@@ -1,14 +1,20 @@
 ## Interface: 120100, 120105
+
 ## Title: |cffff6a00Rocket|r Swap
-## Notes: Conjuntos que relacionam especializacao, talentos e itens — troque os tres com um clique.
-## Author: Otavio Honorio
-## Version: 0.4.2
-## SavedVariablesPerCharacter: RocketSwapDB
+## Notes: Presets that tie specialization, talents and gear together — switch all three with one click.
 ## Category: Combat
+
+## Notes-ptBR: Conjuntos que relacionam especialização, talentos e itens — troque os três com um clique.
+## Category-ptBR: Combate
+
+## Author: Otávio Honório
+## Version: 0.5.0
+## SavedVariablesPerCharacter: RocketSwapDB
 ## IconTexture: Interface\Icons\INV_Misc_MissileLarge_Red
 ## AllowAddOnTableAccess: 1
 
-Locales.lua
+Locales\enUS.lua
+Locales\ptBR.lua
 Core.lua
 Data.lua
 UI.lua

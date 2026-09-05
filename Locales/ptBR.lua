@@ -1,10 +1,7 @@
--- RocketSwap | Locales.lua
--- As chaves SÃO o texto em inglês: sem tradução, a própria chave aparece na tela.
+-- RocketSwap | Locales/ptBR.lua
+-- Sobrescreve o que o enUS.lua deixou. Uma chave ausente aqui NÃO é um buraco: ela cai no
+-- rótulo do jogo (quando `FROM_GAME` cobre) ou na própria chave, que já é o texto em inglês.
 local ADDON, ns = ...
-
-ns.L = setmetatable({}, {
-    __index = function(_, key) return key end,
-})
 
 if GetLocale() ~= "ptBR" then return end
 
@@ -104,3 +101,10 @@ L["When the leader starts one, it prints your specialization, talent loadout and
     "Quando o líder manda, mostra sua especialização, seus talentos e seu conjunto de itens — para conferir antes de puxar."
 L["It stays quiet in combat, once the gates are open, and whenever the reading is not reliable. Type /rs gear to see what it reads on each slot."] =
     "Ele cala em combate, depois que os portões abrem, e sempre que a leitura não for confiável. Digite /rs gear para ver como cada slot está sendo lido."
+
+-- Conferencia dos rotulos que vem do jogo (0.5.0). Mesmo motivo do /rs gear: a falha e
+-- silenciosa — a global some e o rotulo so continua em ingles.
+L["checks the labels taken from the game"] = "confere os rotulos que vem do jogo"
+L["locale %s, %d game label(s):"] = "idioma %s, %d rotulo(s) vindos do jogo:"
+L["%d game label(s) are not usable here."] = "%d rotulo(s) do jogo nao servem neste cliente."
+L["version"] = "versão"

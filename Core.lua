@@ -3,6 +3,10 @@
 local ADDON, ns = ...
 local L = ns.L
 
+-- A versao vem do .toc, nunca de uma constante aqui: numero em dois lugares vira numero
+-- errado em um deles. (Padronizado com o RocketMeter em 05/09/2026.)
+ns.version = C_AddOns.GetAddOnMetadata(ADDON, "Version") or "0.0.0"
+
 ns.defaults = {
     presets = {},        -- { { name, spec, talent, gear }, ... }
     last = nil,          -- nome do ultimo conjunto carregado, para o clique direito
