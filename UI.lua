@@ -43,6 +43,21 @@ local ATTIC_Y = -30           -- faixa entre o título e o inset
 
 local frame, editor, selection
 
+-- O conjunto em edição, guardado AQUI e não perguntado ao ScrollBox.
+--
+-- Dois motivos, os dois descobertos no primeiro teste in-game:
+--
+--   1. `SelectionBehaviorMixin:GetSelectedElementData()` devolve uma **LISTA**, não um
+--      elemento (`ScrollUtil.lua:434`). Uma lista vazia é VERDADEIRA em Lua, então o editor
+--      achava que havia um conjunto selecionado — um conjunto sem spec, sem talentos e sem
+--      itens. Era isso o "combo de talentos não traz nada": sem spec, `GetLoadouts(nil)`
+--      devolve lista vazia. E era isso o "a deleção não funcionou": `UI.Delete` procurava
+--      uma tabela vazia na lista e não achava.
+--   2. `SetDataProvider` **apaga a seleção** (`OnScrollBoxDataProviderReassigned`,
+--      `ScrollUtil.lua:413`). Sem guardar por fora, qualquer troca de equipamento no jogo
+--      redesenharia a lista e jogaria a seleção de volta para o primeiro conjunto.
+local current
+
 --------------------------------------------------------------------------------
 local function Presets()
     return ns.db and ns.db.presets or {}
@@ -133,6 +148,17 @@ local function BuildRow(row)
     row.check:SetPoint("RIGHT", -8, 0)
     row.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
     row.check:Hide()
+
+    -- O CLIQUE DA LINHA. Ele não existia: eu troquei o `OnClick` manual pelo
+    -- `AddSelectionBehavior` achando que o comportamento também capturava o clique. Ele só
+    -- gerencia o ESTADO da seleção — quem seleciona é quem clica. Era o "não consigo clicar
+    -- em outros conjuntos".
+    row:RegisterForClicks("LeftButtonUp")
+    row:SetScript("OnClick", function(self)
+        if selection and self.GetElementData then
+            selection:Select(self)
+        end
+    end)
 
     row:SetScript("OnEnter", function(self)
         if not self.preset then return end
@@ -398,7 +424,12 @@ local function Create()
         function(_, elementData, isSelected)
             local row = frame.list:FindFrame(elementData)
             if row and row.selected then row.selected:SetShown(isSelected) end
-            if isSelected then UI.RefreshEditor() end
+            if isSelected then
+                current = elementData
+                UI.RefreshEditor()
+            elseif current == elementData then
+                current = nil
+            end
         end, UI)
 
     -- Sótão: a faixa entre o título e o inset, à direita do retrato (x ≥ 58).
@@ -427,11 +458,16 @@ local function Create()
 end
 
 --------------------------------------------------------------------------------
----O conjunto em edição. É a TABELA, não um índice — `table.remove` no Apagar desloca os
----índices e um índice guardado passaria a apontar para outro conjunto.
+---O conjunto em edição. É a TABELA do conjunto, não um índice — `table.remove` no Apagar
+---desloca os índices, e um índice guardado passaria a apontar para outro conjunto.
+---Acesso à lista, só para o harness poder disparar o clique de uma linha. Sem isto o teste
+---que trava o bug "não consigo clicar em outros conjuntos" não teria como existir.
+function UI.DebugList()
+    return frame and frame.list
+end
+
 function UI.Selected()
-    if not selection or not selection.GetSelectedElementData then return nil end
-    return selection:GetSelectedElementData()
+    return current
 end
 
 function UI.SetStatus(text, isError)
@@ -489,18 +525,19 @@ function UI.Refresh()
         return
     end
 
+    -- `SetDataProvider` apaga a seleção do comportamento; por isso o conjunto corrente é
+    -- guardado por fora e reancorado logo abaixo.
+    local wanted = current
     frame.list:SetDataProvider(CreateDataProvider(presets), true)
+
+    local stillThere = false
+    for i = 1, total do
+        if presets[i] == wanted then stillThere = true end
+    end
 
     -- Seleção automática: é isto que faz o estado "nada selecionado" não existir, e com ele
     -- os rótulos órfãos e o texto colado. Não é um remendo — é a remoção do estado.
-    local current = UI.Selected()
-    local stillThere = false
-    for i = 1, total do
-        if presets[i] == current then stillThere = true end
-    end
-    if not stillThere then
-        selection:SelectElementData(presets[1])
-    end
+    selection:SelectElementData(stillThere and wanted or presets[1])
 
     UI.RefreshEditor()
 end
@@ -532,9 +569,8 @@ function UI.New()
     }
     presets[#presets + 1] = preset
 
+    current = preset
     UI.Refresh()
-    if selection then selection:SelectElementData(preset) end
-    UI.RefreshEditor()
     editor.name:SetFocus()
 end
 
@@ -562,6 +598,7 @@ function UI.Delete()
         end
     end
 
+    current = nil
     if selection and selection.ClearSelections then selection:ClearSelections() end
     UI.SetStatus(L["preset deleted."], false)
     UI.Refresh()
