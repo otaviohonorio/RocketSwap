@@ -30,7 +30,7 @@ local UI = {}
 ns.UI = UI
 
 -- Todos os números têm origem. Onde há citação, ela é de arquivo do cliente 12.1.0.
-local WIDTH, HEIGHT = 520, 370
+local WIDTH, HEIGHT = 520, 420
 local LIST_W = 260            -- largura externa do inset da lista: x 4..264
 local GUTTER = 20             -- calha entre colunas (MountJournal)
 local COL_X = 284             -- borda esquerda da ARTE da coluna direita
@@ -379,19 +379,19 @@ local function BuildEmptyState()
 end
 
 --------------------------------------------------------------------------------
----A faixa de avisos, no rodapé e em LARGURA TOTAL.
+---A seção "Avisos", no rodapé e em largura total.
 ---
----Ela fica visível SEMPRE — inclusive com zero conjuntos, que é o caso que motivou existir.
----Os dois avisos são o que o addon faz por quem nunca vai criar um conjunto; deixá-los só em
+---Ela fica visível SEMPRE — inclusive com zero conjuntos, que é o caso que a motivou. Os dois
+---avisos são o que o addon faz por quem nunca vai criar um conjunto; deixá-los só em
 ---`/rs warn` e `/rs ready` é o mesmo que não tê-los, porque ninguém descobre comando.
 ---
----Ligados por padrão, e por isso o texto é afirmativo: a caixa marcada descreve o que já está
----acontecendo, não uma promessa.
+---Ligados por padrão, e por isso o rótulo é afirmativo: a caixa marcada descreve o que já
+---está acontecendo, não uma promessa.
 local function BuildToggles()
     local strip = CreateFrame("Frame", nil, frame)
-    strip:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -(HEIGHT - 68))
-    strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -(HEIGHT - 68))
-    strip:SetHeight(36)
+    strip:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -304)
+    strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -304)
+    strip:SetHeight(86)
 
     strip.divider = strip:CreateTexture(nil, "ARTWORK")
     strip.divider:SetPoint("TOPLEFT", 0, 0)
@@ -401,13 +401,62 @@ local function BuildToggles()
         strip.divider:SetColorTexture(1, 1, 1, 0.12)
     end
 
+    strip.title = strip:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    strip.title:SetPoint("TOPLEFT", 0, -10)
+    strip.title:SetText(L["Warnings"])
+    strip.title:SetTextColor(1, 0.82, 0)
+
+    -- O "?" ao lado do título, e não em cada caixa: o que precisa ser explicado é o RECURSO
+    -- (que os avisos funcionam sem conjunto, e quando eles calam), não cada linha isolada.
+    --
+    -- `Interface\common\help-i` é a arte que a Blizzard usa no HelpPlate
+    -- (`Blizzard_HelpPlate.xml:382`). Caminho de textura falha em SILÊNCIO, então ele passa
+    -- por `ns.FirstIcon`, que consulta `GetFileIDFromPath` — e o último recurso é desenhar um
+    -- "?" de texto, que não tem como não aparecer.
+    local help = CreateFrame("Button", nil, strip)
+    help:SetSize(18, 18)
+    help:SetPoint("LEFT", strip.title, "RIGHT", 6, 0)
+
+    local art, verified = ns.FirstIcon({ "Interface\\common\\help-i" })
+    if verified then
+        help.icon = help:CreateTexture(nil, "ARTWORK")
+        help.icon:SetAllPoints()
+        help.icon:SetTexture(art)
+    else
+        help.label = help:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        help.label:SetAllPoints()
+        help.label:SetText("?")
+        help.label:SetTextColor(1, 0.82, 0)
+    end
+    help:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+
+    help:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Warnings"], 1, 1, 1)
+        GameTooltip:AddLine(L["These two work without any preset — they are what the addon does on the day you install it."],
+            0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(L["Wrong gear:"], 1, 0.82, 0)
+        GameTooltip:AddLine(L["In an arena or battleground it flags every slot WITHOUT the PvP item level line; in a dungeon or raid, every slot WITH it. It names the slots, and offers to load a preset if you have one that fits."],
+            0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(L["Ready check:"], 1, 0.82, 0)
+        GameTooltip:AddLine(L["When the leader starts one, it prints your specialization, talent loadout and gear set — so you can confirm before the pull."],
+            0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(L["It stays quiet in combat, once the gates are open, and whenever the reading is not reliable. Type /rs gear to see what it reads on each slot."],
+            0.6, 0.6, 0.6, true)
+        GameTooltip:Show()
+    end)
+    help:SetScript("OnLeave", GameTooltip_Hide)
+
     ---Uma caixa com rótulo próprio. `UICheckButtonTemplate` tem um `.text` embutido, mas ele
     ---depende de o frame ter nome — e frame nomeado vira global. FontString própria evita as
     ---duas coisas.
-    local function Toggle(x, label, tip, key)
+    local function Toggle(y, label, key)
         local box = CreateFrame("CheckButton", nil, strip, "UICheckButtonTemplate")
         box:SetSize(24, 24)
-        box:SetPoint("TOPLEFT", x, -8)
+        box:SetPoint("TOPLEFT", 0, y)
 
         local text = strip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         text:SetPoint("LEFT", box, "RIGHT", 2, 0)
@@ -416,25 +465,12 @@ local function BuildToggles()
         box:SetScript("OnClick", function(self)
             ns.db[key] = self:GetChecked() and true or false
         end)
-        box:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText(label, 1, 1, 1)
-            GameTooltip:AddLine(tip, 0.7, 0.7, 0.7, true)
-            GameTooltip:Show()
-        end)
-        box:SetScript("OnLeave", GameTooltip_Hide)
-
         box.key = key
         return box
     end
 
-    strip.warn = Toggle(0, L["Warn about wrong gear"],
-        L["In an arena with PvE gear, or in a dungeon with PvP gear, the addon says which slots are wrong."],
-        "warn")
-
-    strip.ready = Toggle(246, L["Show my setup on ready check"],
-        L["When the leader starts a ready check, the addon prints your spec, talent loadout and gear set."],
-        "readyCheck")
+    strip.warn = Toggle(-30, L["Warn about wrong gear"], "warn")
+    strip.ready = Toggle(-54, L["Show my setup on ready check"], "readyCheck")
 
     frame.toggles = strip
 end
@@ -470,7 +506,7 @@ local function Create()
     if frame.Inset then
         frame.Inset:ClearAllPoints()
         frame.Inset:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -60)
-        frame.Inset:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 4 + LIST_W, -(HEIGHT - 70))
+        frame.Inset:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 4 + LIST_W, -300)
     end
     local host = frame.Inset or frame
 

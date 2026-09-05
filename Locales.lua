@@ -92,8 +92,15 @@ L["turns the gear warning on or off"] = "liga ou desliga o aviso de equipamento"
 L["turns the ready check summary on or off"] = "liga ou desliga o resumo no ready check"
 L["re-enables warnings you silenced"] = "religa os avisos que você silenciou"
 L["Warn about wrong gear"] = "Avisar equipamento errado"
-L["In an arena with PvE gear, or in a dungeon with PvP gear, the addon says which slots are wrong."] =
-    "Numa arena com equipamento de PvE, ou numa masmorra com equipamento de PvP, o addon diz quais slots estão errados."
 L["Show my setup on ready check"] = "Resumo no ready check"
-L["When the leader starts a ready check, the addon prints your spec, talent loadout and gear set."] =
-    "Quando o líder manda o ready check, o addon mostra sua especialização, seus talentos e seu conjunto de itens."
+L["Warnings"] = "Avisos"
+L["These two work without any preset — they are what the addon does on the day you install it."] =
+    "Os dois funcionam sem nenhum conjunto criado — é o que o addon faz no dia em que você o instala."
+L["Wrong gear:"] = "Equipamento errado:"
+L["In an arena or battleground it flags every slot WITHOUT the PvP item level line; in a dungeon or raid, every slot WITH it. It names the slots, and offers to load a preset if you have one that fits."] =
+    "Em arena ou campo de batalha, marca todo slot SEM a linha de nível de item de PvP; em masmorra ou raide, todo slot COM ela. Diz quais slots são, e oferece carregar um conjunto se você tiver um que sirva."
+L["Ready check:"] = "Ready check:"
+L["When the leader starts one, it prints your specialization, talent loadout and gear set — so you can confirm before the pull."] =
+    "Quando o líder manda, mostra sua especialização, seus talentos e seu conjunto de itens — para conferir antes de puxar."
+L["It stays quiet in combat, once the gates are open, and whenever the reading is not reliable. Type /rs gear to see what it reads on each slot."] =
+    "Ele cala em combate, depois que os portões abrem, e sempre que a leitura não for confiável. Digite /rs gear para ver como cada slot está sendo lido."
