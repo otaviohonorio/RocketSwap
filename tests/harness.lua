@@ -201,6 +201,7 @@ local state = {
     inCombat = false,
     specIndex = 2,               -- Gelido
     equippedSet = 1,             -- Frost
+    outfit = 71,                 -- aparencia ativa
     activeLoadout = { [251] = 11, [252] = nil, [250] = nil },
 }
 
@@ -284,6 +285,26 @@ C_EquipmentSet = {
     EquipmentSetContainsLockedItems = function() return state.locked == true end,
     UseEquipmentSet = function(setID)
         state.pendingSet = setID
+        return true
+    end,
+}
+
+-- Transmog: namespace novo do Midnight. O ID e o INDICE sao coisas diferentes de proposito
+-- (o comentario da Blizzard diz que os IDs tem buracos), e o simulador reproduz isso — se o
+-- addon guardar o indice em vez do ID, o teste de "apagar uma aparencia" pega.
+local OUTFITS = {
+    { outfitID = 71, playerFacingOutfitIndex = 1, name = "Gelido",  icon = 201, isDisabled = false },
+    { outfitID = 88, playerFacingOutfitIndex = 2, name = "Arena",   icon = 202, isDisabled = false },
+    { outfitID = 93, playerFacingOutfitIndex = 3, name = "Antigo",  icon = 203, isDisabled = true  },
+}
+
+C_TransmogOutfitInfo = {
+    GetOutfitsInfo = function() return OUTFITS end,
+    GetActiveOutfitID = function() return state.outfit end,
+    ChangeToOutfit = function(index)
+        for _, o in ipairs(OUTFITS) do
+            if o.playerFacingOutfitIndex == index then state.pendingOutfit = o.outfitID end
+        end
         return true
     end,
 }
@@ -466,6 +487,53 @@ local escolhido, verificado = ns.FirstIcon(ns.ICON_CANDIDATES)
 check("caiu no candidato que existe", escolhido:find("MissileLarge_Red", 1, true) ~= nil, true)
 check("e sabe que verificou", verificado, true)
 check("lista de candidatos exposta", #ns.ICON_CANDIDATES >= 2, true)
+
+print("== aparencia (transmog) e opcional ==")
+-- Pedido do usuario: "poderia por como opcional o transmog salvo tambem?". Opcional de
+-- verdade — conjunto sem aparencia definida NAO pode mexer na roupa.
+check("duas aparencias utilizaveis", #ns.Data.GetOutfits(), 2)
+check("a desabilitada nao entra na lista",
+    (function()
+        for _, o in ipairs(ns.Data.GetOutfits()) do
+            if o.name == "Antigo" then return true end
+        end
+        return false
+    end)(), false)
+check("nome por id", ns.Data.OutfitName(88), "Arena")
+
+state.outfit, state.pendingOutfit = 71, nil
+local semRoupa = { name = "Sem roupa", spec = 2, talent = nil, gear = 2 }
+state.equippedSet = 1
+ns.Data.Apply(semRoupa, function() end)
+fire("EQUIPMENT_SWAP_FINISHED", true, 2)
+check("conjunto sem aparencia nao troca a roupa", state.pendingOutfit, nil)
+
+-- O ID e o INDICE sao diferentes: o conjunto guarda o ID 88, e a troca tem que pedir o
+-- indice 2. Guardar o indice apodreceria quando uma aparencia fosse apagada.
+state.equippedSet = 1
+local comRoupa = { name = "Arena", spec = 2, talent = nil, gear = 2, transmog = 88 }
+ns.Data.Apply(comRoupa, function() end)
+fire("EQUIPMENT_SWAP_FINISHED", true, 2)
+check("pediu a aparencia certa pelo INDICE", state.pendingOutfit, 88)
+
+-- E a aparencia vem depois dos itens: aplicar a roupa antes seria escrever por cima do que o
+-- passo de itens ainda vai mudar.
+state.equippedSet, state.outfit, state.pendingOutfit, state.pendingSet = 1, 71, nil, nil
+ns.Data.Apply({ name = "Arena", spec = 2, gear = 4, transmog = 88 }, function() end)
+check("os itens vao primeiro", state.pendingSet, 4)
+check("e a roupa ainda nao foi", state.pendingOutfit, nil)
+state.equippedSet = 4
+fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+check("so entao a roupa", state.pendingOutfit, 88)
+
+-- Aparencia apagada entre o salvamento e o uso: tem que avisar, nao vestir outra.
+state.outfit, state.pendingOutfit = 71, nil
+local erroRoupa
+ns.Data.Apply({ name = "Fantasma", spec = 2, transmog = 999 }, function(t, isErr)
+    if isErr then erroRoupa = t end
+end)
+check("aparencia inexistente avisa", erroRoupa ~= nil, true)
+check("e nao veste outra", state.pendingOutfit, nil)
 
 print("== janela: estado vazio ==")
 -- Reclamacao literal do usuario: "fica tudo vazio quando nao tem nada". Com zero conjuntos a

@@ -120,6 +120,51 @@ function Data.GetGearSets()
     return out
 end
 
+---Conjuntos de aparência (transmog) que o jogador tem salvos.
+---
+---`C_TransmogOutfitInfo` é namespace NOVO do Midnight — não é o transmog antigo, preso ao NPC.
+---É o sistema de "outfits" que o jogo passou a trocar sozinho por situação (o enum
+---`TransmogSituationTrigger` tem `Location`, `Movement`, `Weather`, `Specialization` e até
+---`EquipmentSet`).
+---
+---GUARDAMOS O `outfitID`, MAS A TROCA PEDE O ÍNDICE. São coisas diferentes, e o comentário da
+---própria Blizzard diz por quê: *"playerFacingOutfitIndex is slightly different from outfitID
+---(outfitIDs may have gaps)"*. Guardar o índice apodreceria: apagar um conjunto de aparência
+---desloca todos os seguintes, e o preset passaria a vestir outra roupa.
+function Data.GetOutfits()
+    local out = {}
+    if not C_TransmogOutfitInfo or not C_TransmogOutfitInfo.GetOutfitsInfo then return out end
+
+    local ok, list = pcall(C_TransmogOutfitInfo.GetOutfitsInfo)
+    if not ok or type(list) ~= "table" then return out end
+
+    for _, info in ipairs(list) do
+        if info.outfitID and not info.isDisabled then
+            out[#out + 1] = {
+                outfitID = info.outfitID,
+                index = info.playerFacingOutfitIndex,
+                name = info.name or "?",
+                icon = info.icon,
+            }
+        end
+    end
+    return out
+end
+
+function Data.OutfitName(outfitID)
+    if not outfitID then return nil end
+    for _, o in ipairs(Data.GetOutfits()) do
+        if o.outfitID == outfitID then return o.name, o.icon end
+    end
+    return nil
+end
+
+function Data.GetActiveOutfitID()
+    if not C_TransmogOutfitInfo or not C_TransmogOutfitInfo.GetActiveOutfitID then return nil end
+    local ok, id = pcall(C_TransmogOutfitInfo.GetActiveOutfitID)
+    return ok and id or nil
+end
+
 function Data.GetEquippedSetID()
     for _, set in ipairs(Data.GetGearSets()) do
         if set.isEquipped then return set.setID end
@@ -156,6 +201,7 @@ function Data.IsLoaded(preset)
         return false
     end
     if preset.gear and Data.GetEquippedSetID() ~= preset.gear then return false end
+    if preset.transmog and Data.GetActiveOutfitID() ~= preset.transmog then return false end
 
     return true
 end
@@ -280,6 +326,42 @@ function Steps.gear(preset)
     return "wait"           -- confirma em EQUIPMENT_SWAP_FINISHED
 end
 
+---A aparência entra POR ÚLTIMO, depois dos itens.
+---
+---Motivo concreto: equipar um conjunto de itens mexe nas peças, e a aparência se aplica sobre
+---o que está vestido. Trocar a roupa antes das peças seria escrever por cima do que o passo
+---seguinte vai mudar.
+---
+---Este passo é o único que NÃO tem evento de confirmação amarrado: `TRANSMOG_OUTFITS_CHANGED`
+---dispara quando a LISTA muda (criar, apagar), não quando a aparência ativa troca. Então ele
+---confirma lendo `GetActiveOutfitID` logo depois — e se a leitura não bater, avisa em vez de
+---dizer "pronto".
+function Steps.transmog(preset)
+    if not preset.transmog then return "skip" end
+    if Data.GetActiveOutfitID() == preset.transmog then return "skip" end
+
+    if not C_TransmogOutfitInfo or not C_TransmogOutfitInfo.ChangeToOutfit then
+        return "fail", L["this client cannot switch transmog outfits."]
+    end
+
+    -- O índice é resolvido AGORA, não no momento em que o conjunto foi salvo: ele desloca
+    -- quando uma aparência é apagada.
+    local index
+    for _, outfit in ipairs(Data.GetOutfits()) do
+        if outfit.outfitID == preset.transmog then index = outfit.index end
+    end
+    if not index then
+        return "fail", L["that transmog outfit no longer exists."]
+    end
+
+    Report(L["Changing appearance..."], false)
+
+    local ok = pcall(C_TransmogOutfitInfo.ChangeToOutfit, index, false)
+    if not ok then return "fail", L["the transmog outfit could not be applied."] end
+
+    return "skip"
+end
+
 --------------------------------------------------------------------------------
 RunNext = function()
     if not running then return end
@@ -322,7 +404,7 @@ function Data.Apply(preset, report)
         return false
     end
 
-    running = { preset = preset, steps = { "spec", "talent", "gear" }, at = 0, report = report }
+    running = { preset = preset, steps = { "spec", "talent", "gear", "transmog" }, at = 0, report = report }
     if report then report(format(L["Loading %s..."], preset.name or "?"), false) end
 
     Data.EnsureListener()
