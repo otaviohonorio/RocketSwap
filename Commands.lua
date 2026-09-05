@@ -30,7 +30,7 @@ end
 
 commands["list"] = function()
     if #ns.db.presets == 0 then
-        ns.Print(L["No presets yet."])
+        ns.Print(L["No presets yet"])
         return
     end
     ns.Print(L["Presets"] .. ":")

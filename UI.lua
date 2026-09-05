@@ -1,46 +1,55 @@
 -- RocketSwap | UI.lua
--- A janela: lista de conjuntos à esquerda, editor à direita, estado embaixo.
+-- A janela: lista de conjuntos à esquerda, editor à direita, estado no rodapé.
 --
--- DECISÕES DE APARÊNCIA, e de onde saíram:
+-- ESTE ARQUIVO FOI REESCRITO depois do primeiro teste in-game. O print mostrou três defeitos,
+-- e os três vinham da mesma raiz: **eu ancorei conteúdo sem contar com a arte do template.**
+-- A geometria abaixo foi medida no código-fonte da UI da Blizzard do 12.1.0, não estimada.
 --
--- * `PortraitFrameTemplate` (`SharedUIPanelTemplates.xml:631`). É a moldura que o próprio jogo
---   usa nas janelas de gerenciamento — retrato redondo, título, botão de fechar, borda
---   dourada. Sai de graça e é imediatamente familiar. Só se pode herdar template na CRIAÇÃO
---   do frame, nunca depois.
--- * `WowStyle1DropdownTemplate` (`Blizzard_AddOnList/AddonList.xml:126`) para os três combos.
---   É o dropdown atual; `UIDropDownMenuTemplate` é o legado e não combina com nada de 12.x.
---   A API é `dropdown:SetupMenu(function(dropdown, root) root:CreateRadio(...) end)`.
--- * Cada linha da lista é uma FAIXA com o ícone do conjunto de itens, não uma célula de
---   planilha: o ícone é o que o olho reconhece antes de ler.
--- * A linha do conjunto que já está aplicado ganha um realce e o botão vira um "✓" — sem
---   isso, "carregar" o que já está carregado é o clique mais comum e o mais inútil.
+--   1. O RETRATO POR CIMA DO TEXTO. `PortraitFrameTemplate` desenha um disco de Ø58 com
+--      centro em (26, −22) do frame. O rótulo "Conjuntos" estava em (14, −34), a
+--      sqrt(12² + 12²) = 17px do centro — ou seja, 12px DENTRO do disco.
+--      REGRA: nada ancorado em `frame` com x < 58 e y > −55. Nada aqui viola isso.
+--
+--   2. RÓTULOS ÓRFÃOS. Com zero conjuntos, "Nome / Especialização / Talentos / Itens"
+--      apareciam sem campo embaixo: eu escondia os controles e esquecia os rótulos.
+--      A correção não é um `SetShown` a mais — é que **o estado "nada selecionado" deixou de
+--      existir**: com ≥1 conjunto, a lista seleciona o primeiro sozinha. Precedente da
+--      Blizzard: `ClickBindingFrameMixin:OnShow` foca o primeiro item.
+--      E cada rótulo agora vive DENTRO do seu grupo — esconder o grupo esconde os dois.
+--
+--   3. JANELA VAZIA. 640×452 para 2 a 5 conjuntos. Agora 520×320, derivado do conteúdo, e o
+--      estado vazio é um bloco centralizado com uma frase e um botão.
+--
+-- O TEMPLATE MUDOU para `ButtonFrameTemplate`: é o `PortraitFrameTemplate` mais um `Inset` já
+-- posicionado nos offsets oficiais (`PANEL_INSET_*` em `SharedUIPanelTemplates.lua:4-9`).
+-- Ancorar na área rebaixada em vez de no frame cru torna o bug 1 impossível de repetir.
 local ADDON, ns = ...
 local L = ns.L
 
 local UI = {}
 ns.UI = UI
 
-local WIDTH, HEIGHT = 640, 452
-local LIST_WIDTH = 292
-local ROW_HEIGHT = 54
-local ROW_SPACING = 4
-local VISIBLE_ROWS = 6
-local SIDE = 14
+-- Todos os números têm origem. Onde há citação, ela é de arquivo do cliente 12.1.0.
+local WIDTH, HEIGHT = 520, 320
+local LIST_W = 260            -- largura externa do inset da lista: x 4..264
+local GUTTER = 20             -- calha entre colunas (MountJournal)
+local COL_X = 284             -- borda esquerda da ARTE da coluna direita
+local ROW_HEIGHT = 44         -- GearSetButtonTemplate: a lista de conjuntos da própria Blizzard
+local ROW_SPACING = 2
+local FIELD_W = 200           -- combos (o dropdown de loadout de talentos usa 200)
+local NAME_W = 211            -- EditBox: a arte termina em 500, alinhada com a dos combos
+local GROUP_STEP = 50         -- rótulo (15) + combo (25) + respiro (10)
+local ATTIC_Y = -30           -- faixa entre o título e o inset
 
-local frame, rows, editor
-local selected              -- índice do conjunto em edição
-local scrollOffset = 0
-
-local GOLD = { 1, 0.82, 0 }
-local DIM = { 0.65, 0.66, 0.70 }
+local frame, editor, selection
 
 --------------------------------------------------------------------------------
 local function Presets()
     return ns.db and ns.db.presets or {}
 end
 
----Texto de apoio da linha: "Gélido · SBA ST · Frost". Só entra o que o conjunto define —
----um conjunto que não mexe em talentos não deve mentir que mexe.
+---Texto de apoio da linha: "Gélido · SBA ST · Frost". Só entra o que o conjunto define — um
+---conjunto que não mexe em talentos não deve dar a entender que mexe.
 local function Subtitle(preset)
     local parts = {}
 
@@ -48,10 +57,9 @@ local function Subtitle(preset)
     if spec then parts[#parts + 1] = spec.name end
 
     if preset.talent then
-        local specID = spec and spec.id
-        parts[#parts + 1] = ns.Data.LoadoutName(specID, preset.talent) or ("#" .. preset.talent)
+        parts[#parts + 1] = ns.Data.LoadoutName(spec and spec.id, preset.talent)
+            or ("#" .. preset.talent)
     end
-
     if preset.gear then
         parts[#parts + 1] = ns.Data.GearSetName(preset.gear) or ("#" .. preset.gear)
     end
@@ -60,149 +68,219 @@ local function Subtitle(preset)
 end
 
 --------------------------------------------------------------------------------
--- Linhas
+-- A linha da lista
 --------------------------------------------------------------------------------
-local function BuildRow(index)
-    local row = rows[index]
-    if row then return row end
+---Monta a linha uma vez. O ScrollBox reaproveita o mesmo frame para dados diferentes, então
+---tudo que depende do conjunto vai em `Fill`, não aqui.
+local function BuildRow(row)
+    if row.built then return end
+    row.built = true
 
-    row = CreateFrame("Button", nil, frame.list)
     row:SetHeight(ROW_HEIGHT)
-    row:SetPoint("TOPLEFT", frame.list, "TOPLEFT", 0, -((index - 1) * (ROW_HEIGHT + ROW_SPACING)))
-    row:SetPoint("TOPRIGHT", frame.list, "TOPRIGHT", 0, -((index - 1) * (ROW_HEIGHT + ROW_SPACING)))
 
-    row.bg = row:CreateTexture(nil, "BACKGROUND")
-    row.bg:SetAllPoints()
-    row.bg:SetColorTexture(1, 1, 1, 0.04)
+    -- Sem fundo próprio: quem dá o fundo é o mármore do inset. A linha só se pinta quando
+    -- está sob o mouse ou selecionada — o padrão do painel de Opções do jogo.
+    --
+    -- Os alfas antigos (0.12 na seleção, 0.07 no hover) eram 3 a 6× mais fracos que o nativo
+    -- e sem `ADD`: era por isso que a seleção não aparecia. Estas duas texturas e estes
+    -- números são copiados do `GearSetButtonTemplate`, que é a lista de conjuntos de itens
+    -- da própria Blizzard. `TexCoord 0.2..0.8` corta as pontas para esticar sem deformar.
+    row.selected = row:CreateTexture(nil, "OVERLAY")
+    row.selected:SetAllPoints()
+    row.selected:SetTexture("Interface\\FriendsFrame\\UI-FriendsFrame-HighlightBar")
+    row.selected:SetTexCoord(0.2, 0.8, 0, 1)
+    row.selected:SetBlendMode("ADD")
+    row.selected:SetAlpha(0.4)
+    row.selected:Hide()
 
-    row.selection = row:CreateTexture(nil, "BORDER")
-    row.selection:SetAllPoints()
-    row.selection:SetColorTexture(1, 0.82, 0, 0.12)
-    row.selection:Hide()
-
-    row:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
-    local hl = row:GetHighlightTexture()
-    hl:SetVertexColor(1, 1, 1, 0.07)
+    row:SetHighlightTexture("Interface\\FriendsFrame\\UI-FriendsFrame-HighlightBar-Blue")
+    local highlight = row:GetHighlightTexture()
+    if highlight then
+        highlight:SetTexCoord(0.2, 0.8, 0, 1)
+        highlight:SetBlendMode("ADD")
+        highlight:SetAlpha(0.4)
+    end
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetSize(38, 38)
-    row.icon:SetPoint("LEFT", 8, 0)
+    row.icon:SetSize(36, 36)
+    row.icon:SetPoint("LEFT", 4, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 10, -2)
+    row.name:SetPoint("TOPLEFT", 44, -8)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -86, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
     row.detail = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    row.detail:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 10, 3)
+    row.detail:SetPoint("BOTTOMLEFT", 44, 8)
+    row.detail:SetPoint("RIGHT", row, "RIGHT", -86, 0)
     row.detail:SetJustifyH("LEFT")
     row.detail:SetWordWrap(false)
 
+    -- O botão e o ✓ dividem o mesmo slot: a linha não reflui quando o conjunto passa a
+    -- estar aplicado, porque o texto reserva os 86px dos dois jeitos.
     row.load = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.load:SetSize(78, 22)
-    row.load:SetPoint("RIGHT", -8, 0)
+    row.load:SetSize(74, 22)
+    row.load:SetPoint("RIGHT", -6, 0)
     row.load:SetText(L["Load"])
     row.load:SetScript("OnClick", function(self)
-        UI.Load(self:GetParent().presetIndex)
+        UI.Load(self:GetParent().preset)
     end)
 
-    -- O "já está" ocupa o mesmo lugar do botão: é a resposta para a pergunta que o botão faria.
-    row.active = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.active:SetPoint("RIGHT", -18, 0)
-    row.active:SetText("|cff40d878✓|r")
-    row.active:Hide()
+    row.check = row:CreateTexture(nil, "OVERLAY")
+    row.check:SetSize(16, 16)
+    row.check:SetPoint("RIGHT", -8, 0)
+    row.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    row.check:Hide()
 
-    row:SetScript("OnClick", function(self)
-        selected = self.presetIndex
-        UI.Refresh()
+    row:SetScript("OnEnter", function(self)
+        if not self.preset then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.preset.name ~= "" and self.preset.name or L["Unnamed"], 1, 1, 1)
+        GameTooltip:AddLine(Subtitle(self.preset), 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
     end)
+    row:SetScript("OnLeave", GameTooltip_Hide)
+end
 
-    rows[index] = row
-    return row
+---Preenche a linha com um conjunto.
+local function FillRow(row, preset)
+    BuildRow(row)
+    row.preset = preset
+
+    row.name:SetText(preset.name ~= "" and preset.name or L["Unnamed"])
+    row.detail:SetText(Subtitle(preset))
+
+    local _, icon = ns.Data.GearSetName(preset.gear)
+    row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+
+    -- UM canal por fato: a barra dourada diz "selecionado", o slot do botão diz "aplicado".
+    -- A versão anterior também tingia o nome, e dourado-contra-quase-branco é distinção que
+    -- ninguém lê — dois sinais para o mesmo fato brigando com a barra de seleção.
+    local loaded = ns.Data.IsLoaded(preset)
+    row.check:SetShown(loaded)
+    row.load:SetShown(not loaded)
+
+    row.selected:SetShown(selection ~= nil and selection:IsElementDataSelected(preset))
 end
 
 --------------------------------------------------------------------------------
--- Editor
+-- Os campos do editor
 --------------------------------------------------------------------------------
----Um combo com rótulo em cima. `items()` devolve a lista; `get()`/`set()` leem e escrevem
----o valor no conjunto em edição.
-local function BuildDropdown(parent, label, y, items, get, set)
-    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    title:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, y)
-    title:SetText(label)
-    title:SetTextColor(unpack(GOLD))
+---Rótulo + combo num CONTÊINER. Esconder o grupo esconde os dois — é o que impede o rótulo
+---órfão de voltar no próximo campo que alguém acrescentar.
+---
+---O rótulo assenta pelo rodapé no topo do combo, +3: assim ele não depende do corpo da fonte.
+local function Group(parent, labelText, yTop, items, get, set)
+    local group = CreateFrame("Frame", nil, parent)
+    group:SetSize(216, 40)
+    group:SetPoint("TOPLEFT", parent, "TOPLEFT", COL_X, yTop)
 
-    local dd = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
-    dd:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -2, -4)
-    dd:SetWidth(parent:GetWidth())
+    -- +8 compensa o transbordo da arte do combo, para ela cair exatamente na coluna.
+    local dd = CreateFrame("DropdownButton", nil, group, "WowStyle1DropdownTemplate")
+    dd:SetSize(FIELD_W, 25)
+    dd:SetPoint("BOTTOMLEFT", group, "BOTTOMLEFT", 8, 0)
 
-    dd.Sync = function()
-        local current = get()
-        local text = L["(none)"]
-        for _, item in ipairs(items()) do
-            if item.value == current then text = item.text end
-        end
-        dd:SetDefaultText(text)
+    local label = group:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    label:SetPoint("BOTTOMLEFT", dd, "TOPLEFT", 3, 3)
+    label:SetJustifyH("LEFT")
+    label:SetText(labelText)
+
+    ---Regenera o menu a partir do estado atual.
+    ---
+    ---`SetDefaultText` é só para "nada selecionado" — a marca do item escolhido sai de graça
+    ---do `IsSelected` do `CreateRadio`. A versão anterior usava o default como "texto do
+    ---selecionado", que é o que o comentário da própria Blizzard desaconselha.
+    function group.Sync()
+        local list = items()
 
         dd:SetupMenu(function(_, root)
-            root:CreateRadio(L["(none)"],
-                function() return get() == nil end,
-                function() set(nil); UI.Refresh() end)
+            root:CreateButton(L["(none)"], function() set(nil); UI.AfterEdit() end)
+            if #list > 0 then root:CreateDivider() end
 
-            for _, item in ipairs(items()) do
-                root:CreateRadio(item.text,
+            for _, item in ipairs(list) do
+                local entry = root:CreateRadio(item.text,
                     function() return get() == item.value end,
-                    function() set(item.value); UI.Refresh() end)
+                    function() set(item.value); UI.AfterEdit() end,
+                    item.value)
+
+                -- O conjunto de itens já tem ícone; mostrá-lo no menu custa cinco linhas e
+                -- é o que faz escolher "Frost" sem ler.
+                if item.icon and entry.AddInitializer then
+                    entry:AddInitializer(function(button)
+                        local tex = button:AttachTexture()
+                        tex:SetSize(19, 19)
+                        tex:SetPoint("LEFT")
+                        tex:SetTexture(item.icon)
+                        if button.fontString then
+                            button.fontString:SetPoint("LEFT", tex, "RIGHT", 3, 0)
+                        end
+                    end)
+                end
             end
+
+            -- Sem nada para escolher, o combo fica apagado em vez de abrir um menu de um
+            -- item só — o caso real de uma spec sem loadout salvo.
+            if root.HasElements then dd:SetEnabled(root:HasElements()) end
         end)
+
+        local current, text = get(), nil
+        for _, item in ipairs(list) do
+            if item.value == current then text = item.text end
+        end
+        dd:SetDefaultText(text or L["(none)"])
     end
 
-    return dd
+    group.dropdown = dd
+    return group
 end
 
 local function BuildEditor()
-    editor = CreateFrame("Frame", nil, frame)
-    editor:SetPoint("TOPLEFT", frame, "TOPLEFT", SIDE + LIST_WIDTH + 16, -64)
-    editor:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -SIDE, 66)
+    editor = {}
 
-    editor.title = editor:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    editor.title:SetPoint("TOPLEFT", 0, 0)
-    editor.title:SetTextColor(unpack(GOLD))
-
-    local nameLabel = editor:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    nameLabel:SetPoint("TOPLEFT", 0, -34)
-    nameLabel:SetText(L["Name"])
-    nameLabel:SetTextColor(unpack(GOLD))
-
-    editor.name = CreateFrame("EditBox", nil, editor, "InputBoxTemplate")
-    editor.name:SetPoint("TOPLEFT", nameLabel, "BOTTOMLEFT", 6, -4)
-    editor.name:SetSize(240, 22)
+    -- O nome NÃO tem rótulo separado: a instrução mora dentro da caixa. Era metade do
+    -- "texto colado", resolvida pela raiz em vez de por um `SetShown`.
+    editor.name = CreateFrame("EditBox", nil, frame, "InputBoxInstructionsTemplate")
+    editor.name:SetSize(NAME_W, 22)
+    editor.name:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X + 5, -60)
     editor.name:SetAutoFocus(false)
+    editor.name:SetMaxLetters(31)
+    if editor.name.Instructions then
+        -- Sem isto o texto de instrução nasce 16px à direita do texto digitado.
+        editor.name.Instructions:SetAllPoints()
+        editor.name.Instructions:SetText(L["Preset name"])
+    end
     editor.name:SetScript("OnEscapePressed", editor.name.ClearFocus)
-    editor.name:SetScript("OnEnterPressed", function(self)
-        self:ClearFocus()
-        UI.Save()
-    end)
+    editor.name:SetScript("OnEnterPressed", editor.name.ClearFocus)
+    -- Sair da caixa salva. O botão "Salvar" foi embora: os combos já escrevem direto no
+    -- conjunto, então ele só confirmava o nome — e sua existência levantava a dúvida "a
+    -- escolha do combo salvou?".
+    editor.name:SetScript("OnEditFocusLost", function() UI.SaveName() end)
 
-    local function Current()
-        return Presets()[selected]
+    editor.divider = frame:CreateTexture(nil, "ARTWORK")
+    editor.divider:SetSize(216, 1)
+    editor.divider:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, -98)
+    if not ns.SetAtlasSafe or not ns.SetAtlasSafe(editor.divider, "Options_HorizontalDivider") then
+        editor.divider:SetColorTexture(1, 1, 1, 0.12)
     end
 
-    editor.spec = BuildDropdown(editor, L["Specialization"], -92,
+    local function Current() return UI.Selected() end
+
+    editor.spec = Group(frame, L["Specialization"], -108,
         function()
             local out = {}
             for _, s in ipairs(ns.Data.GetSpecs()) do
-                out[#out + 1] = { value = s.index, text = s.name }
+                out[#out + 1] = { value = s.index, text = s.name, icon = s.icon }
             end
             return out
         end,
         function() local p = Current(); return p and p.spec end,
+        -- Trocar a spec zera o loadout: um loadout de Gélido não existe em Profano, e
+        -- oferecê-lo seria oferecer o impossível.
         function(v) local p = Current(); if p then p.spec = v; p.talent = nil end end)
 
-    -- Os talentos dependem da spec escolhida: trocar a spec zera o loadout (acima), porque
-    -- um loadout de Gélido não existe em Profano e mostrá-lo seria oferecer o impossível.
-    editor.talent = BuildDropdown(editor, L["Talents"], -152,
+    editor.talent = Group(frame, L["Talents"], -108 - GROUP_STEP,
         function()
             local p = Current()
             local spec = p and ns.Data.GetSpecByIndex(p.spec)
@@ -215,42 +293,55 @@ local function BuildEditor()
         function() local p = Current(); return p and p.talent end,
         function(v) local p = Current(); if p then p.talent = v end end)
 
-    editor.gear = BuildDropdown(editor, L["Gear"], -212,
+    editor.gear = Group(frame, L["Gear"], -108 - GROUP_STEP * 2,
         function()
             local out = {}
             for _, s in ipairs(ns.Data.GetGearSets()) do
-                out[#out + 1] = { value = s.setID, text = s.name }
+                out[#out + 1] = { value = s.setID, text = s.name, icon = s.icon }
             end
             return out
         end,
         function() local p = Current(); return p and p.gear end,
         function(v) local p = Current(); if p then p.gear = v end end)
+end
 
-    editor.save = CreateFrame("Button", nil, editor, "UIPanelButtonTemplate")
-    editor.save:SetSize(110, 22)
-    editor.save:SetPoint("BOTTOMLEFT", 0, 0)
-    editor.save:SetText(L["Save"])
-    editor.save:SetScript("OnClick", function() UI.Save() end)
+--------------------------------------------------------------------------------
+-- Estado vazio
+--------------------------------------------------------------------------------
+---Bloco centralizado. A Blizzard não tem tela de vazio com arte: em ~20 sistemas o padrão é
+---uma FontString centralizada mais, quando há o que fazer, um botão.
+---
+---O texto responde à pergunta que o botão levanta ("vou ter que preencher tudo?"), em vez de
+---descrever o produto. E a resposta é verdade no código: `UI.New` já nasce preenchido.
+local function BuildEmptyState()
+    local empty = CreateFrame("Frame", nil, frame)
+    empty:SetAllPoints()
 
-    editor.delete = CreateFrame("Button", nil, editor, "UIPanelButtonTemplate")
-    editor.delete:SetSize(110, 22)
-    editor.delete:SetPoint("BOTTOMLEFT", editor.save, "BOTTOMRIGHT", 8, 0)
-    editor.delete:SetText(L["Delete"])
-    editor.delete:SetScript("OnClick", function() UI.Delete() end)
+    empty.title = empty:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    empty.title:SetPoint("CENTER", frame, "CENTER", 0, 45)
+    empty.title:SetText(L["No presets yet"])
 
-    editor.empty = editor:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-    editor.empty:SetPoint("TOPLEFT", 0, -40)
-    editor.empty:SetWidth(editor:GetWidth())
-    editor.empty:SetJustifyH("LEFT")
-    editor.empty:SetText(L["Pick a preset"])
+    empty.body = empty:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    empty.body:SetPoint("TOP", empty.title, "BOTTOM", 0, -10)
+    empty.body:SetWidth(320)
+    empty.body:SetJustifyH("CENTER")
+    empty.body:SetText(L["The first one starts with the spec, talents and gear you have right now."])
+
+    empty.button = CreateFrame("Button", nil, empty, "UIPanelButtonTemplate")
+    empty.button:SetSize(180, 22)
+    empty.button:SetPoint("TOP", empty.body, "BOTTOM", 0, -20)
+    empty.button:SetText(L["Create the first preset"])
+    empty.button:SetScript("OnClick", function() UI.New() end)
+
+    frame.emptyState = empty
 end
 
 --------------------------------------------------------------------------------
 local function Create()
     if frame then return frame end
 
-    -- Herança de template só na criação — depois não dá.
-    frame = CreateFrame("Frame", ADDON .. "Frame", UIParent, "PortraitFrameTemplate")
+    -- Herança de template só na criação.
+    frame = CreateFrame("Frame", ADDON .. "Frame", UIParent, "ButtonFrameTemplate")
     frame:SetSize(WIDTH, HEIGHT)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("HIGH")
@@ -266,62 +357,83 @@ local function Create()
     frame:Hide()
 
     if frame.SetTitle then frame:SetTitle(ADDON) end
-    -- `SetPortraitToAsset` é o método do próprio `PortraitFrameMixin` (`PortraitFrame.lua:47`).
-    -- Mexer em `frame.PortraitContainer.portrait` à mão funciona hoje e quebra quando a
-    -- Blizzard reorganizar o template — e um addon instalado já guarda esta chamada assim.
     if frame.SetPortraitToAsset then
         frame:SetPortraitToAsset(ns.FirstIcon(ns.ICON_CANDIDATES))
     end
     tinsert(UISpecialFrames, frame:GetName())
 
-    frame.listLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.listLabel:SetPoint("TOPLEFT", SIDE, -34)
-    frame.listLabel:SetText(L["Presets"])
-    frame.listLabel:SetTextColor(unpack(GOLD))
+    -- O inset do template cobre a largura toda; aqui ele passa a cobrir só a coluna da lista.
+    -- A coluna direita fica sobre o fundo da janela de propósito: o mármore do inset é fundo
+    -- de LISTA, e sob um formulário ele compete com a arte dos combos.
+    if frame.Inset then
+        frame.Inset:ClearAllPoints()
+        frame.Inset:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -60)
+        frame.Inset:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 4 + LIST_W, -(HEIGHT - 26))
+    end
+    local host = frame.Inset or frame
 
-    frame.list = CreateFrame("Frame", nil, frame)
-    frame.list:SetPoint("TOPLEFT", SIDE, -56)
-    frame.list:SetSize(LIST_WIDTH, VISIBLE_ROWS * (ROW_HEIGHT + ROW_SPACING))
+    -- Sem rótulo "Conjuntos": o inset já delimita a lista, e era justamente esse rótulo que
+    -- estava embaixo do retrato.
+    frame.list = CreateFrame("Frame", nil, host, "WowScrollBoxList")
+    frame.listBar = CreateFrame("EventFrame", nil, host, "MinimalScrollBar")
+    frame.listBar:SetPoint("TOPRIGHT", host, "TOPRIGHT", -3, -3)
+    frame.listBar:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -3, 3)
 
-    -- Rolagem pela roda, sem barra: com poucos conjuntos a barra é moldura vazia.
-    frame.list:EnableMouseWheel(true)
-    frame.list:SetScript("OnMouseWheel", function(_, delta)
-        local total = #Presets()
-        local max = math.max(0, total - VISIBLE_ROWS)
-        local wanted = scrollOffset - delta
-        if wanted < 0 then wanted = 0 elseif wanted > max then wanted = max end
-        if wanted ~= scrollOffset then
-            scrollOffset = wanted
-            UI.Refresh()
-        end
-    end)
+    local view = CreateScrollBoxListLinearView(0, 0, 0, 0, ROW_SPACING)
+    view:SetVirtualized(false)          -- 2 a 5 itens: cria todos, não recicla
+    view:SetElementExtent(ROW_HEIGHT)   -- obrigatório com o tipo nativo "Button"
+    view:SetElementInitializer("Button", FillRow)
+    ScrollUtil.InitScrollBoxListWithScrollBar(frame.list, frame.listBar, view)
 
-    frame.empty = frame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-    frame.empty:SetPoint("TOPLEFT", frame.list, "TOPLEFT", 4, -8)
-    frame.empty:SetWidth(LIST_WIDTH - 8)
-    frame.empty:SetJustifyH("LEFT")
-    frame.empty:SetText(L["No presets yet."] .. "\n\n"
-        .. L["Create one to switch spec, talents and gear with a single click."])
+    ScrollUtil.AddManagedScrollBarVisibilityBehavior(frame.list, frame.listBar,
+        { CreateAnchor("TOPLEFT", host, "TOPLEFT", 3, -3),
+          CreateAnchor("BOTTOMRIGHT", host, "BOTTOMRIGHT", -17, 3) },
+        { CreateAnchor("TOPLEFT", host, "TOPLEFT", 3, -3),
+          CreateAnchor("BOTTOMRIGHT", host, "BOTTOMRIGHT", -3, 3) })
 
+    -- A seleção guarda a TABELA do conjunto, não o índice. Com índice, `table.remove` no
+    -- Apagar deslocava tudo e a seleção passava a apontar para outro conjunto.
+    selection = ScrollUtil.AddSelectionBehavior(frame.list)
+    selection:RegisterCallback(SelectionBehaviorMixin.Event.OnSelectionChanged,
+        function(_, elementData, isSelected)
+            local row = frame.list:FindFrame(elementData)
+            if row and row.selected then row.selected:SetShown(isSelected) end
+            if isSelected then UI.RefreshEditor() end
+        end, UI)
+
+    -- Sótão: a faixa entre o título e o inset, à direita do retrato (x ≥ 58).
     frame.new = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.new:SetSize(LIST_WIDTH, 22)
-    frame.new:SetPoint("TOPLEFT", frame.list, "BOTTOMLEFT", 0, -8)
+    frame.new:SetSize(140, 22)
+    frame.new:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, ATTIC_Y)
     frame.new:SetText("+ " .. L["New preset"])
     frame.new:SetScript("OnClick", function() UI.New() end)
 
-    -- Uma linha de estado embaixo, que é onde a corrente de passos se explica. Sem ela o
-    -- clique em "Carregar" é um salto no escuro: a troca demora, e falha em silêncio.
-    frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.status:SetPoint("BOTTOMLEFT", SIDE, 16)
-    frame.status:SetPoint("BOTTOMRIGHT", -SIDE, 16)
-    frame.status:SetJustifyH("LEFT")
+    -- Rodapé: a banda que o template já reserva (y 4..26).
+    frame.delete = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.delete:SetSize(100, 22)
+    frame.delete:SetPoint("BOTTOMRIGHT", -6, 4)
+    frame.delete:SetText(L["Delete"])
+    frame.delete:SetScript("OnClick", function() UI.Delete() end)
 
-    rows = {}
+    frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.status:SetPoint("BOTTOMLEFT", 10, 8)
+    frame.status:SetPoint("RIGHT", frame.delete, "LEFT", -8, 0)
+    frame.status:SetJustifyH("LEFT")
+    frame.status:SetWordWrap(false)
+
     BuildEditor()
+    BuildEmptyState()
     return frame
 end
 
 --------------------------------------------------------------------------------
+---O conjunto em edição. É a TABELA, não um índice — `table.remove` no Apagar desloca os
+---índices e um índice guardado passaria a apontar para outro conjunto.
+function UI.Selected()
+    if not selection or not selection.GetSelectedElementData then return nil end
+    return selection:GetSelectedElementData()
+end
+
 function UI.SetStatus(text, isError)
     if not frame then return end
     frame.status:SetText(text or "")
@@ -332,112 +444,131 @@ function UI.SetStatus(text, isError)
     end
 end
 
+---Só o editor. Chamado quando a seleção muda ou quando um combo escreve.
+function UI.RefreshEditor()
+    if not frame or not editor then return end
+
+    local preset = UI.Selected()
+    local has = preset ~= nil
+
+    editor.name:SetShown(has)
+    for _, group in ipairs({ editor.spec, editor.talent, editor.gear }) do
+        -- `SetupMenu` só gera o menu com o frame visível: mostrar ANTES de sincronizar.
+        group:SetShown(has)
+        if has then group.Sync() end
+    end
+    editor.divider:SetShown(has)
+
+    if has and not editor.name:HasFocus() then
+        editor.name:SetText(preset.name or "")
+        if editor.name.Instructions and InputBoxInstructions_OnTextChanged then
+            InputBoxInstructions_OnTextChanged(editor.name)
+        end
+    end
+end
+
 function UI.Refresh()
     if not frame or not frame:IsShown() then return end
 
     local presets = Presets()
     local total = #presets
+    local empty = total == 0
 
-    local max = math.max(0, total - VISIBLE_ROWS)
-    if scrollOffset > max then scrollOffset = max end
+    frame.emptyState:SetShown(empty)
+    if frame.Inset then frame.Inset:SetShown(not empty) end
+    frame.list:SetShown(not empty)
+    frame.new:SetShown(not empty)
+    frame.delete:SetShown(not empty)
 
-    frame.empty:SetShown(total == 0)
-
-    for i = 1, VISIBLE_ROWS do
-        local row = BuildRow(i)
-        local preset = presets[scrollOffset + i]
-
-        if not preset then
-            row:Hide()
-        else
-            row.presetIndex = scrollOffset + i
-            row.name:SetText(preset.name ~= "" and preset.name or L["Unnamed"])
-            row.detail:SetText(Subtitle(preset))
-
-            local _, icon = ns.Data.GearSetName(preset.gear)
-            row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
-
-            local loaded = ns.Data.IsLoaded(preset)
-            row.active:SetShown(loaded)
-            row.load:SetShown(not loaded)
-            row.selection:SetShown(row.presetIndex == selected)
-            row.name:SetTextColor(loaded and 1 or 0.95, loaded and 0.9 or 0.95, loaded and 0.6 or 0.95)
-            row:Show()
+    if empty then
+        editor.name:Hide()
+        editor.divider:Hide()
+        for _, group in ipairs({ editor.spec, editor.talent, editor.gear }) do
+            group:Hide()
         end
+        return
     end
 
-    -- Editor
-    local preset = presets[selected]
-    local has = preset ~= nil
+    frame.list:SetDataProvider(CreateDataProvider(presets), true)
 
-    editor.empty:SetShown(not has)
-    editor.name:SetShown(has)
-    editor.save:SetShown(has)
-    editor.delete:SetShown(has)
-    for _, dd in ipairs({ editor.spec, editor.talent, editor.gear }) do
-        dd:SetShown(has)
-        if has then dd.Sync() end
+    -- Seleção automática: é isto que faz o estado "nada selecionado" não existir, e com ele
+    -- os rótulos órfãos e o texto colado. Não é um remendo — é a remoção do estado.
+    local current = UI.Selected()
+    local stillThere = false
+    for i = 1, total do
+        if presets[i] == current then stillThere = true end
     end
-    for _, fs in ipairs({ editor.title }) do
-        fs:SetShown(has)
+    if not stillThere then
+        selection:SelectElementData(presets[1])
     end
 
-    if has then
-        editor.title:SetText(preset.name ~= "" and preset.name or L["Unnamed"])
-        if not editor.name:HasFocus() then editor.name:SetText(preset.name or "") end
+    UI.RefreshEditor()
+end
+
+---Depois de mexer num combo: o texto da linha mudou, a quantidade não. Reinicializar é mais
+---barato que trocar o data provider, e não perde a rolagem.
+function UI.AfterEdit()
+    if frame and frame.list and frame.list.ReinitializeFrames then
+        frame.list:ReinitializeFrames()
     end
+    UI.RefreshEditor()
 end
 
 --------------------------------------------------------------------------------
 function UI.New()
     local presets = Presets()
 
-    -- O novo conjunto já nasce com o que está valendo AGORA. É o caso de uso real: você
-    -- acabou de arrumar a spec, os talentos e o equipamento para uma masmorra — agora só
-    -- quer dar um nome a isso. Começar vazio obrigaria a redigitar o óbvio.
+    -- O conjunto novo já nasce com o que está valendo AGORA. É o caso de uso real: você
+    -- acabou de arrumar spec, talentos e equipamento para uma masmorra — agora só quer dar
+    -- um nome a isso. Começar vazio obrigaria a redigitar o óbvio.
     local specIndex = ns.Data.GetCurrentSpecIndex()
     local spec = ns.Data.GetSpecByIndex(specIndex)
 
-    presets[#presets + 1] = {
+    local preset = {
         name = "",
         spec = specIndex,
         talent = spec and ns.Data.GetActiveLoadoutID(spec.id) or nil,
         gear = ns.Data.GetEquippedSetID(),
     }
+    presets[#presets + 1] = preset
 
-    selected = #presets
-    scrollOffset = math.max(0, #presets - VISIBLE_ROWS)
     UI.Refresh()
+    if selection then selection:SelectElementData(preset) end
+    UI.RefreshEditor()
     editor.name:SetFocus()
 end
 
-function UI.Save()
-    local preset = Presets()[selected]
+function UI.SaveName()
+    local preset = UI.Selected()
     if not preset then return end
 
-    local name = editor.name:GetText()
-    if not name or name:match("^%s*$") then
-        UI.SetStatus(L["give the preset a name first."], true)
-        return
-    end
+    local name = editor.name:GetText() or ""
+    name = name:match("^%s*(.-)%s*$")
+    if name == preset.name then return end
 
-    preset.name = name:match("^%s*(.-)%s*$")
-    UI.SetStatus(L["preset saved."], false)
-    UI.Refresh()
+    preset.name = name
+    UI.AfterEdit()
 end
 
 function UI.Delete()
-    if not Presets()[selected] then return end
-    table.remove(Presets(), selected)
-    selected = nil
+    local preset = UI.Selected()
+    if not preset then return end
+
+    local presets = Presets()
+    for i = 1, #presets do
+        if presets[i] == preset then
+            table.remove(presets, i)
+            break
+        end
+    end
+
+    if selection and selection.ClearSelections then selection:ClearSelections() end
     UI.SetStatus(L["preset deleted."], false)
     UI.Refresh()
 end
 
-function UI.Load(index)
-    local preset = Presets()[index]
+function UI.Load(preset)
     if not preset then return end
-
     ns.db.last = preset.name
     ns.Data.Apply(preset, UI.SetStatus)
 end
