@@ -360,7 +360,7 @@ local function BuildEmptyState()
     empty:SetAllPoints()
 
     empty.title = empty:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    empty.title:SetPoint("CENTER", frame, "CENTER", 0, 45)
+    empty.title:SetPoint("CENTER", frame, "CENTER", 0, 55)
     empty.title:SetText(L["No presets yet"])
 
     empty.body = empty:CreateFontString(nil, "OVERLAY", "GameFontDisable")
@@ -379,6 +379,66 @@ local function BuildEmptyState()
 end
 
 --------------------------------------------------------------------------------
+---A faixa de avisos, no rodapé e em LARGURA TOTAL.
+---
+---Ela fica visível SEMPRE — inclusive com zero conjuntos, que é o caso que motivou existir.
+---Os dois avisos são o que o addon faz por quem nunca vai criar um conjunto; deixá-los só em
+---`/rs warn` e `/rs ready` é o mesmo que não tê-los, porque ninguém descobre comando.
+---
+---Ligados por padrão, e por isso o texto é afirmativo: a caixa marcada descreve o que já está
+---acontecendo, não uma promessa.
+local function BuildToggles()
+    local strip = CreateFrame("Frame", nil, frame)
+    strip:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -(HEIGHT - 68))
+    strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -(HEIGHT - 68))
+    strip:SetHeight(36)
+
+    strip.divider = strip:CreateTexture(nil, "ARTWORK")
+    strip.divider:SetPoint("TOPLEFT", 0, 0)
+    strip.divider:SetPoint("TOPRIGHT", 0, 0)
+    strip.divider:SetHeight(1)
+    if not ns.SetAtlasSafe or not ns.SetAtlasSafe(strip.divider, "Options_HorizontalDivider") then
+        strip.divider:SetColorTexture(1, 1, 1, 0.12)
+    end
+
+    ---Uma caixa com rótulo próprio. `UICheckButtonTemplate` tem um `.text` embutido, mas ele
+    ---depende de o frame ter nome — e frame nomeado vira global. FontString própria evita as
+    ---duas coisas.
+    local function Toggle(x, label, tip, key)
+        local box = CreateFrame("CheckButton", nil, strip, "UICheckButtonTemplate")
+        box:SetSize(24, 24)
+        box:SetPoint("TOPLEFT", x, -8)
+
+        local text = strip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        text:SetPoint("LEFT", box, "RIGHT", 2, 0)
+        text:SetText(label)
+
+        box:SetScript("OnClick", function(self)
+            ns.db[key] = self:GetChecked() and true or false
+        end)
+        box:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(label, 1, 1, 1)
+            GameTooltip:AddLine(tip, 0.7, 0.7, 0.7, true)
+            GameTooltip:Show()
+        end)
+        box:SetScript("OnLeave", GameTooltip_Hide)
+
+        box.key = key
+        return box
+    end
+
+    strip.warn = Toggle(0, L["Warn about wrong gear"],
+        L["In an arena with PvE gear, or in a dungeon with PvP gear, the addon says which slots are wrong."],
+        "warn")
+
+    strip.ready = Toggle(246, L["Show my setup on ready check"],
+        L["When the leader starts a ready check, the addon prints your spec, talent loadout and gear set."],
+        "readyCheck")
+
+    frame.toggles = strip
+end
+
 local function Create()
     if frame then return frame end
 
@@ -410,7 +470,7 @@ local function Create()
     if frame.Inset then
         frame.Inset:ClearAllPoints()
         frame.Inset:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -60)
-        frame.Inset:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 4 + LIST_W, -(HEIGHT - 26))
+        frame.Inset:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 4 + LIST_W, -(HEIGHT - 70))
     end
     local host = frame.Inset or frame
 
@@ -470,6 +530,7 @@ local function Create()
 
     BuildEditor()
     BuildEmptyState()
+    BuildToggles()
     return frame
 end
 
@@ -480,6 +541,11 @@ end
 ---que trava o bug "não consigo clicar em outros conjuntos" não teria como existir.
 function UI.DebugList()
     return frame and frame.list
+end
+
+---Acesso à faixa de avisos, para o harness poder clicar nas caixas.
+function UI.DebugToggles()
+    return frame and frame.toggles
 end
 
 function UI.Selected()
@@ -525,6 +591,11 @@ function UI.Refresh()
     local presets = Presets()
     local total = #presets
     local empty = total == 0
+
+    -- As caixas ficam fora do jogo de esconder/mostrar de propósito: elas valem nos dois
+    -- estados, e o estado vazio é justamente onde elas mais importam.
+    frame.toggles.warn:SetChecked(ns.db.warn ~= false)
+    frame.toggles.ready:SetChecked(ns.db.readyCheck ~= false)
 
     frame.emptyState:SetShown(empty)
     if frame.Inset then frame.Inset:SetShown(not empty) end

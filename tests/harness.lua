@@ -44,6 +44,8 @@ local function widget(kind)
     function self.GetHighlightTexture() return widget("Texture") end
     function self.GetNormalTexture() return widget("Texture") end
     function self.GetText() return self.__text or "" end
+    function self.SetChecked(_, v) self.__checked = v end
+    function self.GetChecked() return self.__checked == true end
     function self.SetText(_, t) self.__text = t end
     function self.HasFocus() return false end
 
@@ -691,6 +693,32 @@ print("== janela: estado vazio ==")
 ns.db.presets = {}
 ns.UI.Toggle()
 check("nenhum conjunto selecionado com a lista vazia", ns.UI.Selected(), nil)
+
+print("== as caixas de aviso ficam visiveis SEM conjunto nenhum ==")
+-- O motivo de existirem: os dois avisos sao o que o addon faz por quem nunca cria conjunto.
+-- Se eles so existissem em /rs warn e /rs ready, ninguem descobriria. E se sumissem junto com
+-- a lista na tela vazia, sumiriam exatamente no caso que os justifica.
+check("ligados por padrao", ns.db.warn ~= false and ns.db.readyCheck ~= false, true)
+check("a faixa existe", ns.UI.DebugToggles() ~= nil, true)
+check("e nao e escondida com a lista vazia",
+    ns.UI.DebugToggles().__shown ~= false, true)
+
+-- Desmarcar escreve no banco, e o aviso obedece.
+local caixa = ns.UI.DebugToggles().warn
+caixa.__checked = false
+caixa.__scripts.OnClick(caixa)
+check("desmarcar desliga o aviso", ns.db.warn, false)
+
+state.instance = "arena"
+VestirTudo(false)
+ns.Gear.ClearCache()
+ns.Alert.Check("teste")
+check("e com ele desligado o addon nao avisa", ns.Alert.__shown ~= true, true)
+
+caixa.__checked = true
+caixa.__scripts.OnClick(caixa)
+check("remarcar religa", ns.db.warn, true)
+state.instance = nil
 
 print("== janela: selecao automatica ==")
 -- Os bugs 2 e 3 (rotulo sem campo, texto colado) vinham do estado "nada selecionado". Ele

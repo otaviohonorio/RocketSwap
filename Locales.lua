@@ -91,3 +91,9 @@ L["shows what each slot is reading as"] = "mostra como cada slot está sendo lid
 L["turns the gear warning on or off"] = "liga ou desliga o aviso de equipamento"
 L["turns the ready check summary on or off"] = "liga ou desliga o resumo no ready check"
 L["re-enables warnings you silenced"] = "religa os avisos que você silenciou"
+L["Warn about wrong gear"] = "Avisar equipamento errado"
+L["In an arena with PvE gear, or in a dungeon with PvP gear, the addon says which slots are wrong."] =
+    "Numa arena com equipamento de PvE, ou numa masmorra com equipamento de PvP, o addon diz quais slots estão errados."
+L["Show my setup on ready check"] = "Resumo no ready check"
+L["When the leader starts a ready check, the addon prints your spec, talent loadout and gear set."] =
+    "Quando o líder manda o ready check, o addon mostra sua especialização, seus talentos e seu conjunto de itens."

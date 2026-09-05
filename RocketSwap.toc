@@ -2,7 +2,7 @@
 ## Title: |cffff6a00Rocket|r Swap
 ## Notes: Conjuntos que relacionam especializacao, talentos e itens — troque os tres com um clique.
 ## Author: Otavio Honorio
-## Version: 0.4.0
+## Version: 0.4.1
 ## SavedVariablesPerCharacter: RocketSwapDB
 ## Category: Combat
 ## IconTexture: Interface\Icons\INV_Misc_MissileLarge_Red
