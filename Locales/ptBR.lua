@@ -108,3 +108,7 @@ L["checks the labels taken from the game"] = "confere os rotulos que vem do jogo
 L["locale %s, %d game label(s):"] = "idioma %s, %d rotulo(s) vindos do jogo:"
 L["%d game label(s) are not usable here."] = "%d rotulo(s) do jogo nao servem neste cliente."
 L["version"] = "versão"
+
+-- Falha parcial e motivo vindo do jogo (0.6.0)
+L["talents: %s"] = "talentos: %s"
+L["%s loaded, except: %s"] = "%s carregado, menos: %s"
