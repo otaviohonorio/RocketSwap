@@ -58,9 +58,29 @@ local function widget(kind)
 end
 
 local frames = {}
+
+-- As PARTES que cada template da Blizzard cria. Sem isto o simulador devolveria uma FUNCAO
+-- para `frame.Inset` (o metatable responde qualquer chave PascalCase), o guard `if frame.Inset`
+-- passaria e o `:ClearAllPoints()` estouraria — um erro que so existe no simulador e mascara
+-- o comportamento real. Melhor o stub imitar o template do que o codigo se defender do stub.
+local TEMPLATE_PARTS = {
+    ButtonFrameTemplate = { "Inset", "Bg", "TitleContainer", "CloseButton", "PortraitContainer" },
+    PortraitFrameTemplate = { "TitleContainer", "CloseButton", "PortraitContainer" },
+    InputBoxInstructionsTemplate = { "Instructions" },
+}
+
 function CreateFrame(frameType, name, parent, template)
     local f = widget(frameType or "Frame")
     f.__name, f.__template = name, template
+
+    for pattern, parts in pairs(TEMPLATE_PARTS) do
+        if template == pattern then
+            for _, part in ipairs(parts) do
+                f[part] = widget(part)
+            end
+        end
+    end
+
     frames[#frames + 1] = f
     return f
 end
@@ -92,6 +112,64 @@ function UnitCastingInfo() return nil end
 function GetFileIDFromPath(path)
     return path:find("MissileLarge_Red", 1, true) and 12345 or nil
 end
+
+-- ScrollBox: o sistema de lista da Blizzard. Os stubs nao sao no-op — o SetDataProvider
+-- CHAMA o inicializador de cada linha, para o teste exercitar FillRow de verdade. Stub que
+-- nao executa nada da a impressao de cobertura sem cobrir.
+function CreateDataProvider(t) return { __items = t } end
+function CreateAnchor() return {} end
+function WrapTextInColor(text) return text end
+function InputBoxInstructions_OnTextChanged() end
+GRAY_FONT_COLOR = {}
+SelectionBehaviorMixin = { Event = { OnSelectionChanged = "OnSelectionChanged" } }
+
+function CreateScrollBoxListLinearView()
+    local view = {}
+    function view.SetVirtualized() end
+    function view.SetElementExtent() end
+    function view.SetPadding() end
+    function view.SetElementInitializer(_, _, fn) view.__init = fn end
+    return view
+end
+
+ScrollUtil = {
+    InitScrollBoxListWithScrollBar = function(list, _, view)
+        list.__view = view
+        list.__rows = {}
+        function list.SetDataProvider(_, provider)
+            list.__rows = {}
+            for i, data in ipairs(provider.__items or {}) do
+                local row = CreateFrame("Button", nil, list)
+                list.__rows[i] = row
+                if view.__init then view.__init(row, data) end
+            end
+        end
+        function list.ReinitializeFrames()
+            for i, row in ipairs(list.__rows) do
+                if view.__init and row.preset then view.__init(row, row.preset) end
+            end
+        end
+        function list.FindFrame(_, data)
+            for _, row in ipairs(list.__rows) do
+                if row.preset == data then return row end
+            end
+            return nil
+        end
+    end,
+    AddManagedScrollBarVisibilityBehavior = function() end,
+    AddSelectionBehavior = function()
+        local sel = { __selected = nil, __callbacks = {} }
+        function sel.RegisterCallback(_, _, fn, owner) sel.__callbacks[#sel.__callbacks + 1] = { fn, owner } end
+        function sel.GetSelectedElementData() return sel.__selected end
+        function sel.IsElementDataSelected(_, data) return sel.__selected == data end
+        function sel.SelectElementData(_, data)
+            sel.__selected = data
+            for _, cb in ipairs(sel.__callbacks) do cb[1](cb[2], data, true) end
+        end
+        function sel.ClearSelections() sel.__selected = nil end
+        return sel
+    end,
+}
 
 -- Estado simulado do personagem: um Cavaleiro da Morte com os mesmos conjuntos e loadouts
 -- do print que o usuario mandou. Frost e PvP sao a MESMA spec — que e o caso que o jogo
@@ -366,18 +444,56 @@ check("caiu no candidato que existe", escolhido:find("MissileLarge_Red", 1, true
 check("e sabe que verificou", verificado, true)
 check("lista de candidatos exposta", #ns.ICON_CANDIDATES >= 2, true)
 
-print("== janela ==")
+print("== janela: estado vazio ==")
+-- Reclamacao literal do usuario: "fica tudo vazio quando nao tem nada". Com zero conjuntos a
+-- janela mostra UM bloco central, e nada mais — nem lista, nem rotulos orfaos.
+ns.db.presets = {}
+ns.UI.Toggle()
+check("nenhum conjunto selecionado com a lista vazia", ns.UI.Selected(), nil)
+
+print("== janela: selecao automatica ==")
+-- Os bugs 2 e 3 (rotulo sem campo, texto colado) vinham do estado "nada selecionado". Ele
+-- deixou de existir: com pelo menos um conjunto a lista seleciona o primeiro sozinha. Se
+-- alguem tirar essa selecao automatica, este teste cai e os dois bugs voltam juntos.
+ns.UI.New()
+check("criar ja seleciona", ns.UI.Selected() ~= nil, true)
+check("o conjunto novo nasce com a spec atual", ns.UI.Selected().spec, 2)
+check("e com o conjunto de itens vestido", ns.UI.Selected().gear, 4)
+
+ns.UI.Refresh()
+check("refresh mantem a selecao", ns.UI.Selected() ~= nil, true)
+
+print("== janela: apagar usa a TABELA, nao o indice ==")
+-- Bug latente da versao anterior: `selected` era um indice, e `table.remove` desloca os
+-- indices — apagar um fazia a selecao apontar para outro conjunto. Agora ela guarda a
+-- propria tabela do conjunto.
+ns.db.presets = {}
+for _, nome in ipairs({ "Um", "Dois", "Tres" }) do
+    ns.UI.New()
+    ns.UI.Selected().name = nome
+end
+ns.UI.Refresh()
+check("tres conjuntos", #ns.db.presets, 3)
+
+local alvo = ns.UI.Selected()
+check("ha um selecionado", alvo ~= nil, true)
+ns.UI.Delete()
+check("sobraram dois", #ns.db.presets, 2)
+check("saiu exatamente o que estava selecionado",
+    ns.db.presets[1] ~= alvo and ns.db.presets[2] ~= alvo, true)
+
+print("== janela: o resto do ciclo ==")
 for _, step in ipairs({
-    { "UI.Toggle (abrir)", function() ns.UI.Toggle() end },
-    { "UI.New", function() ns.UI.New() end },
-    { "UI.Save sem nome", function() ns.UI.Save() end },
     { "UI.Refresh", function() ns.UI.Refresh() end },
-    { "UI.Delete", function() ns.UI.Delete() end },
+    { "UI.RefreshEditor", function() ns.UI.RefreshEditor() end },
+    { "UI.AfterEdit", function() ns.UI.AfterEdit() end },
+    { "UI.SaveName", function() ns.UI.SaveName() end },
     { "UI.Toggle (fechar)", function() ns.UI.Toggle() end },
 }) do
     local ok, err = pcall(step[2])
     print(ok and ("  ok    " .. step[1]) or ("  ERRO  " .. step[1] .. ": " .. tostring(err)))
     if not ok then os.exit(1) end
 end
+
 
 print("\nTudo carregou e rodou sem erro de Lua.")

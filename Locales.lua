@@ -13,9 +13,7 @@ local L = ns.L
 L["Presets"] = "Conjuntos"
 L["New preset"] = "Novo conjunto"
 L["Load"] = "Carregar"
-L["Save"] = "Salvar"
 L["Delete"] = "Apagar"
-L["Name"] = "Nome"
 L["Specialization"] = "Especialização"
 
 -- ARMADILHA DE NOME: a janela de talentos do jogo, em pt-BR, chama um loadout de talentos de
@@ -27,10 +25,14 @@ L["Talents"] = "Talentos"
 L["Gear"] = "Itens"
 
 L["(none)"] = "(nenhum)"
-L["Pick a preset"] = "Escolha um conjunto"
-L["No presets yet."] = "Nenhum conjunto ainda."
-L["Create one to switch spec, talents and gear with a single click."] =
-    "Crie um para trocar especialização, talentos e itens com um clique só."
+-- Estado vazio (redesenho de 05/09/2026). O texto responde à pergunta que o BOTÃO levanta
+-- ("vou ter que preencher tudo?") em vez de descrever o produto — e a resposta é verdade no
+-- código: `UI.New` já nasce com a spec, o loadout e o conjunto que estão valendo.
+L["No presets yet"] = "Nenhum conjunto ainda"
+L["The first one starts with the spec, talents and gear you have right now."] =
+    "O primeiro já nasce com a especialização, os talentos e os itens que você está usando agora."
+L["Create the first preset"] = "Criar o primeiro conjunto"
+L["Preset name"] = "Nome do conjunto"
 L["Unnamed"] = "Sem nome"
 
 L["Loading %s..."] = "Carregando %s..."
@@ -50,9 +52,7 @@ L["you are casting something — try again in a second."] =
     "você está conjurando algo — tente de novo daqui a pouco."
 L["timed out waiting for the game to confirm."] = "o jogo não confirmou a tempo."
 
-L["preset saved."] = "conjunto salvo."
 L["preset deleted."] = "conjunto apagado."
-L["give the preset a name first."] = "dê um nome ao conjunto primeiro."
 
 L["opens the window"] = "abre a janela"
 L["loads a preset by name"] = "carrega um conjunto pelo nome"
