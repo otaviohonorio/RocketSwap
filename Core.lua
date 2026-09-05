@@ -37,6 +37,32 @@ local function FlushQueue()
 end
 
 --------------------------------------------------------------------------------
+-- Icone: escolher sem chutar
+--------------------------------------------------------------------------------
+---Devolve o primeiro caminho de textura da lista que EXISTE neste cliente.
+---
+---`SetTexture` com caminho inexistente falha em SILENCIO — o botao fica vazio e nada avisa.
+---Nome de icone e o tipo de coisa que eu nao consigo confirmar em disco (as texturas moram
+---no CASC, nao na pasta de addons), entao ate aqui eu estava torcendo.
+---
+---`GetFileIDFromPath` resolve isso: devolve o id do arquivo, ou nil se o caminho nao existe.
+---E API documentada do 12.1.0 (`ClientDocumentation.lua:29`) e um addon instalado a usa
+---exatamente como teste de existencia (`MountJournalEnhanced/UI/SettingsDropDown.lua:88`).
+---@param paths string[] candidatos, do preferido para o ultimo recurso
+---@return string|nil caminho, boolean verificado
+function ns.FirstIcon(paths)
+    if type(GetFileIDFromPath) ~= "function" then
+        return paths[#paths], false     -- sem como verificar: usa o ultimo recurso
+    end
+
+    for _, path in ipairs(paths) do
+        local ok, id = pcall(GetFileIDFromPath, path)
+        if ok and id then return path, true end
+    end
+    return paths[#paths], false
+end
+
+--------------------------------------------------------------------------------
 ---Carrega o conjunto usado por ultimo. E o que o botao direito do minimapa faz: o caso
 ---comum e alternar entre dois conjuntos, e para isso nao vale abrir janela.
 function ns.LoadLast()

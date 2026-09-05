@@ -87,6 +87,11 @@ end
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 function tinsert(t, v) t[#t + 1] = v end
 function UnitCastingInfo() return nil end
+-- Resolve caminho de textura em FileID, ou nil se nao existir. E como o addon evita icone
+-- fantasma: aqui so o ultimo candidato "existe", para o fallback ser exercitado.
+function GetFileIDFromPath(path)
+    return path:find("MissileLarge_Red", 1, true) and 12345 or nil
+end
 
 -- Estado simulado do personagem: um Cavaleiro da Morte com os mesmos conjuntos e loadouts
 -- do print que o usuario mandou. Frost e PvP sao a MESMA spec — que e o caso que o jogo
@@ -347,11 +352,19 @@ check("nem comeca", comecou, false)
 check("e diz por que", msg ~= nil, true)
 
 print("== comandos ==")
-for _, cmd in ipairs({ "", "list", "help", "load Arena", "load nao-existe", "Arena" }) do
+for _, cmd in ipairs({ "", "list", "help", "icon", "load Arena", "load nao-existe", "Arena" }) do
     local ok, err = pcall(SlashCmdList.ROCKETSWAP, cmd)
     print(ok and ("  ok    /rs " .. cmd) or ("  ERRO  /rs " .. cmd .. ": " .. tostring(err)))
     if not ok then os.exit(1) end
 end
+
+print("== icone verificado, nao chutado ==")
+-- No simulador so o ultimo candidato existe: o addon tem que descer a lista ate ele, em vez
+-- de usar o primeiro e desenhar nada.
+local escolhido, verificado = ns.FirstIcon(ns.ICON_CANDIDATES)
+check("caiu no candidato que existe", escolhido:find("MissileLarge_Red", 1, true) ~= nil, true)
+check("e sabe que verificou", verificado, true)
+check("lista de candidatos exposta", #ns.ICON_CANDIDATES >= 2, true)
 
 print("== janela ==")
 for _, step in ipairs({

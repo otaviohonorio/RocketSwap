@@ -13,6 +13,25 @@ ns.Minimap = Minimap_
 local RADIUS = 80
 local button
 
+-- Candidatos de ícone, do preferido para o último recurso. Quem escolhe é o CLIENTE, via
+-- `ns.FirstIcon` → `GetFileIDFromPath`: caminho de textura que não existe falha em silêncio,
+-- e nome de ícone é justamente o que não dá para conferir em disco (as texturas moram no
+-- CASC, não na pasta de addons).
+--
+-- O último da lista é o do RocketMeter — o único nome que eu SEI existir neste cliente,
+-- porque o usuário o vê na lista de addons hoje. Se todos os outros falharem, cai nele.
+--
+-- `/rs icon` imprime quais resolveram: se você preferir outro, é trocar uma linha.
+local ICON_CANDIDATES = {
+    "Interface\\Icons\\INV_Misc_EnggizmosCog",
+    "Interface\\Icons\\INV_Misc_Gear_01",
+    "Interface\\Icons\\Trade_Engineering",
+    "Interface\\Icons\\INV_Misc_Bag_08",
+    "Interface\\Icons\\INV_Misc_MissileLarge_Red",
+}
+
+ns.ICON_CANDIDATES = ICON_CANDIDATES
+
 local function Reposition()
     local angle = math.rad(ns.db.minimap and ns.db.minimap.angle or 210)
     button:SetPoint("CENTER", Minimap, "CENTER",
@@ -89,12 +108,13 @@ function Minimap_.Create()
     return button
 end
 
----Atualiza o ícone para o conjunto vestido. Chamado quando o equipamento muda.
+---Ícone do botão: FIXO e genérico.
+---
+---A primeira versão mostrava o ícone do conjunto vestido, com a ideia de virar indicador. Na
+---prática o botão passou a parecer ícone de classe — o usuário viu um Cavaleiro da Morte
+---Sangue no minimapa, não o addon. Botão de addon precisa dizer QUAL addon ele é; qual
+---conjunto está ativo já é dito na janela, pelo ✓.
 function Minimap_.Refresh()
     if not button then return end
-
-    local _, icon = ns.Data.GearSetName(ns.Data.GetEquippedSetID())
-    -- Sem conjunto vestido (ou peça trocada à mão), cai para o ícone do addon — o mesmo do
-    -- RocketMeter, que é o único nome que eu sei existir neste cliente.
-    button.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_MissileLarge_Red")
+    button.icon:SetTexture(ns.FirstIcon(ICON_CANDIDATES))
 end
