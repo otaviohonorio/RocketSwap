@@ -100,6 +100,18 @@ format = string.format
 
 function GameTooltip_Hide() end
 function GetLocale() return "ptBR" end
+
+-- Le o .toc de verdade em vez de devolver um numero fixo: com constante aqui, um teste
+-- sobre versao passaria a confirmar o stub em vez do addon.
+C_AddOns = {
+    GetAddOnMetadata = function(_, field)
+        for line in io.lines(ADDON .. ".toc") do
+            local value = line:match("^## " .. field .. ":%s*(.-)%s*$")
+            if value then return (value:gsub("%c", "")) end
+        end
+    end,
+}
+
 function GetCursorPosition() return 400, 300 end
 function CopyTable(t)
     local out = {}
@@ -537,7 +549,7 @@ check("nem comeca", comecou, false)
 check("e diz por que", msg ~= nil, true)
 
 print("== comandos ==")
-for _, cmd in ipairs({ "", "list", "help", "icon", "load Arena", "load nao-existe", "Arena" }) do
+for _, cmd in ipairs({ "", "list", "help", "icon", "i18n", "load Arena", "load nao-existe", "Arena" }) do
     local ok, err = pcall(SlashCmdList.ROCKETSWAP, cmd)
     print(ok and ("  ok    /rs " .. cmd) or ("  ERRO  /rs " .. cmd .. ": " .. tostring(err)))
     if not ok then os.exit(1) end
@@ -813,5 +825,75 @@ for _, step in ipairs({
     if not ok then os.exit(1) end
 end
 
+
+
+print("== localizacao: rotulos que vem do jogo ==")
+-- Mesmo bloco do RocketMeter (padronizado em 05/09/2026). `FROM_GAME` troca nossos rotulos
+-- pelas palavras que o CLIENTE ja traduziu. A guarda de tipo e a que nao pode ser removida:
+-- sem ela, `text:find` recebe `nil` e levanta erro NA CARGA — e como e aqui que `ns.L` nasce,
+-- o addon inteiro morre junto.
+--
+-- Roda em namespace proprio, carregando so o enUS.lua: num cliente pt-BR o ptBR.lua sobrescreve
+-- as chaves, entao pelo `L` de verdade este caminho e invisivel.
+do
+    local saved, touched = {}, {}
+    local function setglobal(name, value)
+        if not touched[name] then
+            saved[name], touched[name] = _G[name], true
+        end
+        _G[name] = value
+    end
+
+    setglobal("SPECIALIZATION", "Spezialisierung")   -- 1. global limpa
+    setglobal("TALENTS", nil)                        -- 2. nao existe neste cliente
+    setglobal("APPEARANCE_LABEL", "%d. %s")          -- 3. modelo de frase, nao rotulo
+    setglobal("DELETE", "")                          -- 4. existe mas esta vazia
+
+    local probe = {}
+    assert(loadfile("Locales/enUS.lua"))(ADDON, probe)
+    local PL = probe.L
+
+    check("global limpa vira o rotulo", PL["Specialization"], "Spezialisierung")
+    check("global ausente cai no ingles, nao em nil", PL["Talents"], "Talents")
+    check("global com marcador de formato e recusada", PL["Appearance"], "Appearance")
+    check("global vazia e recusada", PL["Delete"], "Delete")
+
+    local why = {}
+    for _, row in ipairs(probe.CheckGameStrings()) do
+        why[row.tag] = row.why or false
+    end
+    check("ausente entra no relatorio", why["TALENTS"], "ausente")
+    check("com formato entra no relatorio", why["APPEARANCE_LABEL"], "modelo de frase")
+    check("vazia entra no relatorio", why["DELETE"], "vazia")
+    check("limpa NAO entra no relatorio", why["SPECIALIZATION"], false)
+
+    -- Conferir nao pode ESCREVER: o `/rs i18n` roda muito depois da carga, e reaplicar ali
+    -- apagaria o que o ptBR.lua sobrescreveu. A isca e a SPECIALIZATION acima, que esta
+    -- valida de proposito -- sem uma global valida, a sabotagem nao teria o que sobrescrever.
+    local antes = ns.L["Specialization"]
+    ns.CheckGameStrings()
+    check("conferir NAO reaplica por cima da traducao", ns.L["Specialization"], antes)
+
+    -- Chave de FROM_GAME que o codigo nao usa e peso morto que ninguem descobre sozinho.
+    local usedKeys = {}
+    for _, file in ipairs(files) do
+        local fh = io.open(file)
+        for key in fh:read("*a"):gmatch('L%[%s*"([^"]*)"%s*%]') do
+            usedKeys[key] = true
+        end
+        fh:close()
+    end
+    local orphan = false
+    for key in pairs(probe.FROM_GAME) do
+        if not usedKeys[key] then
+            orphan = key
+        end
+    end
+    check("nenhuma chave de FROM_GAME esta morta", orphan, false)
+
+    for name in pairs(touched) do
+        _G[name] = saved[name]
+    end
+end
 
 print("\nTudo carregou e rodou sem erro de Lua.")

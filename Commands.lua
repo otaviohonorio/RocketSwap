@@ -76,12 +76,35 @@ commands["gear"] = function()
     end
 end
 
+-- Instrumentacao, pelo mesmo motivo do `/rs gear`: `FROM_GAME` depende de globais do cliente, e
+-- global que nao existe nao avisa nada — o rotulo apenas continua em ingles, o que e
+-- indistinguivel de "esta certo assim". Uma linha de saida encerra a duvida.
+commands["i18n"] = function()
+    local report = ns.CheckGameStrings()
+    ns.Print(format(L["locale %s, %d game label(s):"], GetLocale(), #report))
+
+    local broken = 0
+    for _, row in ipairs(report) do
+        if row.text then
+            print(format("  |cff33ff99ok|r    %-24s %s", row.tag, row.text))
+        else
+            broken = broken + 1
+            print(format("  |cffff5555--|r    %-24s %s  (%s)", row.tag, row.key, row.why))
+        end
+    end
+
+    if broken > 0 then
+        ns.Print(format(L["%d game label(s) are not usable here."], broken))
+    end
+end
+
 commands["help"] = function()
-    ns.Print(L["commands:"])
+    ns.Print(L["version"] .. " " .. ns.version .. " — " .. L["commands:"])
     print("  /rs                 " .. L["opens the window"])
     print("  /rs load <nome>     " .. L["loads a preset by name"])
     print("  /rs list            " .. L["lists the presets"])
     print("  /rs gear            " .. L["shows what each slot is reading as"])
+    print("  /rs i18n            " .. L["checks the labels taken from the game"])
     print("  /rs warn            " .. L["turns the gear warning on or off"])
     print("  /rs ready           " .. L["turns the ready check summary on or off"])
     print("  /rs unmute          " .. L["re-enables warnings you silenced"])
