@@ -23,6 +23,7 @@ L["Specialization"] = "Especialização"
 -- justamente para quem já se confunde entre as duas.
 L["Talents"] = "Talentos"
 L["Gear"] = "Itens"
+L["Appearance"] = "Aparência"
 
 L["(none)"] = "(nenhum)"
 -- Estado vazio (redesenho de 05/09/2026). O texto responde à pergunta que o BOTÃO levanta
@@ -62,3 +63,9 @@ L["commands:"] = "comandos:"
 L["loaded. %d preset(s). Type /rs."] = "carregado. %d conjunto(s). Digite /rs."
 L["Left click: open. Right click: load the last preset."] =
     "Clique: abrir. Botão direito: carregar o último conjunto."
+-- Transmog opcional (0.3.0)
+L["Changing appearance..."] = "Trocando a aparência..."
+L["this client cannot switch transmog outfits."] =
+    "este cliente não sabe trocar conjuntos de aparência."
+L["that transmog outfit no longer exists."] = "esse conjunto de aparência não existe mais."
+L["the transmog outfit could not be applied."] = "não deu para aplicar a aparência."

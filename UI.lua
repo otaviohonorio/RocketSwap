@@ -30,7 +30,7 @@ local UI = {}
 ns.UI = UI
 
 -- Todos os números têm origem. Onde há citação, ela é de arquivo do cliente 12.1.0.
-local WIDTH, HEIGHT = 520, 320
+local WIDTH, HEIGHT = 520, 370
 local LIST_W = 260            -- largura externa do inset da lista: x 4..264
 local GUTTER = 20             -- calha entre colunas (MountJournal)
 local COL_X = 284             -- borda esquerda da ARTE da coluna direita
@@ -77,6 +77,9 @@ local function Subtitle(preset)
     end
     if preset.gear then
         parts[#parts + 1] = ns.Data.GearSetName(preset.gear) or ("#" .. preset.gear)
+    end
+    if preset.transmog then
+        parts[#parts + 1] = ns.Data.OutfitName(preset.transmog) or ("#" .. preset.transmog)
     end
 
     return table.concat(parts, "  ·  ")
@@ -329,6 +332,19 @@ local function BuildEditor()
         end,
         function() local p = Current(); return p and p.gear end,
         function(v) local p = Current(); if p then p.gear = v end end)
+
+    -- Aparência é OPCIONAL de propósito: deixar em "(nenhum)" faz o conjunto não mexer na
+    -- roupa. Quem não usa transmog nem percebe que o campo existe.
+    editor.transmog = Group(frame, L["Appearance"], -108 - GROUP_STEP * 3,
+        function()
+            local out = {}
+            for _, o in ipairs(ns.Data.GetOutfits()) do
+                out[#out + 1] = { value = o.outfitID, text = o.name, icon = o.icon }
+            end
+            return out
+        end,
+        function() local p = Current(); return p and p.transmog end,
+        function(v) local p = Current(); if p then p.transmog = v end end)
 end
 
 --------------------------------------------------------------------------------
@@ -488,7 +504,7 @@ function UI.RefreshEditor()
     local has = preset ~= nil
 
     editor.name:SetShown(has)
-    for _, group in ipairs({ editor.spec, editor.talent, editor.gear }) do
+    for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
         -- `SetupMenu` só gera o menu com o frame visível: mostrar ANTES de sincronizar.
         group:SetShown(has)
         if has then group.Sync() end
@@ -519,7 +535,7 @@ function UI.Refresh()
     if empty then
         editor.name:Hide()
         editor.divider:Hide()
-        for _, group in ipairs({ editor.spec, editor.talent, editor.gear }) do
+        for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
             group:Hide()
         end
         return

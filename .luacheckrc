@@ -19,7 +19,7 @@ read_globals = {
     "C_Timer", "C_Spell", "C_Item", "C_AddOns", "C_Secrets", "C_CurveUtil",
     "C_DurationUtil", "C_RestrictedActions", "C_UnitAuras", "C_ChatInfo",
     -- O que este addon usa de fato:
-    "C_EquipmentSet", "C_ClassTalents", "C_Traits", "C_SpecializationInfo", "Enum",
+    "C_EquipmentSet", "C_TransmogOutfitInfo", "C_ClassTalents", "C_Traits", "C_SpecializationInfo", "Enum",
     "GetSpecialization", "GetNumSpecializations", "SetSpecialization", "UnitCastingInfo",
     "GetLocale", "GetCursorPosition", "Minimap", "UISpecialFrames", "tinsert", "table",
     "math", "ipairs", "pairs", "type", "pcall", "tostring", "tonumber", "unpack",
