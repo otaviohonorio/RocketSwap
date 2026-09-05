@@ -140,9 +140,13 @@ ScrollUtil = {
             list.__rows = {}
             for i, data in ipairs(provider.__items or {}) do
                 local row = CreateFrame("Button", nil, list)
+                row.GetElementData = function() return data end
                 list.__rows[i] = row
                 if view.__init then view.__init(row, data) end
             end
+            -- Como no jogo: trocar o data provider APAGA a selecao
+            -- (SelectionBehaviorMixin:OnScrollBoxDataProviderReassigned, ScrollUtil.lua:413).
+            if list.__selection then list.__selection.__selected = nil end
         end
         function list.ReinitializeFrames()
             for i, row in ipairs(list.__rows) do
@@ -157,15 +161,34 @@ ScrollUtil = {
         end
     end,
     AddManagedScrollBarVisibilityBehavior = function() end,
-    AddSelectionBehavior = function()
+    -- ESTE STUB JA MENTIU UMA VEZ. A versao anterior fazia GetSelectedElementData devolver UM
+    -- elemento; a API real devolve uma LISTA (ScrollUtil.lua:434). Lista vazia e verdadeira em
+    -- Lua, entao o addon achava que havia selecao onde nao havia — e 61 checks passaram em
+    -- cima de codigo quebrado. Stub que diverge da API testa a si mesmo.
+    AddSelectionBehavior = function(list)
         local sel = { __selected = nil, __callbacks = {} }
-        function sel.RegisterCallback(_, _, fn, owner) sel.__callbacks[#sel.__callbacks + 1] = { fn, owner } end
-        function sel.GetSelectedElementData() return sel.__selected end
+        sel.__list = list
+        list.__selection = sel
+
+        function sel.RegisterCallback(_, _, fn, owner)
+            sel.__callbacks[#sel.__callbacks + 1] = { fn, owner }
+        end
+        -- LISTA, como a de verdade.
+        function sel.GetSelectedElementData()
+            return sel.__selected and { sel.__selected } or {}
+        end
+        function sel.GetFirstSelectedElementData() return sel.__selected end
         function sel.IsElementDataSelected(_, data) return sel.__selected == data end
         function sel.SelectElementData(_, data)
+            local antigo = sel.__selected
             sel.__selected = data
-            for _, cb in ipairs(sel.__callbacks) do cb[1](cb[2], data, true) end
+            for _, cb in ipairs(sel.__callbacks) do
+                if antigo and antigo ~= data then cb[1](cb[2], antigo, false) end
+                cb[1](cb[2], data, true)
+            end
         end
+        -- Select(frame) le o elementData DO FRAME (ScrollUtil.lua:619).
+        function sel.Select(_, f) return sel:SelectElementData(f:GetElementData()) end
         function sel.ClearSelections() sel.__selected = nil end
         return sel
     end,
@@ -481,6 +504,55 @@ ns.UI.Delete()
 check("sobraram dois", #ns.db.presets, 2)
 check("saiu exatamente o que estava selecionado",
     ns.db.presets[1] ~= alvo and ns.db.presets[2] ~= alvo, true)
+
+print("== janela: o que o teste in-game reprovou ==")
+-- Quatro bugs relatados pelo usuario, todos com o mesmo tipo de causa: eu confiei numa API
+-- sem ler o retorno dela, e o simulador antigo confirmou a minha versao em vez da real.
+-- Estes checks falham se qualquer um deles voltar.
+
+ns.db.presets = {}
+ns.UI.Toggle()
+ns.UI.New(); ns.UI.Selected().name = "Mitica"
+ns.UI.New(); ns.UI.Selected().name = "Arena"
+ns.UI.Refresh()
+check("dois conjuntos", #ns.db.presets, 2)
+
+-- (1) "nao consigo clicar em outros conjuntos": a linha nao tinha OnClick nenhum. O
+-- AddSelectionBehavior gerencia o ESTADO da selecao, nao captura o clique.
+check("a linha responde ao clique",
+    (function()
+        local list = ns.UI.DebugList and ns.UI.DebugList()
+        if not list or not list.__rows or not list.__rows[2] then return "sem linhas" end
+        local row = list.__rows[2]
+        if not row.__scripts.OnClick then return "sem OnClick" end
+        row.__scripts.OnClick(row)
+        return ns.UI.Selected() == ns.db.presets[2]
+    end)(), true)
+
+-- (2) "quando seleciono a especializacao, nada muda": Current() devolvia a LISTA vazia do
+-- GetSelectedElementData, entao o set escrevia numa tabela descartavel.
+local alvo = ns.UI.Selected()
+check("ha um conjunto de verdade selecionado", type(alvo) == "table" and alvo.name ~= nil, true)
+check("e ele esta na lista", alvo == ns.db.presets[2], true)
+
+alvo.spec = 3
+ns.UI.AfterEdit()
+check("escrever a spec pega no conjunto certo", ns.db.presets[2].spec, 3)
+
+-- (3) "o combo de talentos nao traz nada": sem spec valida, GetLoadouts(nil) devolve vazio.
+-- Com a spec certa (Gelido = indice 2, id 251), tem que trazer os tres loadouts.
+alvo.spec = 2
+local spec = ns.Data.GetSpecByIndex(alvo.spec)
+check("a spec resolve", spec ~= nil and spec.id, 251)
+check("e ai o combo de talentos tem itens", #ns.Data.GetLoadouts(spec.id), 3)
+check("sem spec, nao tem (era o sintoma)", #ns.Data.GetLoadouts(nil), 0)
+
+-- (4) "a delecao nao funcionou": Delete procurava a tabela vazia na lista e nao achava.
+local antes = #ns.db.presets
+local paraApagar = ns.UI.Selected()
+ns.UI.Delete()
+check("apagou um", #ns.db.presets, antes - 1)
+check("e foi o selecionado", ns.db.presets[1] ~= paraApagar, true)
 
 print("== janela: o resto do ciclo ==")
 for _, step in ipairs({
