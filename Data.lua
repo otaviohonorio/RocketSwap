@@ -37,6 +37,11 @@ ns.Data = Data
 -- Prazo de cada passo. Trocar de spec é o mais lento: tem cast e o servidor responde.
 local STEP_TIMEOUT = 12
 
+-- Um quadro de folga antes de conferir se a aparencia trocou. Ver `Steps.transmog`: nao esta
+-- verificado que a troca vale no mesmo quadro da chamada, e conferir cedo demais transformaria
+-- uma troca que funciona num aviso de falha.
+local TRANSMOG_CONFIRM_DELAY = 0.1
+
 --------------------------------------------------------------------------------
 -- Leitura: o que o jogador já tem
 --------------------------------------------------------------------------------
@@ -225,7 +230,16 @@ local function Finish(ok, message)
     -- em "Carregar". Pego pelo harness, não in-game.
     local preset = running and running.preset
     local report = running and running.report
+    local failures = running and running.failures
     running = nil
+
+    -- Correu tudo, mas algum passo não deu: o resultado não é sucesso nem fracasso, é
+    -- **parcial**, e a mensagem tem que dizer as duas coisas — o que foi aplicado e o que não.
+    if ok and failures and #failures > 0 then
+        ok = false
+        message = format(L["%s loaded, except: %s"],
+            preset and preset.name or "?", table.concat(failures, "; "))
+    end
 
     local text = ok and format(L["%s is ready."], preset and preset.name or "?")
         or (message or L["timed out waiting for the game to confirm."])
@@ -242,8 +256,15 @@ local RunNext   -- declarado antes para os passos poderem chamá-lo
 ---travado em "carregando" para sempre, sem dizer nada.
 local function Arm()
     if running.timer then running.timer:Cancel() end
+    -- O PRAZO TAMBEM SO ANOTA. Pela mesma razao do `fail` em `RunNext`: se os talentos nao
+    -- confirmarem a tempo, os itens e a aparencia ainda podem ser aplicados, e derrubar tudo
+    -- deixaria o jogador sem nada em vez de sem uma parte.
     running.timer = C_Timer.NewTimer(STEP_TIMEOUT, function()
-        Finish(false, L["timed out waiting for the game to confirm."])
+        if not running then return end
+        running.failures = running.failures or {}
+        running.failures[#running.failures + 1] =
+            L["timed out waiting for the game to confirm."]
+        RunNext()
     end)
 end
 
@@ -270,6 +291,18 @@ function Steps.spec(preset)
     return "wait"
 end
 
+---A mensagem do JOGO, quando ele der uma.
+---
+---O texto vem localizado e diz a causa concreta ("você não pode fazer isso em combate", "não é
+---possível numa área de dificuldade Mítica"…). A nossa frase genérica só entra quando o jogo
+---não explicou — e aí ela é honesta, porque de fato não se sabe.
+local function TalentError(changeError)
+    if type(changeError) == "string" and changeError ~= "" then
+        return format(L["talents: %s"], changeError)
+    end
+    return L["the talent loadout could not be loaded."]
+end
+
 function Steps.talent(preset)
     if not preset.talent then return "skip" end
 
@@ -282,7 +315,21 @@ function Steps.talent(preset)
         return "fail", L["the talent loadout could not be loaded."]
     end
 
-    local ok, result = pcall(C_ClassTalents.LoadConfig, preset.talent, true)
+    -- PERGUNTA ANTES, e usa a resposta do jogo. `CanEditTalents` devolve `canEdit, changeError`
+    -- e a documentação é explícita: *"Returns true if the player could switch talents if they
+    -- staged a proper loadout"*. É o motivo real da falha intermitente — combate, área errada,
+    -- restrição de instância — e o jogo já o entrega em português.
+    if C_ClassTalents.CanEditTalents then
+        local fine, canEdit, why = pcall(C_ClassTalents.CanEditTalents)
+        if fine and canEdit == false then
+            return "fail", TalentError(why)
+        end
+    end
+
+    -- TRÊS retornos, não um: `result, changeError, newLearnedNodeIDs`. Capturar só o primeiro
+    -- jogava fora justamente a string que diz POR QUE não deu — e o addon respondia com um
+    -- "não deu para carregar os talentos" que não ensina nada.
+    local ok, result, changeError = pcall(C_ClassTalents.LoadConfig, preset.talent, true)
     if not ok then return "fail", L["the talent loadout could not be loaded."] end
 
     -- Faz o jogo lembrar qual loadout está valendo — sem isto a própria janela de talentos
@@ -296,7 +343,7 @@ function Steps.talent(preset)
         return "skip"       -- já aplicado; segue direto para o próximo passo
     end
     if result == (E and E.Error) then
-        return "fail", L["the talent loadout could not be loaded."]
+        return "fail", TalentError(changeError)
     end
 
     Arm()
@@ -356,10 +403,41 @@ function Steps.transmog(preset)
 
     Report(L["Changing appearance..."], false)
 
+    -- `allowRemoveOutfit = false` é obrigatório aqui, e o motivo está escrito na própria
+    -- Blizzard: *"if applying the same outfit that is already applied, it will be treated as a
+    -- **clear** unless the index is prefixed by '!'"* (`SlashCommands.lua:1716`). Com `true`,
+    -- carregar duas vezes o mesmo conjunto TIRARIA a aparência na segunda.
     local ok = pcall(C_TransmogOutfitInfo.ChangeToOutfit, index, false)
     if not ok then return "fail", L["the transmog outfit could not be applied."] end
 
-    return "skip"
+    -- CONFERE, em vez de presumir. O comentário acima desta função já prometia isso desde a
+    -- 0.3.0 e o código não fazia: devolvia "skip" logo depois da chamada. Como não há evento de
+    -- confirmação para a troca de aparência (`TRANSMOG_OUTFITS_CHANGED` avisa que a LISTA mudou,
+    -- não qual está ativa), ler o estado de volta é a única verificação possível.
+    --
+    -- **Não imediatamente**, e este cuidado é deliberado: não está verificado que a troca vale
+    -- no mesmo quadro da chamada. Conferir na hora e errar transformaria uma troca que funciona
+    -- num aviso de falha — pior que o defeito original. Um quadro de espera custa nada e tira o
+    -- palpite da conta.
+    -- `Arm()` ANTES de agendar: a confirmação chama `RunNext`, que pode terminar a corrente e
+    -- zerar `running` ali mesmo. Armar depois disso indexaria `running` já nulo — e não é
+    -- teórico, foi o que o harness pegou na primeira versão desta função.
+    Arm()
+
+    local token = running
+    C_Timer.After(TRANSMOG_CONFIRM_DELAY, function()
+        -- Outra aplicação pode ter começado nesse meio tempo; esta já não manda mais.
+        if not running or running ~= token then return end
+
+        if Data.GetActiveOutfitID() ~= preset.transmog then
+            running.failures = running.failures or {}
+            running.failures[#running.failures + 1] =
+                L["the transmog outfit could not be applied."]
+        end
+        RunNext()
+    end)
+
+    return "wait"
 end
 
 --------------------------------------------------------------------------------
@@ -378,7 +456,19 @@ RunNext = function()
     if outcome == "skip" then
         RunNext()
     elseif outcome == "fail" then
-        Finish(false, message)
+        -- UM PASSO QUE FALHA NÃO DERRUBA OS SEGUINTES.
+        --
+        -- Antes, `fail` chamava `Finish` na hora, e a corrente parava ali. Como a ordem é
+        -- spec → talentos → itens → aparência, uma falha nos talentos (que acontece por motivo
+        -- do jogo — combate, área errada) levava junto os ITENS e a APARÊNCIA, que teriam
+        -- funcionado. Foi assim que "a aparência não funciona" apareceu: ela é o último passo e
+        -- quase nunca chegava a rodar.
+        --
+        -- Agora a falha é anotada e a corrente segue. No fim, o relatório diz o que não deu —
+        -- e o jogador fica com tudo que era possível aplicar, em vez de nada.
+        running.failures = running.failures or {}
+        running.failures[#running.failures + 1] = message
+        RunNext()
     end
     -- "wait": o evento correspondente chama RunNext()
 end

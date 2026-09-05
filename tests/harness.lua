@@ -315,10 +315,16 @@ C_ClassTalents = {
     UpdateLastSelectedSavedConfigID = function(specID, configID)
         state.activeLoadout[specID] = configID
     end,
+    -- TRES retornos, como a API: `result, changeError, newLearnedNodeIDs`
+    -- (ClassTalentsDocumentation.lua:263-268). Devolver so o primeiro escondia que o addon
+    -- estava jogando fora justamente a string que diz por que a troca nao deu.
     LoadConfig = function(configID)
         state.pendingLoadout = configID
-        return 2                 -- LoadInProgress: confirma por evento
+        return 2, nil, {}        -- LoadInProgress: confirma por evento
     end,
+    -- `CanEditTalents` devolve `canEdit, changeError`. Sem ela no simulador, a pre-checagem do
+    -- addon era pulada em silencio e o teste nunca via esse caminho.
+    CanEditTalents = function() return true, nil end,
 }
 
 C_Traits = {
@@ -547,6 +553,100 @@ local comecou = ns.Data.Apply({ name = "Arena", spec = 2, talent = 10, gear = 4 
     function(text) msg = text end)
 check("nem comeca", comecou, false)
 check("e diz por que", msg ~= nil, true)
+
+print("== um passo que falha NAO derruba os seguintes ==")
+-- Relato: "as vezes da erro pra trocar o preset" e "o transmog nao ta funcionando". As duas
+-- coisas eram A MESMA: a ordem e spec -> talentos -> itens -> aparencia, e uma falha nos
+-- talentos chamava `Finish` na hora. A aparencia e o ULTIMO passo, entao quase nunca chegava a
+-- rodar -- parecia que ela nao funcionava, quando na verdade nem era tentada.
+do
+    state.specIndex, state.equippedSet = 2, 1
+    state.activeLoadout[251] = 11
+    state.outfit = nil
+    state.pendingOutfit = nil
+
+    -- Talentos falham por motivo do jogo.
+    local realCanEdit = C_ClassTalents.CanEditTalents
+    C_ClassTalents.CanEditTalents = function() return false, "Voce nao pode fazer isso agora." end
+
+    -- A aparencia, se for tentada, funciona.
+    local realChange = C_TransmogOutfitInfo.ChangeToOutfit
+    C_TransmogOutfitInfo.ChangeToOutfit = function(index)
+        for _, o in ipairs(OUTFITS) do
+            if o.playerFacingOutfitIndex == index then state.outfit = o.outfitID end
+        end
+        return true
+    end
+
+    local texto, houveErro
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, talent = 10, gear = 1, transmog = 71 },
+        function(t, isError) texto, houveErro = t, isError end)
+
+    check("a aparencia foi aplicada mesmo com os talentos falhando", state.outfit, 71)
+    check("e o addon avisou que algo falhou", houveErro, true)
+    check("a mensagem diz o motivo que o JOGO deu",
+        texto and texto:find("Voce nao pode fazer isso agora.", 1, true) ~= nil, true)
+    check("e diz que o resto foi aplicado",
+        texto and texto:find("Frost PvP", 1, true) ~= nil, true)
+
+    C_ClassTalents.CanEditTalents = realCanEdit
+    C_TransmogOutfitInfo.ChangeToOutfit = realChange
+end
+
+print("== o motivo vem do jogo, nao da nossa frase generica ==")
+-- `LoadConfig` devolve TRES valores -- `result, changeError, newLearnedNodeIDs` -- e o codigo
+-- capturava so o primeiro, jogando fora justamente a string que diz por que nao deu.
+do
+    state.specIndex, state.activeLoadout[251] = 2, 11
+    state.outfit = nil
+
+    local realLoad = C_ClassTalents.LoadConfig
+    C_ClassTalents.LoadConfig = function()
+        return 0, "Nao e possivel trocar talentos aqui."      -- Error + motivo
+    end
+
+    local texto
+    ns.Data.Apply({ name = "Tank", spec = 2, talent = 10 },
+        function(t) texto = t end)
+
+    check("o motivo do jogo chega ao jogador",
+        texto and texto:find("Nao e possivel trocar talentos aqui.", 1, true) ~= nil, true)
+
+    C_ClassTalents.LoadConfig = realLoad
+end
+
+print("== a aparencia CONFERE que pegou ==")
+-- O comentario da funcao prometia isso desde a 0.3.0 e o codigo nao fazia: devolvia "skip" logo
+-- depois da chamada. Uma troca que nao pega passava por "pronto".
+do
+    state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
+    state.outfit = nil
+
+    -- A chamada "funciona" (nao estoura) mas nao muda nada -- o caso silencioso.
+    local realChange = C_TransmogOutfitInfo.ChangeToOutfit
+    C_TransmogOutfitInfo.ChangeToOutfit = function() return true end
+
+    local texto, houveErro
+    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
+        function(t, isError) texto, houveErro = t, isError end)
+
+    check("troca que nao pega e reportada", houveErro, true)
+
+    -- E quando pega, nao reclama.
+    C_TransmogOutfitInfo.ChangeToOutfit = function(index)
+        for _, o in ipairs(OUTFITS) do
+            if o.playerFacingOutfitIndex == index then state.outfit = o.outfitID end
+        end
+        return true
+    end
+    state.outfit = nil
+    local ok2
+    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
+        function(_, isError) ok2 = not isError end)
+    check("troca que pega nao vira aviso", ok2, true)
+
+    C_TransmogOutfitInfo.ChangeToOutfit = realChange
+end
 
 print("== comandos ==")
 for _, cmd in ipairs({ "", "list", "help", "icon", "i18n", "load Arena", "load nao-existe", "Arena" }) do
