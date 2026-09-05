@@ -23,7 +23,9 @@ read_globals = {
     "GetSpecialization", "GetNumSpecializations", "SetSpecialization", "UnitCastingInfo",
     "GetLocale", "GetCursorPosition", "Minimap", "UISpecialFrames", "tinsert", "table",
     "math", "ipairs", "pairs", "type", "pcall", "tostring", "tonumber", "unpack",
-    "GameTooltip_Hide", "Settings",
+    "GameTooltip_Hide", "Settings", "C_TooltipInfo", "C_EventUtils", "UIErrorsFrame",
+    "RaidWarningUtil", "GetInventoryItemLink", "GetMaxBattlefieldID", "GetBattlefieldStatus",
+    "PVP_ITEM_LEVEL_TOOLTIP", "NORMAL_FONT_COLOR", "_G", "GetFileIDFromPath",
     "Settings", "EventRegistry", "LibStub",
 }
 

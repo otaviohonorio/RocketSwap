@@ -8,6 +8,13 @@ ns.defaults = {
     last = nil,          -- nome do ultimo conjunto carregado, para o clique direito
     minimap = { angle = 210 },
     pos = nil,
+
+    -- Os dois avisos, ligados por padrao: eles sao o que o addon faz por quem nunca criar
+    -- um conjunto. Desligaveis por /rs warn e /rs ready.
+    warn = true,          -- equipamento errado para o conteudo
+    readyCheck = true,    -- resumo do que voce esta usando, no ready check
+    muted = {},           -- situacoes que o usuario mandou calar
+    mutedSlots = {},      -- slots que o usuario mandou calar
 }
 
 function ns.Print(...)
@@ -103,6 +110,7 @@ end
 
 function handlers:PLAYER_LOGIN()
     ns.Minimap.Create()
+    ns.Alert.Create()
     ns.Print(format(L["loaded. %d preset(s). Type /rs."], #ns.db.presets))
 end
 

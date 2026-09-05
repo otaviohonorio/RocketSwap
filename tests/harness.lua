@@ -107,11 +107,65 @@ end
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 function tinsert(t, v) t[#t + 1] = v end
 function UnitCastingInfo() return nil end
+-- No jogo, valor secret e opaco em combate. Aqui nada e secret; o que importa e o addon
+-- CHAMAR a funcao antes de tocar no valor, e isso o simulador exercita.
+function issecretvalue() return false end
+_G = _G or setmetatable({}, { __index = function(_, k) return rawget(_ENV or {}, k) end })
 -- Resolve caminho de textura em FileID, ou nil se nao existir. E como o addon evita icone
 -- fantasma: aqui so o ultimo candidato "existe", para o fallback ser exercitado.
 function GetFileIDFromPath(path)
     return path:find("MissileLarge_Red", 1, true) and 12345 or nil
 end
+
+-- Equipamento e tooltip. O texto da global e o REAL do build 12.1.0.69587, conferido no
+-- GlobalStrings do wago.tools — e a linha vem EMBRULHADA EM CODIGO DE COR de proposito,
+-- porque foi exatamente isso que quebrou o padrao ancorado do EnhanceQoL.
+PVP_ITEM_LEVEL_TOOLTIP =
+    "Equipar: aumenta o nível do item para um mínimo de %d em Arenas, Campos de Batalha e no Modo de Guerra."
+
+HEADSLOT, NECKSLOT, SHOULDERSLOT = "Cabeca", "Pescoco", "Ombros"
+CHESTSLOT, WAISTSLOT, LEGSSLOT, FEETSLOT = "Peito", "Cintura", "Pernas", "Pes"
+WRISTSLOT, HANDSSLOT = "Pulsos", "Maos"
+FINGER0SLOT, FINGER1SLOT = "Anel 1", "Anel 2"
+TRINKET0SLOT, TRINKET1SLOT = "Berloque 1", "Berloque 2"
+BACKSLOT, MAINHANDSLOT, SECONDARYHANDSLOT = "Costas", "Mao principal", "Mao secundaria"
+NORMAL_FONT_COLOR = {}
+
+-- Que peca esta em cada slot, e se ela e de PvP. O teste mexe nisto.
+local equipped = {}
+local function VestirTudo(ehPvP)
+    equipped = {}
+    for _, slot in ipairs({ 1,2,3,5,6,7,8,9,10,11,12,13,14,15,16,17 }) do
+        equipped[slot] = { link = "item:" .. slot, pvp = ehPvP }
+    end
+end
+VestirTudo(false)
+
+function GetInventoryItemLink(_, slot)
+    return equipped[slot] and equipped[slot].link
+end
+
+C_TooltipInfo = {
+    GetInventoryItem = function(_, slot)
+        local item = equipped[slot]
+        if not item then return nil end
+        local lines = { { type = 0, leftText = "Nome do item" } }
+        if item.pvp then
+            -- EMBRULHADA EM COR: o caso que derruba padrao ancorado.
+            lines[#lines + 1] = {
+                type = 0,
+                leftText = "|cffffffff" .. PVP_ITEM_LEVEL_TOOLTIP:gsub("%%d", "684") .. "|r",
+            }
+        end
+        return { lines = lines }
+    end,
+}
+
+UIErrorsFrame = { AddExternalWarningMessage = function() end }
+C_EventUtils = { IsEventValid = function() return true end }
+C_RestrictedActions = { GetAddOnRestrictionState = function() return 0 end }
+function GetMaxBattlefieldID() return 2 end
+function GetBattlefieldStatus() return "none" end
 
 -- ScrollBox: o sistema de lista da Blizzard. Os stubs nao sao no-op — o SetDataProvider
 -- CHAMA o inicializador de cada linha, para o teste exercitar FillRow de verdade. Stub que
@@ -199,6 +253,7 @@ ScrollUtil = {
 -- nao consegue expressar sozinho, e a razao deste addon existir.
 local state = {
     inCombat = false,
+    instance = nil,          -- nil | "party" | "raid" | "arena" | "pvp"
     specIndex = 2,               -- Gelido
     equippedSet = 1,             -- Frost
     outfit = 71,                 -- aparencia ativa
@@ -206,6 +261,8 @@ local state = {
 }
 
 function InCombatLockdown() return state.inCombat end
+function IsInInstance() return state.instance ~= nil, state.instance end
+function IsInRaid() return state.instance == "raid" end
 
 local SPECS = {
     { index = 1, id = 250, name = "Sangue",  icon = 1 },
@@ -309,7 +366,11 @@ C_TransmogOutfitInfo = {
     end,
 }
 
-Enum = { LoadConfigResult = { Error = 0, NoChangesNecessary = 1, LoadInProgress = 2, Ready = 3 } }
+Enum = {
+    AddOnRestrictionType = { Combat = 0, Encounter = 1, ChallengeMode = 2, PvPMatch = 3 },
+    AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 },
+    LoadConfigResult = { Error = 0, NoChangesNecessary = 1, LoadInProgress = 2, Ready = 3 },
+}
 
 -- C_Timer com relogio manual: o teste controla quando o prazo estoura.
 local timers = {}
@@ -487,6 +548,95 @@ local escolhido, verificado = ns.FirstIcon(ns.ICON_CANDIDATES)
 check("caiu no candidato que existe", escolhido:find("MissileLarge_Red", 1, true) ~= nil, true)
 check("e sabe que verificou", verificado, true)
 check("lista de candidatos exposta", #ns.ICON_CANDIDATES >= 2, true)
+
+print("== deteccao de peca de PvP ==")
+-- A deteccao inteira depende de uma LINHA DE TOOLTIP casar com um padrao montado a partir de
+-- uma string global. Tres coisas ja quebraram esse padrao em addons publicados, e as tres
+-- estao reproduzidas aqui.
+
+-- (1) A LINHA VEM EMBRULHADA EM CODIGO DE COR. O fmtToPattern do EnhanceQoL devolve
+-- "^" .. pat .. "$", e por isso NAO casa nesse caso. O nosso padrao nao tem ancora.
+VestirTudo(true)
+ns.Gear.ClearCache()
+check("peca de PvP e reconhecida mesmo com codigo de cor", ns.Gear.IsPvPItem(1), true)
+
+VestirTudo(false)
+ns.Gear.ClearCache()
+check("peca sem a linha e reconhecida como PvE", ns.Gear.IsPvPItem(1), false)
+
+-- (2) SLOT VAZIO NAO E "PvE". E desconhecido — e desconhecido nunca vira aviso.
+equipped[1] = nil
+ns.Gear.ClearCache()
+check("slot vazio devolve desconhecido", ns.Gear.IsPvPItem(1), nil)
+
+-- (3) Camisa e tabardo nao entram: nao tem atributo nem versao de PvP.
+check("a lista de slots ignora camisa e tabardo",
+    (function()
+        for _, slot in ipairs(ns.Gear.SLOTS) do
+            if slot == 4 or slot == 19 then return false end
+        end
+        return #ns.Gear.SLOTS == 16
+    end)(), true)
+
+print("== a regra: o que e erro em cada contexto ==")
+VestirTudo(false)          -- tudo de PvE
+ns.Gear.ClearCache()
+local erradas = ns.Gear.Wrong(true)     -- estamos em PvP?
+check("de PvE em PvP: os 16 slots estao errados", #erradas, 16)
+erradas = ns.Gear.Wrong(false)          -- estamos em PvE?
+check("de PvE em PvE: nada errado", #erradas, 0)
+
+VestirTudo(true)           -- tudo de PvP
+ns.Gear.ClearCache()
+check("de PvP em PvE: os 16 errados", #ns.Gear.Wrong(false), 16)
+check("de PvP em PvP: nada errado", #ns.Gear.Wrong(true), 0)
+
+-- Caso realista: trocou tudo menos os berloques.
+VestirTudo(true)
+equipped[13].pvp, equipped[14].pvp = false, false
+ns.Gear.ClearCache()
+local mistas = ns.Gear.Wrong(true)
+check("dois berloques de PvE numa arena", #mistas, 2)
+check("e o aviso sabe QUAL slot", ns.Gear.SlotName(mistas[1].slot), "Berloque 1")
+
+print("== a comporta que impede o addon de gritar quando a leitura falha ==")
+-- Se TODO slot lido deu errado, e muito mais provavel que a deteccao tenha falhado (idioma
+-- cujo padrao nao casa, tooltip nao carregada) do que o jogador estar com 16 pecas erradas.
+-- Sem esta comporta, um cliente em coreano veria o addon gritar em toda arena.
+VestirTudo(false)
+ns.Gear.ClearCache()
+local todas, lidos = ns.Gear.Wrong(true)
+check("todos errados = leitura suspeita", ns.Gear.LooksReliable(todas, lidos), false)
+
+VestirTudo(true)
+equipped[13].pvp = false
+ns.Gear.ClearCache()
+local uma, lidos2 = ns.Gear.Wrong(true)
+check("uma errada entre dezesseis = confiavel", ns.Gear.LooksReliable(uma, lidos2), true)
+
+print("== o aviso so aparece quando ainda da para consertar ==")
+VestirTudo(false)
+ns.Gear.ClearCache()
+state.instance = "arena"
+state.inCombat = true
+ns.Alert.Check("teste")
+check("em combate o aviso cala", ns.Alert.__shown ~= true, true)
+state.inCombat = false
+state.instance = nil
+
+print("== resumo do ready check ==")
+-- Pedido do usuario: no ready check, dizer qual conjunto e qual spec estao em uso.
+state.specIndex, state.activeLoadout[251], state.equippedSet = 2, 11, 1
+local resumo = ns.Alert.Summary()
+check("traz a spec", resumo:find("Gelido", 1, true) ~= nil, true)
+check("traz o loadout de talentos", resumo:find("SBA ST", 1, true) ~= nil, true)
+check("traz o conjunto de itens", resumo:find("Frost", 1, true) ~= nil, true)
+
+-- Sem conjunto de itens vestido, o resumo diz isso em vez de mentir ou ficar vazio.
+state.equippedSet = 99
+check("sem conjunto, avisa que nao ha",
+    ns.Alert.Summary():find("sem conjunto", 1, true) ~= nil, true)
+state.equippedSet = 1
 
 print("== aparencia (transmog) e opcional ==")
 -- Pedido do usuario: "poderia por como opcional o transmog salvo tambem?". Opcional de
