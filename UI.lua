@@ -270,7 +270,7 @@ local function Create()
     -- Mexer em `frame.PortraitContainer.portrait` à mão funciona hoje e quebra quando a
     -- Blizzard reorganizar o template — e um addon instalado já guarda esta chamada assim.
     if frame.SetPortraitToAsset then
-        frame:SetPortraitToAsset("Interface\\Icons\\INV_Misc_MissileLarge_Red")
+        frame:SetPortraitToAsset(ns.FirstIcon(ns.ICON_CANDIDATES))
     end
     tinsert(UISpecialFrames, frame:GetName())
 
