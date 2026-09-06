@@ -534,6 +534,23 @@ function Steps.transmog(preset)
     local impedindo = Data.TransmogBlockedBy(preset.transmog)
     if impedindo then return "fail", impedindo end
 
+    -- SE VEIO DO CLIQUE, A TROCA JÁ FOI PEDIDA — e pedir não é ter chegado.
+    --
+    -- A ação segura roda no clique e o servidor responde depois; este passo pode rodar antes da
+    -- resposta, principalmente quando os três passos anteriores não têm nada a fazer e a corrente
+    -- chega aqui no mesmo quadro. Conferir na hora e falhar transformaria uma troca que funciona
+    -- num aviso de falha — que é pior que o defeito original, e foi o que a primeira versão desta
+    -- verificação fazia.
+    --
+    -- Então espera o evento, com o prazo do `Arm()` por trás, como todos os outros passos.
+    if running and running.byClick then
+        Arm()
+        return "wait"
+    end
+
+    -- E SE NÃO VEIO DO CLIQUE não há o que esperar: ninguém pediu nada. É o caso do
+    -- `/rs load <nome>` e do minimapa, e a frase precisa dizer isso em vez de deixar o jogador
+    -- esperando doze segundos por uma confirmação que não vem.
     return "fail", L["the appearance only changes by clicking Load (Blizzard protects the API)."]
 end
 
@@ -572,7 +589,8 @@ end
 
 ---Aplica um conjunto. Devolve false quando nem começou (combate, ou já está tudo aplicado).
 ---@param report function|nil recebe (texto, éErro) a cada passo, para a UI mostrar
-function Data.Apply(preset, report)
+---@param byClick boolean|nil a chamada veio do clique no botão seguro, que JÁ pediu a aparência
+function Data.Apply(preset, report, byClick)
     if not preset then return false end
 
     if InCombatLockdown() then
@@ -591,7 +609,10 @@ function Data.Apply(preset, report)
         return false
     end
 
-    running = { preset = preset, steps = { "spec", "talent", "gear", "transmog" }, at = 0, report = report }
+    running = {
+        preset = preset, steps = { "spec", "talent", "gear", "transmog" }, at = 0,
+        report = report, byClick = byClick and true or false,
+    }
     if report then report(format(L["Loading %s..."], preset.name or "?"), false) end
 
     Data.EnsureListener()

@@ -931,6 +931,20 @@ do
     comAparencia.transmog = 71
     ns.UI.Refresh()
 
+    -- O `UI.Load` TEM QUE DIZER que veio do clique. Ele e chamado do `PostClick` do botao seguro,
+    -- ou seja a acao de aparencia JA foi disparada -- e sem essa bandeira o passo de aparencia
+    -- confere na hora e acusa falha numa troca que esta a caminho. A bandeira e um argumento
+    -- solto: e o tipo de coisa que se perde numa refatoracao sem nada acusar.
+    state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
+    state.outfit = 70
+    comAparencia.spec, comAparencia.talent, comAparencia.gear = 2, 10, 1
+    ns.UI.Load(comAparencia)
+    check("o clique manda a corrente ESPERAR a aparencia", ns.Data.IsApplying(), true)
+    state.outfit = 71
+    fire("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
+    check("e a resposta fecha a corrente", ns.Data.IsApplying(), false)
+    state.outfit = nil
+
     -- Deixa a janela FECHADA, que e como este bloco a encontrou.
     if ns.UI.IsShown() then ns.UI.Toggle() end
 end
@@ -961,6 +975,31 @@ do
     check("aparencia que ficou para tras e reportada", houveErro, true)
     check("dizendo que so o botao troca",
         texto and texto:lower():find("bot\195\163o carregar") ~= nil, true)
+
+    -- VINDO DO CLIQUE, ELE ESPERA em vez de acusar na hora. A acao segura roda no clique e o
+    -- servidor responde depois; com os tres passos anteriores sem nada a fazer, a corrente chega
+    -- aqui no MESMO quadro. Conferir na hora transformaria uma troca que funciona num aviso de
+    -- falha -- pior que o defeito original, e era o que a primeira versao desta verificacao fazia.
+    state.outfit = 70
+    local vereditoClique
+    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
+        function(_, isError) if isError ~= nil then vereditoClique = isError end end, true)
+    check("vindo do clique, o passo ESPERA", ns.Data.IsApplying(), true)
+    check("e nao deu veredito ainda", vereditoClique, false)
+
+    -- E a resposta que chega fecha o passo, sem reclamacao.
+    state.outfit = 71
+    fire("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
+    check("a resposta do servidor fecha o passo", ns.Data.IsApplying(), false)
+    check("sem acusar falha", vereditoClique, false)
+
+    -- E se a resposta NAO vier, o prazo reporta -- a espera nao pode ser eterna.
+    state.outfit = 70
+    local erroPrazo
+    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
+        function(_, isError) if isError then erroPrazo = true end end, true)
+    RunTimers()
+    check("e sem resposta o prazo reporta", erroPrazo, true)
 
     -- E UMA PORTA FECHADA explica melhor que a frase geral: o clique seguro passa pelas MESMAS
     -- portas (recarga da magia 1247613, evento de estilo, conjunto travado), entao elas explicam
