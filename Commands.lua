@@ -307,8 +307,17 @@ commands["transmog"] = function(rest)
             if depoisDa2 == tostring(alvoID) then
                 ns.Print("|cff40d878e ESTA funcionou.|r A porta certa e `ChangeDisplayedOutfit`.")
             else
-                ns.Print("|cffff5555nenhuma das duas trocou.|r Recusa silenciosa: recarga, "
-                    .. "conjunto travado, evento, ou funcao protegida para addon.")
+                -- O ESPERADO. As duas sao PROTEGIDAS: o autor do Plumber registrou isso
+                -- ("The API to activate outfit C_TransmogOutfitInfo.ChangeDisplayedOutfit is
+                -- protected"), o patch 12.0.5 adicionou uma acao segura `"outfit"` justamente por
+                -- causa disso, e nenhum dos 117 addons instalados chama as duas funcoes.
+                --
+                -- O comando continua tentando porque prova, na maquina do jogador, o que aqui e
+                -- so citacao -- e porque se um dia a Blizzard liberar, ele avisa.
+                ns.Print("|cffff5555nenhuma das duas trocou -- e e o esperado.|r As duas sao "
+                    .. "protegidas; addon nao troca aparencia.")
+                ns.Print("quem troca e o |cffffd100clique no botao Carregar|r da janela do "
+                    .. "addon, que carrega a acao segura de aparencia.")
             end
 
             -- "SO TROCOU A APARENCIA DA ARMA" foi o relato de 06/09, e ele nao se explica por

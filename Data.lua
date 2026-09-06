@@ -237,6 +237,20 @@ function Data.OutfitName(outfitID)
     return nil
 end
 
+---O `playerFacingOutfitIndex` de um conjunto de aparência, resolvido AGORA.
+---
+---Guardamos o `outfitID` e a troca pede o índice, e os dois não são a mesma coisa — o comentário
+---da própria Blizzard diz por quê: *"playerFacingOutfitIndex is slightly different from outfitID
+---(outfitIDs may have gaps)"*. O índice desloca quando uma aparência é apagada, então ele se
+---resolve na hora de usar e nunca se guarda.
+function Data.OutfitIndex(outfitID)
+    if not outfitID then return nil end
+    for _, outfit in ipairs(Data.GetOutfits()) do
+        if outfit.outfitID == outfitID then return outfit.index end
+    end
+    return nil
+end
+
 function Data.GetActiveOutfitID()
     if not C_TransmogOutfitInfo or not C_TransmogOutfitInfo.GetActiveOutfitID then return nil end
     local ok, id = pcall(C_TransmogOutfitInfo.GetActiveOutfitID)
@@ -472,7 +486,7 @@ end
 ---o que está vestido. Trocar a roupa antes das peças seria escrever por cima do que o passo
 ---seguinte vai mudar.
 ---
----CONFIRMA POR EVENTO, como todos os outros passos.
+---CONFERE, mas NÃO troca: trocar de conjunto de aparência é privilégio de código seguro.
 ---
 ---Isto aqui dizia, por escrito, que "este passo é o único que NÃO tem evento de confirmação
 ---amarrado". **Era falso**, e a afirmação custou caro: em cima dela o passo passou a conferir com
@@ -488,86 +502,39 @@ function Steps.transmog(preset)
     if not preset.transmog then return "skip" end
     if Data.GetActiveOutfitID() == preset.transmog then return "skip" end
 
-    if not C_TransmogOutfitInfo or not C_TransmogOutfitInfo.ChangeToOutfit then
-        return "fail", L["this client cannot switch transmog outfits."]
-    end
-
-    -- O índice é resolvido AGORA, não no momento em que o conjunto foi salvo: ele desloca
-    -- quando uma aparência é apagada.
-    local index
-    for _, outfit in ipairs(Data.GetOutfits()) do
-        if outfit.outfitID == preset.transmog then index = outfit.index end
-    end
+    -- ATÉ AQUI A TROCA JÁ DEVERIA TER ACONTECIDO, no próprio clique. Se não aconteceu, não há o
+    -- que este passo faça: as duas funções que trocam de conjunto são PROTEGIDAS.
+    --
+    -- Chegar a isso custou três rodadas de teste in-game, e a resposta não estava em nada que eu
+    -- pudesse deduzir do código — estava no parque de addons e na web:
+    --
+    --   * dos 117 addons instalados, NENHUM chama `ChangeToOutfit` ou `ChangeDisplayedOutfit`.
+    --     O único que troca aparência, o `EnhanceQoLQuickActions`, monta um botão seguro
+    --     (`Runtime.lua:4544,4593-4595`: `type = "outfit"`, `outfit-index`, `action = "change"`);
+    --   * o autor do Plumber, no repositório dele: *"The API to activate outfit
+    --     C_TransmogOutfitInfo.ChangeDisplayedOutfit is protected"*;
+    --   * e o patch 12.0.5 adicionou **uma ação segura `"outfit"`** justamente para isso —
+    --     *"Added a new secure action (`"outfit"`) for changing/clearing transmog outfits"* — que
+    --     é a forma como a Blizzard respondeu ao pedido de os addons poderem trocar.
+    --
+    -- Ou seja: o caminho não existe por API e não vai existir. Existe por **clique do jogador num
+    -- botão seguro**, e é isso que o botão "Carregar" passou a ser (`UI.lua`, `BuildRow`).
+    --
+    -- POR QUE O PASSO CONTINUA AQUI, se não age: porque ele é a única coisa que sabe dizer que a
+    -- aparência ficou para trás. Sem ele o conjunto se daria por aplicado com a roupa errada.
+    -- Antes ele CHAMAVA e mentia sobre poder; agora ele CONFERE e diz a verdade.
+    local index = Data.OutfitIndex(preset.transmog)
     if not index then
         return "fail", L["that transmog outfit no longer exists."]
     end
 
-    -- PERGUNTA ANTES DE CHAMAR. A chamada em si nunca reclama; se algo esta impedindo, ela
-    -- devolve sucesso e nao faz nada. Sem esta consulta o passo so podia dizer "nao deu",
-    -- e o usuario relatou justamente a ausencia de motivo.
+    -- E se alguma das portas conhecidas estiver fechada, o motivo dela é melhor que o genérico:
+    -- o clique seguro passa pelas mesmas (a recarga da magia 1247613, o evento de estilo, o
+    -- conjunto travado), então elas explicam também o clique que não pegou.
     local impedindo = Data.TransmogBlockedBy(preset.transmog)
     if impedindo then return "fail", impedindo end
 
-    Report(L["Changing appearance..."], false)
-
-    -- `Arm()` ANTES DA CHAMADA, e a ordem é obrigatória.
-    --
-    -- `TRANSMOG_DISPLAYED_OUTFIT_CHANGED` é `SynchronousEvent = true`
-    -- (`TransmogOutfitInfoDocumentation.lua:818-821`): ele dispara DENTRO da chamada, não no
-    -- quadro seguinte. Como a aparência é o último passo, o ouvinte chama `RunNext`, que chega ao
-    -- fim da corrente e zera `running` ali mesmo — e qualquer linha depois disso indexaria
-    -- `running` já nulo. Armando antes, o prazo existe quando a chamada volta e não há nada a
-    -- fazer depois dela.
-    --
-    -- Não é teórico: foi o que o harness pegou assim que o stub passou a disparar o evento como o
-    -- jogo dispara. A versão anterior desta função tinha a armadilha na direção contrária.
-    Arm()
-
-    -- A PORTA QUE A UI DO JOGO USA, e não a de macro.
-    --
-    -- Havia duas, e o addon estava na errada. `ChangeToOutfit(índice, allowRemove)` é o que o
-    -- **comando de barra** e a ação segura chamam (`SlashCommands.lua:1726`,
-    -- `SecureTemplates.lua:663`). O **botão de conjunto** da janela de transmog chama outra:
-    --
-    --     C_TransmogOutfitInfo.ChangeDisplayedOutfit(outfitID, trigger, toggleLock, allowRemove)
-    --     -- Blizzard_Transmog/Blizzard_TransmogTemplates.lua:72
-    --
-    -- Trocar para ela é justificado mesmo sem o defeito: ela recebe **outfitID**, que é o que
-    -- guardamos, então a tradução para índice — e toda a classe de erro que vem de traduzir —
-    -- deixa de existir. E ela recebe o GATILHO explicitamente.
-    --
-    -- O gatilho importa mais do que parece. `TransmogSituationTrigger` tem `Specialization` (5) e
-    -- `EquipmentSet` (6): o sistema de conjuntos do Midnight troca aparência SOZINHO quando a spec
-    -- ou o conjunto de itens muda — que é exatamente o que esta corrente acabou de fazer nos dois
-    -- passos anteriores. Dizer `Manual` é dizer ao jogo que esta troca é do jogador, e não mais
-    -- uma reação em cadeia dele.
-    --
-    -- `allowRemoveOutfit = false` nas duas, e o motivo está escrito na própria Blizzard:
-    -- *"if applying the same outfit that is already applied, it will be treated as a **clear**"*
-    -- (`SlashCommands.lua:1714`). Com `true`, carregar duas vezes o mesmo conjunto TIRARIA a
-    -- aparência na segunda.
-    --
-    -- NÃO ESTÁ CONFIRMADO que era a porta. O que está confirmado é que a anterior não fez o jogo
-    -- disparar `TRANSMOG_DISPLAYED_OUTFIT_CHANGED` em 12 segundos. `/rs transmog <índice>` executa
-    -- as duas e diz qual responde.
-    local ok
-    if C_TransmogOutfitInfo.ChangeDisplayedOutfit then
-        local manual = Enum and Enum.TransmogSituationTrigger
-            and Enum.TransmogSituationTrigger.Manual
-        ok = pcall(C_TransmogOutfitInfo.ChangeDisplayedOutfit,
-            preset.transmog, manual, false, false)
-    else
-        -- Cliente sem a função da UI: cai na de macro, que é a que existe desde antes.
-        ok = pcall(C_TransmogOutfitInfo.ChangeToOutfit, index, false)
-    end
-    if not ok then return "fail", L["the transmog outfit could not be applied."] end
-
-    -- "wait": ou o evento fecha o passo, ou o prazo do `Arm()` anota a falha e segue. Nos dois
-    -- caminhos o jogador fica com tudo o que era possível aplicar.
-    --
-    -- E se o evento já correu lá em cima, `running` é nulo e este "wait" não faz nada: `RunNext`
-    -- só olha o resultado para decidir se CONTINUA, e não há mais o que continuar.
-    return "wait"
+    return "fail", L["the appearance only changes by clicking Load (Blizzard protects the API)."]
 end
 
 --------------------------------------------------------------------------------

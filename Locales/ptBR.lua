@@ -64,9 +64,12 @@ L["loaded. %d preset(s). Type /rs."] = "carregado. %d conjunto(s). Digite /rs."
 L["Left click: open. Right click: load the last preset."] =
     "Clique: abrir. Botão direito: carregar o último conjunto."
 -- Transmog opcional (0.3.0)
-L["Changing appearance..."] = "Trocando a aparência..."
-L["this client cannot switch transmog outfits."] =
-    "este cliente não sabe trocar conjuntos de aparência."
+-- As duas chaves que sairam na 0.10.0 -- "Trocando a aparencia..." e "este cliente nao sabe
+-- trocar" -- pressupunham que o addon TROCAVA. Ele nao troca: a API e protegida, e quem troca e
+-- o clique do jogador no botao seguro. Frase que promete o que nao acontece e pior que frase
+-- nenhuma.
+L["the appearance only changes by clicking Load (Blizzard protects the API)."] =
+    "a aparência só troca pelo botão Carregar (a Blizzard protege a API)."
 L["that transmog outfit no longer exists."] = "esse conjunto de aparência não existe mais."
 L["the transmog outfit could not be applied."] = "não deu para aplicar a aparência."
 

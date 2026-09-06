@@ -138,11 +138,26 @@ local function BuildRow(row)
 
     -- O botão e o ✓ dividem o mesmo slot: a linha não reflui quando o conjunto passa a
     -- estar aplicado, porque o texto reserva os 86px dos dois jeitos.
-    row.load = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    -- BOTÃO SEGURO, e não por capricho: **trocar de conjunto de aparência é protegido**. As duas
+    -- funções que fazem isso (`ChangeToOutfit` e `ChangeDisplayedOutfit`) não respondem a código
+    -- de addon — devolvem sucesso e não fazem nada, que foi o "não troca e não gera nenhum erro"
+    -- relatado três vezes. O patch 12.0.5 adicionou uma ação segura `"outfit"` justamente por
+    -- isso, e é o que o único addon instalado que troca aparência usa
+    -- (`EnhanceQoLQuickActions/Runtime.lua:4544,4593-4595`).
+    --
+    -- Então quem troca a aparência é o CLIQUE DO JOGADOR neste botão, e não o nosso código. Os
+    -- outros três passos (spec, talentos, itens) continuam nossos e rodam no `PostClick`.
+    --
+    -- `PostClick`, e não `OnClick`: num botão seguro o `OnClick` roda dentro do caminho protegido
+    -- e o que fizermos ali contamina o resto. O `PostClick` roda depois, fora dele.
+    row.load = CreateFrame("Button", nil, row,
+        "UIPanelButtonTemplate, SecureActionButtonTemplate")
     row.load:SetSize(74, 22)
     row.load:SetPoint("RIGHT", -6, 0)
     row.load:SetText(L["Load"])
-    row.load:SetScript("OnClick", function(self)
+    row.load:RegisterForClicks("AnyUp")
+    row.load:SetAttribute("useOnKeyDown", false)
+    row.load:SetScript("PostClick", function(self)
         UI.Load(self:GetParent().preset)
     end)
 
@@ -173,10 +188,37 @@ local function BuildRow(row)
     row:SetScript("OnLeave", GameTooltip_Hide)
 end
 
+---Arma (ou desarma) a ação segura de aparência num botão.
+---
+---`action = "change"` e não `"toggle"`: em `SECURE_ACTIONS.outfit` o `"toggle"` vira
+---`allowRemoveOutfit = true`, e aí pedir a aparência que já está posta é tratado como **limpar**
+---(`SlashCommands.lua:1714`) — carregar duas vezes o mesmo conjunto TIRARIA a roupa na segunda.
+---
+---EM COMBATE NÃO SE MEXE em atributo de frame seguro. Sair sem fazer nada é o certo: o atributo
+---que já estava lá continua valendo, e `Data.Apply` já recusa aplicar em combate de todo jeito.
+local function ArmOutfit(button, preset)
+    if InCombatLockdown() then return end
+
+    local index = preset and preset.transmog and ns.Data.OutfitIndex(preset.transmog)
+    if index then
+        button:SetAttribute("type", "outfit")
+        button:SetAttribute("outfit-index", index)
+        button:SetAttribute("action", "change")
+    else
+        -- Sem aparência no conjunto (ou a aparência foi apagada do jogo): o botão volta a ser um
+        -- botão comum. Deixar `type` armado com índice nulo faria o clique cair no ramo de
+        -- `SECURE_ACTIONS.outfit` e não fazer nada, silenciosamente.
+        button:SetAttribute("type", nil)
+        button:SetAttribute("outfit-index", nil)
+        button:SetAttribute("action", nil)
+    end
+end
+
 ---Preenche a linha com um conjunto.
 local function FillRow(row, preset)
     BuildRow(row)
     row.preset = preset
+    ArmOutfit(row.load, preset)
 
     row.name:SetText(preset.name ~= "" and preset.name or L["Unnamed"])
     row.detail:SetText(Subtitle(preset))
@@ -588,6 +630,16 @@ function UI.Selected()
     return current
 end
 
+---A janela está aberta?
+---
+---Existe porque `Toggle` alterna, e alternar obriga quem chama a saber o estado anterior. No
+---harness isso vira dependência de ORDEM entre blocos de teste: um bloco que abre sem fechar
+---inverte o comportamento de todos os seguintes, e o defeito aparece longe de onde nasceu --
+---foi exatamente o que aconteceu ao escrever os testes da 0.10.0.
+function UI.IsShown()
+    return frame ~= nil and frame:IsShown() and true or false
+end
+
 function UI.SetStatus(text, isError)
     if not frame then return end
     frame.status:SetText(text or "")
@@ -640,6 +692,15 @@ function UI.Refresh()
     frame.delete:SetShown(not empty)
 
     if empty then
+        -- SEM LISTA NÃO HÁ CORRENTE. Sem esta linha, `current` continuava apontando para o último
+        -- conjunto selecionado mesmo depois de ele sair da lista — e `UI.Selected()` devolvia um
+        -- conjunto que não existe mais, que é o que `UI.Load` e `UI.Delete` consomem.
+        --
+        -- O editor some de qualquer jeito logo abaixo, então nada disso aparecia na tela; o teste
+        -- que cobria isto passava por acidente de ordem, porque quem rodava antes dele deixava
+        -- `current` nulo. Um bloco de teste novo mudou a ordem e o defeito apareceu.
+        current = nil
+
         editor.name:Hide()
         editor.divider:Hide()
         for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
