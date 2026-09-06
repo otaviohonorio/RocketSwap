@@ -788,10 +788,13 @@ function UI.Delete()
     UI.Refresh()
 end
 
+---Chamada do `PostClick` do botão seguro, e por isso o terceiro argumento é `true`: a ação de
+---aparência JÁ foi disparada pelo clique, e o passo de aparência tem que ESPERAR a resposta do
+---servidor em vez de conferir na hora e acusar falha numa troca que está a caminho.
 function UI.Load(preset)
     if not preset then return end
     ns.db.last = preset.name
-    ns.Data.Apply(preset, UI.SetStatus)
+    ns.Data.Apply(preset, UI.SetStatus, true)
 end
 
 --------------------------------------------------------------------------------
