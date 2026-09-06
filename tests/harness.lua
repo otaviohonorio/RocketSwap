@@ -49,6 +49,18 @@ local function widget(kind)
     function self.SetText(_, t) self.__text = t end
     function self.HasFocus() return false end
 
+    -- ATRIBUTOS DE VERDADE, guardados e devolvidos. Sem isto o `__index` generico respondia
+    -- `SetAttribute` com um no-op e a acao segura de aparencia -- que E toda feita de atributos --
+    -- ficava invisivel ao teste: o addon podia nao armar nada e nada acusaria.
+    --
+    -- E a quarta divergencia da mesma familia nesta sessao (faltavam tambem
+    -- `ChangeDisplayedOutfit`, `Enum.TransmogSituationTrigger` e o disparo do evento de troca).
+    -- Stub que nao sabe representar uma parte da API testa a si mesmo naquela parte.
+    self.__attrs = {}
+    function self.SetAttribute(_, key, value) self.__attrs[key] = value end
+    function self.GetAttribute(_, key) return self.__attrs[key] end
+    function self.RegisterForClicks(_, ...) self.__clicks = { ... } end
+
     return setmetatable(self, {
         __index = function(_, key)
             if type(key) == "string" and key:match("^%u") then
@@ -204,13 +216,23 @@ ScrollUtil = {
     InitScrollBoxListWithScrollBar = function(list, _, view)
         list.__view = view
         list.__rows = {}
+        -- AS LINHAS SAO RECICLADAS, como no jogo. O stub recriava todas a cada troca de provider,
+        -- e isso escondia uma classe inteira de defeito: estado que fica na linha de um conjunto e
+        -- reaparece na linha de outro. Reciclar e o que torna isso visivel -- e e o que o jogo faz
+        -- (e por isso que `ReinitializeFrames` existe: as molduras sao as mesmas).
         function list.SetDataProvider(_, provider)
-            list.__rows = {}
-            for i, data in ipairs(provider.__items or {}) do
-                local row = CreateFrame("Button", nil, list)
+            local items = provider.__items or {}
+            for i, data in ipairs(items) do
+                local row = list.__rows[i]
+                if not row then
+                    row = CreateFrame("Button", nil, list)
+                    list.__rows[i] = row
+                end
                 row.GetElementData = function() return data end
-                list.__rows[i] = row
                 if view.__init then view.__init(row, data) end
+            end
+            for i = #list.__rows, #items + 1, -1 do
+                list.__rows[i] = nil
             end
             -- Como no jogo: trocar o data provider APAGA a selecao
             -- (SelectionBehaviorMixin:OnScrollBoxDataProviderReassigned, ScrollUtil.lua:413).
@@ -759,15 +781,21 @@ do
     check("e o texto traz o motivo, nao um 'nao deu' generico",
         texto and texto:lower():find("recarga") ~= nil, true)
 
-    -- SEM IMPEDIMENTO a mesma troca passa: o teste acima nao pode estar passando por acidente.
+    -- E SEM IMPEDIMENTO NENHUM ele TAMBEM falha, agora -- e essa e a mudanca de fundo da 0.10.0.
+    -- O addon nao troca aparencia e nunca pode ter trocado: `ChangeToOutfit` e
+    -- `ChangeDisplayedOutfit` sao PROTEGIDAS. Quem troca e o clique do jogador no botao seguro.
+    -- O passo continua existindo para DIZER que a aparencia ficou para tras -- sem ele o conjunto
+    -- se daria por aplicado com a roupa errada.
     state.transmogCooldown = 0
     state.outfit = 70
     local texto2, houveErro2
     ns.Data.Apply({ name = "So aparencia", transmog = 71 },
         function(t, isError) texto2, houveErro2 = t, isError end)
 
-    check("sem impedimento a aparencia troca", state.outfit, 71)
-    check("e o relatorio nao acusa erro", houveErro2 or false, false)
+    check("sem o clique, a aparencia NAO troca", state.outfit, 70)
+    check("e o addon diz isso em vez de se dar por pronto", houveErro2, true)
+    check("explicando que so o botao troca",
+        texto2 and texto2:lower():find("bot\195\163o carregar") ~= nil, true)
 
     state.outfit = 70
 end
@@ -777,23 +805,29 @@ print("== um passo que falha NAO derruba os seguintes ==")
 -- coisas eram A MESMA: a ordem e spec -> talentos -> itens -> aparencia, e uma falha nos
 -- talentos chamava `Finish` na hora. A aparencia e o ULTIMO passo, entao quase nunca chegava a
 -- rodar -- parecia que ela nao funcionava, quando na verdade nem era tentada.
+--
+-- O TESTE MUDOU DE ALVO na 0.10.0, e a razao vale registrar: ele media "a aparencia foi aplicada
+-- mesmo com os talentos falhando". Nao pode mais medir isso -- o addon NAO aplica aparencia, a
+-- API e protegida. Mas a regra que ele existe para proteger continua inteira, e o passo de ITENS
+-- serve para prova-la igualmente bem: ele tambem vem depois dos talentos.
 do
     state.specIndex, state.equippedSet = 2, 1
     state.activeLoadout[251] = 11
-    state.outfit = nil
-    state.pendingOutfit = nil
+    state.pendingSet = nil
 
     -- Talentos falham por motivo do jogo.
     local realCanEdit = C_ClassTalents.CanEditTalents
     C_ClassTalents.CanEditTalents = function() return false, "Voce nao pode fazer isso agora." end
 
-    -- A aparencia, se for tentada, funciona: o stub base aplica e dispara o evento.
-
+    -- `gear = 3` e nao `1`: o personagem ja esta com o 1, e passo que nao tem o que fazer PULA --
+    -- o teste mediria o proprio estado inicial em vez de medir a corrente.
     local texto, houveErro
-    ns.Data.Apply({ name = "Frost PvP", spec = 2, talent = 10, gear = 1, transmog = 71 },
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, talent = 10, gear = 3 },
         function(t, isError) texto, houveErro = t, isError end)
 
-    check("a aparencia foi aplicada mesmo com os talentos falhando", state.outfit, 71)
+    check("os itens foram aplicados mesmo com os talentos falhando", state.pendingSet, 3)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+
     check("e o addon avisou que algo falhou", houveErro, true)
     check("a mensagem diz o motivo que o JOGO deu",
         texto and texto:find("Voce nao pode fazer isso agora.", 1, true) ~= nil, true)
@@ -825,91 +859,132 @@ do
     C_ClassTalents.LoadConfig = realLoad
 end
 
-print("== a aparencia CONFERE que pegou, e agora por EVENTO ==")
--- O comentario da funcao prometia conferir desde a 0.3.0 e o codigo nao fazia: devolvia "skip"
--- logo depois da chamada. Depois passou a conferir com um `C_Timer.After(0.1)` -- numero
--- escolhido no olho, em cima de uma afirmacao FALSA que estava escrita ali: "este passo e o unico
--- que NAO tem evento de confirmacao amarrado".
+print("== aparencia: o addon NAO troca, o clique troca ==")
+-- ESTE E O BLOCO QUE MUDOU DE VERDADE NA 0.10.0, e vale registrar como se chegou aqui: tres
+-- rodadas de teste in-game do usuario, "nao troca e nao gera nenhum erro" nas tres. A resposta nao
+-- estava em nada dedutivel do codigo:
 --
--- O evento existe: `TRANSMOG_DISPLAYED_OUTFIT_CHANGED`
--- (`TransmogOutfitInfoDocumentation.lua:818-821`), e e o que a propria janela de transmog escuta.
--- O que eu tinha olhado era o `TRANSMOG_OUTFITS_CHANGED`, que avisa que a LISTA mudou.
+--   * dos 117 addons instalados, NENHUM chama `ChangeToOutfit` nem `ChangeDisplayedOutfit`. O
+--     unico que troca aparencia, o `EnhanceQoLQuickActions`, monta um BOTAO SEGURO
+--     (`Runtime.lua:4544,4593-4595`);
+--   * o autor do Plumber: "The API to activate outfit C_TransmogOutfitInfo.ChangeDisplayedOutfit
+--     is protected";
+--   * o patch 12.0.5 adicionou uma acao segura `"outfit"` justamente para isso.
+--
+-- Ou seja: as duas portas que eu tentei sao PROTEGIDAS, e a terceira rodada nao teria acontecido
+-- se eu tivesse procurado prior art no parque de addons antes de teorizar sobre a API.
+do
+    -- ESTADO EXPLICITO, e nao paridade de `Toggle`. Abrir sem fechar inverte o comportamento de
+    -- todos os blocos seguintes, e o defeito aparece longe de onde nasceu -- foi o que aconteceu
+    -- ao escrever este bloco: um teste de "estado vazio" trinta linhas abaixo comecou a falhar.
+    if not ns.UI.IsShown() then ns.UI.Toggle() end
+
+    ns.db.presets = {}
+    ns.UI.Refresh()
+    ns.UI.New()
+    local comAparencia = ns.UI.Selected()
+    comAparencia.name, comAparencia.transmog = "Com aparencia", 71
+    ns.UI.New()
+    local semAparencia = ns.UI.Selected()
+    semAparencia.name, semAparencia.transmog = "Sem aparencia", nil
+    ns.UI.Refresh()
+
+    local function BotaoDe(indice)
+        local list = ns.UI.DebugList and ns.UI.DebugList()
+        return list and list.__rows and list.__rows[indice] and list.__rows[indice].load
+    end
+
+    local botao = BotaoDe(1)
+    check("a linha tem botao de carregar", botao ~= nil, true)
+
+    -- O BOTAO CARREGA A ACAO SEGURA. E o unico caminho que existe.
+    check("o botao declara a acao de aparencia", botao.__attrs and botao.__attrs.type, "outfit")
+    check("com o INDICE do conjunto, nao o id",
+        botao.__attrs["outfit-index"], ns.Data.OutfitIndex(71))
+
+    -- `change`, e NAO `toggle`. Em `SECURE_ACTIONS.outfit` o `toggle` vira
+    -- `allowRemoveOutfit = true`, e ai pedir a aparencia que ja esta posta e tratado como LIMPAR
+    -- (`SlashCommands.lua:1714`) -- carregar duas vezes o mesmo conjunto TIRARIA a roupa na
+    -- segunda. E o tipo de defeito que so aparece no segundo clique.
+    check("pedindo trocar, nao alternar", botao.__attrs.action, "change")
+
+    -- CONJUNTO SEM APARENCIA desarma o botao. Deixar `type` armado com indice nulo faria o clique
+    -- cair no ramo de outfit e nao fazer nada, em silencio.
+    local botao2 = BotaoDe(2)
+    check("conjunto sem aparencia nao arma nada", botao2.__attrs.type, nil)
+    check("e nem deixa indice para tras", botao2.__attrs["outfit-index"], nil)
+
+    -- APARENCIA APAGADA DO JOGO tambem desarma: o indice nao resolve mais.
+    comAparencia.transmog = 999
+    ns.UI.Refresh()
+    check("aparencia que nao existe mais desarma o botao", BotaoDe(1).__attrs.type, nil)
+    comAparencia.transmog = 71
+    ns.UI.Refresh()
+    check("e volta a armar quando ela existe", BotaoDe(1).__attrs.type, "outfit")
+
+    -- EM COMBATE NAO SE MEXE em atributo de frame seguro -- e erro de Lua, nao aviso.
+    state.inCombat = true
+    comAparencia.transmog = nil
+    ns.UI.Refresh()
+    check("em combate o atributo NAO e tocado", BotaoDe(1).__attrs.type, "outfit")
+    state.inCombat = false
+    comAparencia.transmog = 71
+    ns.UI.Refresh()
+
+    -- Deixa a janela FECHADA, que e como este bloco a encontrou.
+    if ns.UI.IsShown() then ns.UI.Toggle() end
+end
+
+print("== aparencia: o passo confere e diz a verdade ==")
+-- O passo continua na corrente mesmo sem poder agir, e o motivo e concreto: sem ele o conjunto se
+-- daria por aplicado com a roupa errada. Antes ele CHAMAVA e mentia sobre poder; agora CONFERE.
 do
     state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
-    state.outfit = nil
-    state.silentRefusal = false
 
-    -- QUANDO PEGA, o evento fecha o passo e nao ha reclamacao.
-    state.usedDoor, state.lastTrigger = nil, nil
-    local ok1
-    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
-        function(_, isError) ok1 = not isError end)
-    check("troca que pega nao vira aviso", ok1, true)
-    check("e a aparencia entrou", state.outfit, 71)
-
-    -- PELA PORTA DA UI, e nao pela de macro. Havia duas e o addon estava na de macro:
-    -- `ChangeToOutfit(indice, ...)` e o que o comando de barra chama
-    -- (`SlashCommands.lua:1726`); o BOTAO de conjunto da janela de transmog chama
-    -- `ChangeDisplayedOutfit(outfitID, gatilho, ...)` (`Blizzard_TransmogTemplates.lua:72`).
+    -- QUANDO O CLIQUE PEGOU, o passo nao tem o que reclamar: a aparencia ja e a certa.
     --
-    -- Alem de ser a que o jogo usa, ela recebe **outfitID** -- que e o que guardamos. A traducao
-    -- para indice, e toda a classe de erro que vem de traduzir, deixa de existir.
-    check("a troca entra pela porta que a UI do jogo usa",
-        state.usedDoor, "ChangeDisplayedOutfit")
+    -- `gear = 3` de proposito: com tudo igual a corrente nem comeca ("nada a fazer"), e o teste
+    -- mediria essa recusa em vez de medir o passo de aparencia.
+    state.outfit = 71
+    local houveErro1
+    ns.Data.Apply({ name = "So aparencia", spec = 2, talent = 10, gear = 3, transmog = 71 },
+        function(_, isError) if isError then houveErro1 = true end end)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+    check("aparencia ja aplicada nao vira aviso", houveErro1, nil)
+    state.equippedSet = 1
 
-    -- E DECLARANDO `Manual`. O gatilho nao e enfeite: `TransmogSituationTrigger` tem
-    -- `Specialization` (5) e `EquipmentSet` (6), porque o sistema de conjuntos do Midnight troca
-    -- aparencia SOZINHO quando a spec ou o conjunto muda -- que e exatamente o que os dois passos
-    -- anteriores desta corrente acabaram de fazer. Dizer `Manual` e dizer ao jogo que esta troca
-    -- e do jogador, e nao mais uma reacao em cadeia dele.
-    check("declarando que a troca e manual",
-        state.lastTrigger, Enum.TransmogSituationTrigger.Manual)
-
-    -- O CASO QUE SOBROU DEPOIS DO RELATO: nada bloqueando, chamada aceita, e nada muda. Sem
-    -- evento, quem responde e o PRAZO -- e ele nao pode deixar a corrente pendurada.
-    state.outfit = nil
-    state.silentRefusal = true
-
+    -- QUANDO NAO PEGOU, ele diz -- e diz que quem troca e o botao.
+    state.outfit = 70
     local texto, houveErro
     ns.Data.Apply({ name = "So aparencia", transmog = 71 },
         function(t, isError) texto, houveErro = t, isError end)
+    check("aparencia que ficou para tras e reportada", houveErro, true)
+    check("dizendo que so o botao troca",
+        texto and texto:lower():find("bot\195\163o carregar") ~= nil, true)
 
-    -- Antes do prazo a corrente esta ABERTA: o unico relato ate aqui e o "Carregando...", que
-    -- nao e erro. Se o passo fechasse sozinho, ja haveria veredito.
-    check("sem o evento, o passo nao da veredito", houveErro, false)
-    check("e a aplicacao continua em curso", ns.Data.IsApplying(), true)
-
-    RunTimers()
-    check("e o prazo e quem reporta", houveErro, true)
-
-    -- E DIZENDO DE QUAL PASSO. "o jogo nao confirmou a tempo" sozinho, numa corrente de quatro,
-    -- obriga o jogador a adivinhar -- e foi o que aconteceu: o relato veio como "deu a mensagem
-    -- que o jogo nao confirmou o tempo" e eu tive de perguntar qual passo era.
-    check("dizendo de qual passo",
-        texto and texto:find(ns.L["Appearance"], 1, true) ~= nil, true)
-
-    check("e a corrente nao fica pendurada", ns.Data.IsApplying(), false)
-
-    -- O EVENTO NAO DIZ QUAL conjunto entrou -- nao tem carga util
-    -- (`TransmogOutfitInfoDocumentation.lua:818-821`). Entao ele so avisa que ALGO mudou, e quem
-    -- responde "mudou para o certo?" continua sendo a leitura. Sem essa leitura, o passo daria
-    -- por bom qualquer troca -- inclusive a que o JOGADOR fez a mao no meio da aplicacao.
-    state.outfit = nil
-    state.silentRefusal = true          -- a nossa chamada nao pega...
-
-    local texto3, houveErro3
+    -- E UMA PORTA FECHADA explica melhor que a frase geral: o clique seguro passa pelas MESMAS
+    -- portas (recarga da magia 1247613, evento de estilo, conjunto travado), entao elas explicam
+    -- tambem o clique que nao pegou.
+    state.outfit = 70
+    state.transmogCooldown = 9
+    local texto2
     ns.Data.Apply({ name = "So aparencia", transmog = 71 },
-        function(t, isError) texto3, houveErro3 = t, isError end)
+        function(t) texto2 = t end)
+    check("porta fechada explica melhor que a frase geral",
+        texto2 and texto2:lower():find("recarga") ~= nil, true)
+    state.transmogCooldown = 0
 
-    state.outfit = 88                   -- ...e o jogador troca para OUTRO conjunto
-    fire("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
+    -- APARENCIA APAGADA continua sendo o seu proprio motivo.
+    state.outfit = 70
+    local texto3
+    ns.Data.Apply({ name = "So aparencia", transmog = 999 },
+        function(t) texto3 = t end)
+    check("aparencia apagada diz que nao existe mais",
+        texto3 and texto3:lower():find("n\195\163o existe mais") ~= nil, true)
 
-    check("evento com o conjunto ERRADO nao passa por bom", houveErro3, true)
-    check("e a corrente fecha assim mesmo", ns.Data.IsApplying(), false)
-
-    state.silentRefusal = false
     state.outfit = nil
 end
+
 
 print("== comandos ==")
 for _, cmd in ipairs({ "", "list", "help", "icon", "i18n", "load Arena", "load nao-existe", "Arena" }) do
@@ -1028,45 +1103,51 @@ check("a desabilitada nao entra na lista",
     end)(), false)
 check("nome por id", ns.Data.OutfitName(88), "Arena")
 
-state.outfit, state.pendingOutfit = 71, nil
-local semRoupa = { name = "Sem roupa", spec = 2, talent = nil, gear = 2 }
-state.equippedSet = 1
-ns.Data.Apply(semRoupa, function() end)
-fire("EQUIPMENT_SWAP_FINISHED", true, 2)
-check("conjunto sem aparencia nao troca a roupa", state.pendingOutfit, nil)
+-- O ID E O INDICE SAO DIFERENTES, e continuam sendo o ponto: o conjunto guarda o ID 88 e a acao
+-- segura pede o INDICE 2. Guardar o indice apodreceria -- ele desloca quando uma aparencia e
+-- apagada, e o comentario da propria Blizzard diz por que ("outfitIDs may have gaps").
+check("o indice se resolve a partir do id", ns.Data.OutfitIndex(88), 2)
+check("e o id que nao existe mais nao resolve", ns.Data.OutfitIndex(999), nil)
 
--- O ID e o INDICE sao diferentes: o conjunto guarda o ID 88, e a troca tem que pedir o
--- indice 2. Guardar o indice apodreceria quando uma aparencia fosse apagada.
-state.equippedSet = 1
-local comRoupa = { name = "Arena", spec = 2, talent = nil, gear = 2, transmog = 88 }
-ns.Data.Apply(comRoupa, function() end)
-fire("EQUIPMENT_SWAP_FINISHED", true, 2)
-check("pediu a aparencia certa pelo INDICE", state.pendingOutfit, 88)
-
--- E a aparencia vem depois dos itens: aplicar a roupa antes seria escrever por cima do que o
--- passo de itens ainda vai mudar.
-state.equippedSet, state.outfit, state.pendingOutfit, state.pendingSet = 1, 71, nil, nil
-ns.Data.Apply({ name = "Arena", spec = 2, gear = 4, transmog = 88 }, function() end)
-check("os itens vao primeiro", state.pendingSet, 4)
-check("e a roupa ainda nao foi", state.pendingOutfit, nil)
+-- A ORDEM DOS PASSOS MUDOU DE SIGNIFICADO na 0.10.0, e o teste antigo media a ordem errada.
+--
+-- Ele travava "os itens vao primeiro, a roupa depois", com a razao de que aplicar a roupa antes
+-- seria escrever por cima do que o passo de itens ainda vai mudar. Essa razao era boa enquanto o
+-- ADDON aplicava a roupa. Ele nao aplica mais: a aparencia entra no proprio clique, ou seja
+-- ANTES de tudo, e nao ha como ser diferente -- a acao segura roda no clique e o resto no
+-- PostClick.
+--
+-- O que sobra a travar e o que continua nosso: os itens so vao depois da spec e dos talentos.
+state.equippedSet, state.pendingSet = 1, nil
+state.specIndex = 1
+ns.Data.Apply({ name = "Arena", spec = 2, gear = 4 }, function() end)
+check("os itens NAO vao antes da spec", state.pendingSet, nil)
+state.specIndex = 2
+fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+check("e vao depois dela", state.pendingSet, 4)
 state.equippedSet = 4
 fire("EQUIPMENT_SWAP_FINISHED", true, 4)
-check("so entao a roupa", state.pendingOutfit, 88)
 
--- Aparencia apagada entre o salvamento e o uso: tem que avisar, nao vestir outra.
-state.outfit, state.pendingOutfit = 71, nil
+-- Aparencia apagada entre o salvamento e o uso: tem que avisar, e com o motivo proprio.
+state.outfit = 71
 local erroRoupa
 ns.Data.Apply({ name = "Fantasma", spec = 2, transmog = 999 }, function(t, isErr)
     if isErr then erroRoupa = t end
 end)
 check("aparencia inexistente avisa", erroRoupa ~= nil, true)
-check("e nao veste outra", state.pendingOutfit, nil)
+check("dizendo que ela nao existe mais",
+    erroRoupa and erroRoupa:lower():find("n\195\163o existe mais") ~= nil, true)
 
 print("== janela: estado vazio ==")
 -- Reclamacao literal do usuario: "fica tudo vazio quando nao tem nada". Com zero conjuntos a
 -- janela mostra UM bloco central, e nada mais — nem lista, nem rotulos orfaos.
 ns.db.presets = {}
-ns.UI.Toggle()
+-- ABRE SE ESTIVER FECHADA, em vez de alternar. `Toggle` alterna, e este bloco dependia -- sem
+-- dizer -- de a janela estar fechada quando chegasse aqui. Quem a abria era o teste de COMANDOS
+-- trinta linhas acima (`/rs` sem argumento alterna a janela), a dezenas de linhas de distancia.
+-- Mexer em qualquer bloco anterior quebrava este, e o erro apontava para o lugar errado.
+if not ns.UI.IsShown() then ns.UI.Toggle() end
+ns.UI.Refresh()
 check("nenhum conjunto selecionado com a lista vazia", ns.UI.Selected(), nil)
 
 print("== as caixas de aviso ficam visiveis SEM conjunto nenhum ==")
@@ -1132,7 +1213,7 @@ print("== janela: o que o teste in-game reprovou ==")
 -- Estes checks falham se qualquer um deles voltar.
 
 ns.db.presets = {}
-ns.UI.Toggle()
+if not ns.UI.IsShown() then ns.UI.Toggle() end   -- abre se preciso; nao alterna
 ns.UI.New(); ns.UI.Selected().name = "Mitica"
 ns.UI.New(); ns.UI.Selected().name = "Arena"
 ns.UI.Refresh()
