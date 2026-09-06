@@ -375,15 +375,64 @@ local OUTFITS = {
     { outfitID = 93, playerFacingOutfitIndex = 3, name = "Antigo",  icon = 203, isDisabled = true  },
 }
 
+-- AS TRES PORTAS que recusam a troca de aparencia SEM devolver erro. O stub tem que saber
+-- representa-las, senao o codigo que as consulta nunca e exercitado -- e o motivo de elas
+-- existirem aqui e justamente que o jogo nao avisa quando fecham.
+state.transmogCooldown = 0          -- segundos restantes; 0 = sem recarga
+state.inStyleEvent = false
+state.lockedOutfits = {}            -- [outfitID] = true
+
 C_TransmogOutfitInfo = {
     GetOutfitsInfo = function() return OUTFITS end,
     GetActiveOutfitID = function() return state.outfit end,
+    InTransmogEvent = function() return state.inStyleEvent end,
+    IsLockedOutfit = function(outfitID) return state.lockedOutfits[outfitID] == true end,
+    -- A CHAMADA DEVOLVE `true` MESMO QUANDO NAO FAZ NADA, e e essencial que o stub minta assim:
+    -- e exatamente esse o comportamento relatado ("nao troca e nao gera nenhum erro"). Um stub
+    -- que devolvesse erro quando bloqueado testaria um jogo que nao existe.
     ChangeToOutfit = function(index)
+        if state.transmogCooldown > 0 or state.inStyleEvent then return true end
         for _, o in ipairs(OUTFITS) do
-            if o.playerFacingOutfitIndex == index then state.pendingOutfit = o.outfitID end
+            if o.playerFacingOutfitIndex == index then
+                if state.lockedOutfits[o.outfitID] then return true end
+                state.pendingOutfit = o.outfitID
+            end
         end
         return true
     end,
+}
+
+-- `GetSpellCooldown` devolve `{ startTime, duration, isEnabled }`, e "sem recarga" NAO e um
+-- estado so: a Blizzard exige `enable ~= 0 and start > 0 and duration > 0` para desenhar a
+-- recarga (`Blizzard_FrameXMLUtil/Cooldown.lua:3`), ou seja, ela guarda contra combinacoes em
+-- que uma das tres nao vale.
+--
+-- O STUB PRECISA SABER PRODUZIR ESSAS COMBINACOES. Enquanto ele devolvia `duration = 0` junto
+-- com `startTime = 0`, um addon que so olhasse `duration` passava no teste -- o stub estava
+-- concordando com o defeito. `state.cooldownShape` escolhe qual caso representar.
+local fakeNow = 1000
+function GetTime() return fakeNow end
+
+state.cooldownShape = "normal"      -- "normal" | "semInicio" | "desligada"
+
+C_Spell = {
+    GetSpellCooldown = function()
+        if state.transmogCooldown <= 0 then
+            return { startTime = 0, duration = 0, isEnabled = true }
+        end
+        if state.cooldownShape == "semInicio" then
+            -- duration > 0 mas start == 0: o caso contra o qual a Blizzard guarda.
+            return { startTime = 0, duration = state.transmogCooldown, isEnabled = true }
+        end
+        if state.cooldownShape == "desligada" then
+            return { startTime = fakeNow, duration = state.transmogCooldown, isEnabled = false }
+        end
+        return { startTime = fakeNow, duration = state.transmogCooldown, isEnabled = true }
+    end,
+}
+
+Constants = {
+    TransmogOutfitDataConsts = { EQUIP_TRANSMOG_OUTFIT_MANUAL_SPELL_ID = 1247613 },
 }
 
 Enum = {
@@ -553,6 +602,116 @@ local comecou = ns.Data.Apply({ name = "Arena", spec = 2, talent = 10, gear = 4 
     function(text) msg = text end)
 check("nem comeca", comecou, false)
 check("e diz por que", msg ~= nil, true)
+
+print("== aparencia: as portas que recusam sem avisar ==")
+-- O usuario relatou DUAS VEZES que a troca de aparencia "nao troca e nao gera nenhum erro" -- a
+-- segunda vez ja com o passo conferindo o resultado. Sem erro, o passo so podia dizer "nao deu",
+-- e o usuario ficava sem saber por que.
+--
+-- A fonte do 12.1.0 mostra TRES portas que recusam a troca em silencio, e a UI nativa do
+-- conjunto consulta as tres antes de deixar clicar
+-- (`Blizzard_Transmog/Blizzard_TransmogTemplates.lua:72-87,191-198`). Nenhuma delas devolve
+-- erro: a chamada simplesmente nao faz nada.
+do
+    local function LimpaPortas()
+        state.transmogCooldown = 0
+        state.inStyleEvent = false
+        state.lockedOutfits = {}
+    end
+
+    LimpaPortas()
+    check("sem impedimento, nada e reportado", ns.Data.TransmogBlockedBy(71), nil)
+
+    -- RECARGA. E a suspeita mais forte para quem esta TESTANDO: trocar de conjunto varias vezes
+    -- seguidas e exatamente o que mantem a recarga de pe.
+    state.transmogCooldown = 12
+    local motivo = ns.Data.TransmogBlockedBy(71)
+    check("a recarga e reportada", motivo ~= nil, true)
+    check("e diz quanto falta", motivo:find("%d") ~= nil, true)
+
+    -- E AS FORMAS QUE NAO SAO RECARGA. A Blizzard exige as TRES condicoes
+    -- (`Blizzard_FrameXMLUtil/Cooldown.lua:3`), entao quem olhasse so `duration > 0` acusaria
+    -- recarga onde ela nao ha -- e o passo passaria a recusar a troca por conta propria, que e
+    -- um defeito PIOR que o original: em vez de nao trocar em silencio, nao trocaria com um
+    -- motivo inventado.
+    -- `startTime = 0` com uma duracao MAIOR que o relogio. Nao e caso de laboratorio: `GetTime()`
+    -- conta desde que o cliente subiu, entao logo depois do login ele vale poucas centenas, e
+    -- `0 + duracao - GetTime()` da positivo. Quem nao guardar o `startTime > 0` anuncia uma
+    -- recarga inteira que nao existe -- e recusa a troca por um motivo inventado, que e pior que
+    -- o defeito original.
+    state.transmogCooldown = 1200
+    state.cooldownShape = "semInicio"
+    check("duration sem startTime NAO e recarga", ns.Data.TransmogBlockedBy(71), nil)
+    state.transmogCooldown = 12
+    state.cooldownShape = "desligada"
+    check("recarga desligada NAO e recarga", ns.Data.TransmogBlockedBy(71), nil)
+    state.cooldownShape = "normal"
+
+    LimpaPortas()
+
+    -- EVENTO DE ESTILO: a UI desabilita todo conjunto que nao seja do evento.
+    state.inStyleEvent = true
+    check("o evento de estilo e reportado", ns.Data.TransmogBlockedBy(71) ~= nil, true)
+    LimpaPortas()
+
+    -- CONJUNTO TRAVADO, e SO o conjunto travado: travar um nao pode impedir os outros.
+    state.lockedOutfits[71] = true
+    check("o conjunto travado e reportado", ns.Data.TransmogBlockedBy(71) ~= nil, true)
+    check("e outro conjunto continua livre", ns.Data.TransmogBlockedBy(88), nil)
+    LimpaPortas()
+
+    -- `C_Spell` AUSENTE NAO PODE ESTOURAR. `pcall(C_Spell.GetSpellCooldown, ...)` indexa
+    -- `C_Spell` ANTES do pcall: o pcall protege a chamada, nao a busca do argumento. Com
+    -- `C_Spell` nulo isso e erro de Lua fora da protecao -- pego aqui, nao no jogo.
+    local guardado = C_Spell
+    C_Spell = nil
+    local semErro = pcall(ns.Data.TransmogBlockedBy, 71)
+    check("sem C_Spell nao estoura", semErro, true)
+    C_Spell = guardado
+end
+
+print("== aparencia: a recusa silenciosa vira frase ==")
+-- E o pedido de fundo do relato. O passo agora consulta as portas ANTES de chamar, e o relatorio
+-- final traz o motivo em vez de "nao deu para aplicar a aparencia".
+do
+    state.transmogCooldown = 0
+    state.inStyleEvent = false
+    state.lockedOutfits = {}
+    state.outfit = 70
+
+    -- A troca funciona quando nada impede: o stub so aplica se as portas estiverem abertas.
+    local realChange = C_TransmogOutfitInfo.ChangeToOutfit
+    C_TransmogOutfitInfo.ChangeToOutfit = function(index)
+        if state.transmogCooldown > 0 or state.inStyleEvent then return true end
+        for _, o in ipairs(OUTFITS) do
+            if o.playerFacingOutfitIndex == index then state.outfit = o.outfitID end
+        end
+        return true
+    end
+
+    -- COM A RECARGA DE PE: o passo tem que falhar DIZENDO a recarga, e nao "nao deu".
+    state.transmogCooldown = 9
+    local texto, houveErro
+    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
+        function(t, isError) texto, houveErro = t, isError end)
+
+    check("a troca bloqueada e reportada como erro", houveErro, true)
+    check("e o texto traz o motivo, nao um 'nao deu' generico",
+        texto and texto:lower():find("recarga") ~= nil, true)
+
+    -- SEM IMPEDIMENTO a mesma troca passa: o teste acima nao pode estar passando por acidente.
+    state.transmogCooldown = 0
+    state.outfit = 70
+    local texto2, houveErro2
+    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
+        function(t, isError) texto2, houveErro2 = t, isError end)
+
+    check("sem impedimento a aparencia troca", state.outfit, 71)
+    check("e o relatorio nao acusa erro", houveErro2 or false, false)
+
+    C_TransmogOutfitInfo.ChangeToOutfit = realChange
+    state.outfit = 70
+end
 
 print("== um passo que falha NAO derruba os seguintes ==")
 -- Relato: "as vezes da erro pra trocar o preset" e "o transmog nao ta funcionando". As duas
