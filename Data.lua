@@ -327,16 +327,36 @@ local RunNext   -- declarado antes para os passos poderem chamá-lo
 
 ---Arma o prazo do passo corrente. Sem isso, um passo que nunca confirma deixa o addon
 ---travado em "carregando" para sempre, sem dizer nada.
+---Nome do passo em curso, para o relatório. O prazo dizia só "o jogo não confirmou a tempo", sem
+---dizer de quê — e numa corrente de quatro passos isso obriga o jogador a adivinhar (ou a me
+---contar, que foi o que aconteceu: "deu a mensagem que o jogo não confirmou o tempo" e eu tive de
+---perguntar qual passo era).
+local STEP_LABEL = {
+    spec     = "Specialization",
+    talent   = "Talents",
+    gear     = "Gear",
+    transmog = "Appearance",
+}
+
+local function StepName(key)
+    local label = STEP_LABEL[key]
+    return label and L[label] or (key or "?")
+end
+
 local function Arm()
     if running.timer then running.timer:Cancel() end
     -- O PRAZO TAMBEM SO ANOTA. Pela mesma razao do `fail` em `RunNext`: se os talentos nao
     -- confirmarem a tempo, os itens e a aparencia ainda podem ser aplicados, e derrubar tudo
     -- deixaria o jogador sem nada em vez de sem uma parte.
+    -- O NOME DO PASSO É CAPTURADO AGORA, e não lido dentro do prazo: quando ele vencer, `running.at`
+    -- já pode ter andado. Ler lá dentro nomearia o passo errado — que é pior que não nomear.
+    local qual = StepName(running.steps[running.at])
+
     running.timer = C_Timer.NewTimer(STEP_TIMEOUT, function()
         if not running then return end
         running.failures = running.failures or {}
         running.failures[#running.failures + 1] =
-            L["timed out waiting for the game to confirm."]
+            format(L["%s: the game did not confirm in time."], qual)
         RunNext()
     end)
 end
@@ -503,11 +523,43 @@ function Steps.transmog(preset)
     -- jogo dispara. A versão anterior desta função tinha a armadilha na direção contrária.
     Arm()
 
-    -- `allowRemoveOutfit = false` é obrigatório aqui, e o motivo está escrito na própria
-    -- Blizzard: *"if applying the same outfit that is already applied, it will be treated as a
-    -- **clear** unless the index is prefixed by '!'"* (`SlashCommands.lua:1716`). Com `true`,
-    -- carregar duas vezes o mesmo conjunto TIRARIA a aparência na segunda.
-    local ok = pcall(C_TransmogOutfitInfo.ChangeToOutfit, index, false)
+    -- A PORTA QUE A UI DO JOGO USA, e não a de macro.
+    --
+    -- Havia duas, e o addon estava na errada. `ChangeToOutfit(índice, allowRemove)` é o que o
+    -- **comando de barra** e a ação segura chamam (`SlashCommands.lua:1726`,
+    -- `SecureTemplates.lua:663`). O **botão de conjunto** da janela de transmog chama outra:
+    --
+    --     C_TransmogOutfitInfo.ChangeDisplayedOutfit(outfitID, trigger, toggleLock, allowRemove)
+    --     -- Blizzard_Transmog/Blizzard_TransmogTemplates.lua:72
+    --
+    -- Trocar para ela é justificado mesmo sem o defeito: ela recebe **outfitID**, que é o que
+    -- guardamos, então a tradução para índice — e toda a classe de erro que vem de traduzir —
+    -- deixa de existir. E ela recebe o GATILHO explicitamente.
+    --
+    -- O gatilho importa mais do que parece. `TransmogSituationTrigger` tem `Specialization` (5) e
+    -- `EquipmentSet` (6): o sistema de conjuntos do Midnight troca aparência SOZINHO quando a spec
+    -- ou o conjunto de itens muda — que é exatamente o que esta corrente acabou de fazer nos dois
+    -- passos anteriores. Dizer `Manual` é dizer ao jogo que esta troca é do jogador, e não mais
+    -- uma reação em cadeia dele.
+    --
+    -- `allowRemoveOutfit = false` nas duas, e o motivo está escrito na própria Blizzard:
+    -- *"if applying the same outfit that is already applied, it will be treated as a **clear**"*
+    -- (`SlashCommands.lua:1714`). Com `true`, carregar duas vezes o mesmo conjunto TIRARIA a
+    -- aparência na segunda.
+    --
+    -- NÃO ESTÁ CONFIRMADO que era a porta. O que está confirmado é que a anterior não fez o jogo
+    -- disparar `TRANSMOG_DISPLAYED_OUTFIT_CHANGED` em 12 segundos. `/rs transmog <índice>` executa
+    -- as duas e diz qual responde.
+    local ok
+    if C_TransmogOutfitInfo.ChangeDisplayedOutfit then
+        local manual = Enum and Enum.TransmogSituationTrigger
+            and Enum.TransmogSituationTrigger.Manual
+        ok = pcall(C_TransmogOutfitInfo.ChangeDisplayedOutfit,
+            preset.transmog, manual, false, false)
+    else
+        -- Cliente sem a função da UI: cai na de macro, que é a que existe desde antes.
+        ok = pcall(C_TransmogOutfitInfo.ChangeToOutfit, index, false)
+    end
     if not ok then return "fail", L["the transmog outfit could not be applied."] end
 
     -- "wait": ou o evento fecha o passo, ou o prazo do `Arm()` anota a falha e segue. Nos dois

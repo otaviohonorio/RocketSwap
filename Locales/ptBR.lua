@@ -49,6 +49,9 @@ L["some items of this set are locked (in use, or in the mail)."] =
 L["you are casting something — try again in a second."] =
     "você está conjurando algo — tente de novo daqui a pouco."
 L["timed out waiting for the game to confirm."] = "o jogo não confirmou a tempo."
+-- Com o NOME do passo (0.9.0): numa corrente de quatro, "o jogo nao confirmou a tempo" obriga o
+-- jogador a adivinhar de que passo se trata -- e foi o que aconteceu no relato de 06/09.
+L["%s: the game did not confirm in time."] = "%s: o jogo não confirmou a tempo."
 
 L["preset deleted."] = "conjunto apagado."
 

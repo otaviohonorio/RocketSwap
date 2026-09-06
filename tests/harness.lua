@@ -387,6 +387,20 @@ state.transmogCooldown = 0          -- segundos restantes; 0 = sem recarga
 state.inStyleEvent = false
 state.lockedOutfits = {}            -- [outfitID] = true
 state.silentRefusal = false         -- aceita a chamada e nao faz nada, sem motivo declarado
+state.usedDoor = nil                -- por qual das duas portas a troca entrou
+state.lastTrigger = nil             -- o gatilho de situacao declarado na troca
+
+---O que as DUAS portas fazem quando nada impede: aplicam e avisam. Uma so copia do
+---comportamento, porque duas divergem -- foi assim que quatro copias de `ChangeToOutfit`
+---espalhadas pelos testes ficaram para tras quando a confirmacao virou por evento.
+local function Aplica(outfitID)
+    if state.transmogCooldown > 0 or state.inStyleEvent or state.silentRefusal then return end
+    if state.lockedOutfits[outfitID] then return end
+
+    state.pendingOutfit = outfitID
+    state.outfit = outfitID
+    fire("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
+end
 
 C_TransmogOutfitInfo = {
     GetOutfitsInfo = function() return OUTFITS end,
@@ -406,17 +420,24 @@ C_TransmogOutfitInfo = {
     -- bloqueando, chamada aceita, e mesmo assim nada muda. E o unico jeito de exercitar o
     -- caminho do PRAZO, que e quem responde nesse caso.
     ChangeToOutfit = function(index)
-        if state.transmogCooldown > 0 or state.inStyleEvent or state.silentRefusal then
-            return true
-        end
         for _, o in ipairs(OUTFITS) do
             if o.playerFacingOutfitIndex == index then
-                if state.lockedOutfits[o.outfitID] then return true end
-                state.pendingOutfit = o.outfitID
-                state.outfit = o.outfitID
-                fire("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
+                state.usedDoor = "ChangeToOutfit"
+                Aplica(o.outfitID)
             end
         end
+        return true
+    end,
+
+    -- A PORTA QUE A UI DO JOGO USA (`Blizzard_TransmogTemplates.lua:72`). Ela existe aqui porque
+    -- sem ela o addon caia no ramo de fallback e o caminho principal nunca era exercitado -- o
+    -- teste passava confirmando o codigo que NAO roda no jogo. E a mesma classe de divergencia
+    -- que ja apareceu meia duzia de vezes neste projeto: stub que diverge da API testa a si
+    -- mesmo. `state.usedDoor` registra por qual delas a troca entrou.
+    ChangeDisplayedOutfit = function(outfitID, trigger, _toggleLock, _allowRemove)
+        state.lastTrigger = trigger
+        state.usedDoor = "ChangeDisplayedOutfit"
+        Aplica(outfitID)
         return true
     end,
 }
@@ -458,6 +479,18 @@ Enum = {
     AddOnRestrictionType = { Combat = 0, Encounter = 1, ChallengeMode = 2, PvPMatch = 3 },
     AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 },
     LoadConfigResult = { Error = 0, NoChangesNecessary = 1, LoadInProgress = 2, Ready = 3 },
+
+    -- Os valores REAIS do 12.1.0 (`TransmogOutfitConstantsDocumentation.lua:368-376`). Sem este
+    -- enum aqui, `Enum.TransmogSituationTrigger.Manual` no addon resolvia para `nil` e o teste
+    -- passava com o addon mandando nada como gatilho -- a mesma classe de furo que ja apareceu
+    -- meia duzia de vezes: o que o stub nao sabe representar, o teste nao ve.
+    --
+    -- `Specialization` e `EquipmentSet` estao aqui porque explicam por que o gatilho importa: o
+    -- jogo troca aparencia sozinho por esses dois, e sao os dois passos que rodam antes deste.
+    TransmogSituationTrigger = {
+        None = 0, Manual = 1, TransmogUpdate = 2, Location = 3, Movement = 4,
+        Specialization = 5, EquipmentSet = 6, Forms = 7, EventOutfit = 8,
+    },
 }
 
 -- C_Timer com relogio manual: o teste controla quando o prazo estoura.
@@ -807,11 +840,30 @@ do
     state.silentRefusal = false
 
     -- QUANDO PEGA, o evento fecha o passo e nao ha reclamacao.
+    state.usedDoor, state.lastTrigger = nil, nil
     local ok1
     ns.Data.Apply({ name = "So aparencia", transmog = 71 },
         function(_, isError) ok1 = not isError end)
     check("troca que pega nao vira aviso", ok1, true)
     check("e a aparencia entrou", state.outfit, 71)
+
+    -- PELA PORTA DA UI, e nao pela de macro. Havia duas e o addon estava na de macro:
+    -- `ChangeToOutfit(indice, ...)` e o que o comando de barra chama
+    -- (`SlashCommands.lua:1726`); o BOTAO de conjunto da janela de transmog chama
+    -- `ChangeDisplayedOutfit(outfitID, gatilho, ...)` (`Blizzard_TransmogTemplates.lua:72`).
+    --
+    -- Alem de ser a que o jogo usa, ela recebe **outfitID** -- que e o que guardamos. A traducao
+    -- para indice, e toda a classe de erro que vem de traduzir, deixa de existir.
+    check("a troca entra pela porta que a UI do jogo usa",
+        state.usedDoor, "ChangeDisplayedOutfit")
+
+    -- E DECLARANDO `Manual`. O gatilho nao e enfeite: `TransmogSituationTrigger` tem
+    -- `Specialization` (5) e `EquipmentSet` (6), porque o sistema de conjuntos do Midnight troca
+    -- aparencia SOZINHO quando a spec ou o conjunto muda -- que e exatamente o que os dois passos
+    -- anteriores desta corrente acabaram de fazer. Dizer `Manual` e dizer ao jogo que esta troca
+    -- e do jogador, e nao mais uma reacao em cadeia dele.
+    check("declarando que a troca e manual",
+        state.lastTrigger, Enum.TransmogSituationTrigger.Manual)
 
     -- O CASO QUE SOBROU DEPOIS DO RELATO: nada bloqueando, chamada aceita, e nada muda. Sem
     -- evento, quem responde e o PRAZO -- e ele nao pode deixar a corrente pendurada.
@@ -829,7 +881,13 @@ do
 
     RunTimers()
     check("e o prazo e quem reporta", houveErro, true)
-    check("dizendo o que houve", texto ~= nil and texto ~= "", true)
+
+    -- E DIZENDO DE QUAL PASSO. "o jogo nao confirmou a tempo" sozinho, numa corrente de quatro,
+    -- obriga o jogador a adivinhar -- e foi o que aconteceu: o relato veio como "deu a mensagem
+    -- que o jogo nao confirmou o tempo" e eu tive de perguntar qual passo era.
+    check("dizendo de qual passo",
+        texto and texto:find(ns.L["Appearance"], 1, true) ~= nil, true)
+
     check("e a corrente nao fica pendurada", ns.Data.IsApplying(), false)
 
     -- O EVENTO NAO DIZ QUAL conjunto entrou -- nao tem carga util
