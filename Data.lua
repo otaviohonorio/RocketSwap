@@ -42,6 +42,84 @@ local STEP_TIMEOUT = 12
 -- uma troca que funciona num aviso de falha.
 local TRANSMOG_CONFIRM_DELAY = 0.1
 
+-- A MAGIA QUE A TROCA MANUAL DE APARENCIA GASTA, e a razao de ela ter uma.
+--
+-- Trocar de conjunto a mao nao e de graca no Midnight: consome
+-- `Constants.TransmogOutfitDataConsts.EQUIP_TRANSMOG_OUTFIT_MANUAL_SPELL_ID`, e a propria UI do
+-- jogo desenha a recarga por cima do botao do conjunto
+-- (`Blizzard_Transmog/Blizzard_TransmogTemplates.lua:191-198`).
+--
+-- ISSO IMPORTA AQUI PORQUE E RECUSA SILENCIOSA: em recarga a chamada nao troca nada e nao
+-- devolve erro nenhum -- que e exatamente o relato, duas vezes, do usuario. E quem esta TESTANDO
+-- e quem mais cai nela: trocar de conjunto varias vezes seguidas mantem a recarga de pe.
+--
+-- O numero literal e o valor da constante no 12.1.0
+-- (`Blizzard_APIDocumentationGenerated/TransmogOutfitConstantsDocumentation.lua:429`). Lemos da
+-- constante quando ela existe e caimos no literal quando nao -- `Constants` e tabela do cliente e
+-- pode nao estar carregada na ordem que esperamos.
+local TRANSMOG_SPELL_ID = 1247613
+
+local function TransmogSpellID()
+    local consts = Constants and Constants.TransmogOutfitDataConsts
+    local id = consts and consts.EQUIP_TRANSMOG_OUTFIT_MANUAL_SPELL_ID
+    return type(id) == "number" and id or TRANSMOG_SPELL_ID
+end
+
+---O que esta impedindo a troca de aparencia AGORA, ou nil quando nada esta.
+---
+---As tres portas saem da UI nativa do conjunto, que consulta as tres antes de deixar clicar
+---(`Blizzard_TransmogTemplates.lua:72-87,191-198`). Nenhuma delas devolve erro quando a troca e
+---pedida assim mesmo: a chamada simplesmente nao faz nada. Perguntar ANTES e o que transforma
+---"nao troca e nao gera nenhum erro" numa frase que diz o motivo.
+---@param outfitID number|nil o conjunto alvo, para conferir se ELE esta travado
+---@return string|nil
+function Data.TransmogBlockedBy(outfitID)
+    if not C_TransmogOutfitInfo then return nil end
+
+    -- RECARGA. `GetSpellCooldown` devolve `{ startTime, duration, isEnabled, modRate }`, e a
+    -- condicao de "esta em recarga" NAO e so `duration > 0`: e a mesma que a Blizzard usa no
+    -- proprio `CooldownFrame_Set` (`Blizzard_FrameXMLUtil/Cooldown.lua:3`), que exige os TRES --
+    --
+    --     enable and enable ~= 0 and start > 0 and duration > 0
+    --
+    -- Ela guarda contra `duration > 0` com `start == 0`, entao esse caso acontece; espelhar o
+    -- predicado dela e mais barato que descobrir quando.
+    --
+    -- `C_Spell and C_Spell.GetSpellCooldown` ANTES do `pcall`: o `pcall` protege a CHAMADA, nao
+    -- a busca do argumento. `pcall(C_Spell.GetSpellCooldown, ...)` com `C_Spell` nulo estoura na
+    -- indexacao, fora da protecao. Pego pelo harness.
+    local getCD = C_Spell and C_Spell.GetSpellCooldown
+    local ok, cd = false, nil
+    if getCD then ok, cd = pcall(getCD, TransmogSpellID()) end
+    if ok and type(cd) == "table"
+        and cd.isEnabled and cd.isEnabled ~= 0
+        and type(cd.duration) == "number" and cd.duration > 0
+        and type(cd.startTime) == "number" and cd.startTime > 0 then
+        local resta = (cd.startTime + cd.duration) - GetTime()
+        if resta > 0 then
+            return format(L["changing appearance is on cooldown (%d s left)."], resta + 0.5)
+        end
+    end
+
+    -- EVENTO DE ESTILO: durante ele a UI desabilita todo conjunto que nao seja do evento.
+    if C_TransmogOutfitInfo.InTransmogEvent then
+        local okEv, emEvento = pcall(C_TransmogOutfitInfo.InTransmogEvent)
+        if okEv and emEvento then
+            return L["a style event is running; appearances are locked."]
+        end
+    end
+
+    -- CONJUNTO TRAVADO a uma situacao: a UI marca com cadeado.
+    if outfitID and C_TransmogOutfitInfo.IsLockedOutfit then
+        local okLk, travado = pcall(C_TransmogOutfitInfo.IsLockedOutfit, outfitID)
+        if okLk and travado then
+            return L["that appearance set is locked."]
+        end
+    end
+
+    return nil
+end
+
 --------------------------------------------------------------------------------
 -- Leitura: o que o jogador já tem
 --------------------------------------------------------------------------------
@@ -401,6 +479,12 @@ function Steps.transmog(preset)
         return "fail", L["that transmog outfit no longer exists."]
     end
 
+    -- PERGUNTA ANTES DE CHAMAR. A chamada em si nunca reclama; se algo esta impedindo, ela
+    -- devolve sucesso e nao faz nada. Sem esta consulta o passo so podia dizer "nao deu",
+    -- e o usuario relatou justamente a ausencia de motivo.
+    local impedindo = Data.TransmogBlockedBy(preset.transmog)
+    if impedindo then return "fail", impedindo end
+
     Report(L["Changing appearance..."], false)
 
     -- `allowRemoveOutfit = false` é obrigatório aqui, e o motivo está escrito na própria
@@ -430,9 +514,13 @@ function Steps.transmog(preset)
         if not running or running ~= token then return end
 
         if Data.GetActiveOutfitID() ~= preset.transmog then
+            -- Uma porta pode ter fechado ENTRE a consulta e a chamada -- a recarga, tipicamente,
+            -- se outra troca aconteceu no meio. Perguntar de novo aqui troca "nao deu" pelo
+            -- motivo, que e a diferenca entre o usuario saber e o usuario adivinhar.
+            local porque = Data.TransmogBlockedBy(preset.transmog)
             running.failures = running.failures or {}
             running.failures[#running.failures + 1] =
-                L["the transmog outfit could not be applied."]
+                porque or L["the transmog outfit could not be applied."]
         end
         RunNext()
     end)

@@ -67,6 +67,14 @@ L["this client cannot switch transmog outfits."] =
 L["that transmog outfit no longer exists."] = "esse conjunto de aparência não existe mais."
 L["the transmog outfit could not be applied."] = "não deu para aplicar a aparência."
 
+-- As tres portas que recusam a troca SEM devolver erro (0.7.0). A UI nativa do conjunto
+-- consulta as tres antes de deixar clicar; sem elas o addon so sabia dizer "nao deu".
+L["changing appearance is on cooldown (%d s left)."] =
+    "trocar de aparência está em recarga (faltam %d s)."
+L["a style event is running; appearances are locked."] =
+    "há um evento de estilo em andamento; as aparências estão travadas."
+L["that appearance set is locked."] = "esse conjunto de aparência está travado."
+
 -- Aviso de equipamento e resumo no ready check (0.4.0)
 L["PvE gear in a PvP match."] = "Equipamento de PvE numa partida de PvP."
 L["PvP gear in PvE content."] = "Equipamento de PvP em conteúdo de PvE."
@@ -85,6 +93,8 @@ L["what you are wearing:"] = "o que você está usando:"
 L["context:"] = "contexto:"
 L["(open world)"] = "(mundo aberto)"
 L["shows what each slot is reading as"] = "mostra como cada slot está sendo lido"
+L["shows the appearance sets and tests the switch"] =
+    "mostra os conjuntos de aparência e testa a troca"
 L["turns the gear warning on or off"] = "liga ou desliga o aviso de equipamento"
 L["turns the ready check summary on or off"] = "liga ou desliga o resumo no ready check"
 L["re-enables warnings you silenced"] = "religa os avisos que você silenciou"
