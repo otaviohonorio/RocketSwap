@@ -161,12 +161,51 @@ commands["transmog"] = function(rest)
         return table.concat(motivos, ", ")
     end
 
+    ------------------------------------------------------------------ as situacoes automaticas
+    ---O sistema de conjuntos do Midnight troca aparencia SOZINHO por situacao, e duas das
+    ---situacoes sao `Specialization` e `EquipmentSet`
+    ---(`TransmogOutfitConstantsDocumentation.lua:373-374`) -- exatamente os dois passos que a
+    ---corrente do addon executa antes da aparencia. Se isso estiver ligado, o jogo pode estar
+    ---trocando por conta propria em cima do que pedimos, e isso nao aparece como erro em lugar
+    ---nenhum. Ler o estado e barato e responde.
+    local function Situacoes()
+        local partes = {}
+
+        if C_TransmogOutfitInfo.GetOutfitSituationsEnabled then
+            local ok, ligado = pcall(C_TransmogOutfitInfo.GetOutfitSituationsEnabled)
+            if ok then
+                partes[#partes + 1] = "troca automatica por situacao: "
+                    .. (ligado and "|cffff5555LIGADA|r" or "|cff40d878desligada|r")
+            end
+        end
+
+        if C_TransmogOutfitInfo.HasPendingOutfitSituations then
+            local ok, pendente = pcall(C_TransmogOutfitInfo.HasPendingOutfitSituations)
+            if ok and pendente then
+                partes[#partes + 1] = "|cffff5555ha situacao pendente|r"
+            end
+        end
+
+        if C_TransmogOutfitInfo.IsEquippedGearOutfitDisplayed then
+            local ok, mostrando = pcall(C_TransmogOutfitInfo.IsEquippedGearOutfitDisplayed)
+            if ok and mostrando then
+                partes[#partes + 1] = "mostrando a aparencia do EQUIPAMENTO, nao de um conjunto"
+            end
+        end
+
+        if #partes == 0 then return nil end
+        return table.concat(partes, "; ")
+    end
+
     if not arg then
         ns.Print("aparencia ativa agora: |cffffd100" .. Ativo() .. "|r")
 
         local impedindo = Portas(nil)
         ns.Print("impedimentos agora: " ..
             (impedindo and ("|cffff5555" .. impedindo .. "|r") or "|cff40d878nenhum|r"))
+
+        local sit = Situacoes()
+        if sit then ns.Print("situacoes: " .. sit) end
 
         local ok, lista = pcall(C_TransmogOutfitInfo.GetOutfitsInfo)
         if not ok or type(lista) ~= "table" then
@@ -270,6 +309,23 @@ commands["transmog"] = function(rest)
             else
                 ns.Print("|cffff5555nenhuma das duas trocou.|r Recusa silenciosa: recarga, "
                     .. "conjunto travado, evento, ou funcao protegida para addon.")
+            end
+
+            -- "SO TROCOU A APARENCIA DA ARMA" foi o relato de 06/09, e ele nao se explica por
+            -- nenhuma das portas: elas sao tudo-ou-nada. Explica-se por peca -- ha um enum
+            -- inteiro de erro POR PECA (`TransmogOutfitSlotError`: NoItem, NotSoulbound,
+            -- Legendary, InvalidItemType, Mismatch, CannotUseItem, InvalidSlotForRace...) --
+            -- ou pelo jogo ter trocado sozinho por situacao. Os dois aparecem aqui.
+            local sit = Situacoes()
+            if sit then ns.Print("situacoes: " .. sit) end
+
+            if C_TransmogOutfitInfo.GetOutfitInfo and alvoID then
+                local okInfo, info = pcall(C_TransmogOutfitInfo.GetOutfitInfo, alvoID)
+                if okInfo and type(info) == "table" then
+                    print(("   conjunto alvo: %s  (%s)"):format(
+                        tostring(info.name),
+                        info.isDisabled and "|cffff5555desativado|r" or "ativo"))
+                end
             end
         end)
     end)
