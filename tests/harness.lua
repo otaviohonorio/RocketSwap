@@ -375,12 +375,18 @@ local OUTFITS = {
     { outfitID = 93, playerFacingOutfitIndex = 3, name = "Antigo",  icon = 203, isDisabled = true  },
 }
 
+-- `fire` e definido bem mais abaixo, mas o stub de `ChangeToOutfit` precisa dele: no jogo, quem
+-- troca a aparencia DISPARA `TRANSMOG_DISPLAYED_OUTFIT_CHANGED`. Declarar aqui e atribuir la
+-- embaixo mantem o upvalue -- `local` declarado depois de quem usa resolve como global nil.
+local fire
+
 -- AS TRES PORTAS que recusam a troca de aparencia SEM devolver erro. O stub tem que saber
 -- representa-las, senao o codigo que as consulta nunca e exercitado -- e o motivo de elas
 -- existirem aqui e justamente que o jogo nao avisa quando fecham.
 state.transmogCooldown = 0          -- segundos restantes; 0 = sem recarga
 state.inStyleEvent = false
 state.lockedOutfits = {}            -- [outfitID] = true
+state.silentRefusal = false         -- aceita a chamada e nao faz nada, sem motivo declarado
 
 C_TransmogOutfitInfo = {
     GetOutfitsInfo = function() return OUTFITS end,
@@ -390,12 +396,25 @@ C_TransmogOutfitInfo = {
     -- A CHAMADA DEVOLVE `true` MESMO QUANDO NAO FAZ NADA, e e essencial que o stub minta assim:
     -- e exatamente esse o comportamento relatado ("nao troca e nao gera nenhum erro"). Um stub
     -- que devolvesse erro quando bloqueado testaria um jogo que nao existe.
+    --
+    -- E QUANDO FAZ, DISPARA O EVENTO. `TRANSMOG_DISPLAYED_OUTFIT_CHANGED` e o que a propria
+    -- janela de transmog escuta para se redesenhar (`Blizzard_Transmog.lua:85,184`). Sem ele no
+    -- stub, o passo que espera o evento ficaria pendurado e o teste acusaria um defeito que so
+    -- existe no simulador.
+    --
+    -- `state.silentRefusal` representa a hipotese que sobrou depois do relato do usuario: nada
+    -- bloqueando, chamada aceita, e mesmo assim nada muda. E o unico jeito de exercitar o
+    -- caminho do PRAZO, que e quem responde nesse caso.
     ChangeToOutfit = function(index)
-        if state.transmogCooldown > 0 or state.inStyleEvent then return true end
+        if state.transmogCooldown > 0 or state.inStyleEvent or state.silentRefusal then
+            return true
+        end
         for _, o in ipairs(OUTFITS) do
             if o.playerFacingOutfitIndex == index then
                 if state.lockedOutfits[o.outfitID] then return true end
                 state.pendingOutfit = o.outfitID
+                state.outfit = o.outfitID
+                fire("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
             end
         end
         return true
@@ -443,6 +462,19 @@ Enum = {
 
 -- C_Timer com relogio manual: o teste controla quando o prazo estoura.
 local timers = {}
+
+---Dispara os prazos pendentes, como o relogio do jogo faria ao vencerem.
+---
+---Sem isto nao havia como testar o caminho do PRAZO -- `C_Timer.After` roda na hora neste
+---simulador, mas `NewTimer` so guarda. E o prazo e justamente quem responde quando o jogo aceita
+---a chamada e nao faz nada.
+function RunTimers()
+    local pendentes = timers
+    timers = {}
+    for _, t in ipairs(pendentes) do
+        if not t.cancelled then t.fn() end
+    end
+end
 C_Timer = {
     NewTimer = function(seconds, fn)
         local t = { at = seconds, fn = fn, cancelled = false }
@@ -478,7 +510,7 @@ for _, file in ipairs(files) do
 end
 
 --------------------------------------------------------------------------------
-local function fire(event, ...)
+fire = function(event, ...)
     for _, f in ipairs(frames) do
         if f.__events[event] and f.__scripts.OnEvent then
             local ok, err = pcall(f.__scripts.OnEvent, f, event, ...)
@@ -679,15 +711,10 @@ do
     state.lockedOutfits = {}
     state.outfit = 70
 
-    -- A troca funciona quando nada impede: o stub so aplica se as portas estiverem abertas.
-    local realChange = C_TransmogOutfitInfo.ChangeToOutfit
-    C_TransmogOutfitInfo.ChangeToOutfit = function(index)
-        if state.transmogCooldown > 0 or state.inStyleEvent then return true end
-        for _, o in ipairs(OUTFITS) do
-            if o.playerFacingOutfitIndex == index then state.outfit = o.outfitID end
-        end
-        return true
-    end
+    -- Sem sobrescrever `ChangeToOutfit`: o stub base ja consulta as portas, aplica quando estao
+    -- abertas e dispara `TRANSMOG_DISPLAYED_OUTFIT_CHANGED`, que e o que o jogo faz. Sobrescrever
+    -- aqui criava uma SEGUNDA versao do jogo dentro do teste, e foi ela que ficou para tras
+    -- quando a confirmacao passou a ser por evento.
 
     -- COM A RECARGA DE PE: o passo tem que falhar DIZENDO a recarga, e nao "nao deu".
     state.transmogCooldown = 9
@@ -709,7 +736,6 @@ do
     check("sem impedimento a aparencia troca", state.outfit, 71)
     check("e o relatorio nao acusa erro", houveErro2 or false, false)
 
-    C_TransmogOutfitInfo.ChangeToOutfit = realChange
     state.outfit = 70
 end
 
@@ -728,14 +754,7 @@ do
     local realCanEdit = C_ClassTalents.CanEditTalents
     C_ClassTalents.CanEditTalents = function() return false, "Voce nao pode fazer isso agora." end
 
-    -- A aparencia, se for tentada, funciona.
-    local realChange = C_TransmogOutfitInfo.ChangeToOutfit
-    C_TransmogOutfitInfo.ChangeToOutfit = function(index)
-        for _, o in ipairs(OUTFITS) do
-            if o.playerFacingOutfitIndex == index then state.outfit = o.outfitID end
-        end
-        return true
-    end
+    -- A aparencia, se for tentada, funciona: o stub base aplica e dispara o evento.
 
     local texto, houveErro
     ns.Data.Apply({ name = "Frost PvP", spec = 2, talent = 10, gear = 1, transmog = 71 },
@@ -749,7 +768,6 @@ do
         texto and texto:find("Frost PvP", 1, true) ~= nil, true)
 
     C_ClassTalents.CanEditTalents = realCanEdit
-    C_TransmogOutfitInfo.ChangeToOutfit = realChange
 end
 
 print("== o motivo vem do jogo, nao da nossa frase generica ==")
@@ -774,37 +792,65 @@ do
     C_ClassTalents.LoadConfig = realLoad
 end
 
-print("== a aparencia CONFERE que pegou ==")
--- O comentario da funcao prometia isso desde a 0.3.0 e o codigo nao fazia: devolvia "skip" logo
--- depois da chamada. Uma troca que nao pega passava por "pronto".
+print("== a aparencia CONFERE que pegou, e agora por EVENTO ==")
+-- O comentario da funcao prometia conferir desde a 0.3.0 e o codigo nao fazia: devolvia "skip"
+-- logo depois da chamada. Depois passou a conferir com um `C_Timer.After(0.1)` -- numero
+-- escolhido no olho, em cima de uma afirmacao FALSA que estava escrita ali: "este passo e o unico
+-- que NAO tem evento de confirmacao amarrado".
+--
+-- O evento existe: `TRANSMOG_DISPLAYED_OUTFIT_CHANGED`
+-- (`TransmogOutfitInfoDocumentation.lua:818-821`), e e o que a propria janela de transmog escuta.
+-- O que eu tinha olhado era o `TRANSMOG_OUTFITS_CHANGED`, que avisa que a LISTA mudou.
 do
     state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
     state.outfit = nil
+    state.silentRefusal = false
 
-    -- A chamada "funciona" (nao estoura) mas nao muda nada -- o caso silencioso.
-    local realChange = C_TransmogOutfitInfo.ChangeToOutfit
-    C_TransmogOutfitInfo.ChangeToOutfit = function() return true end
+    -- QUANDO PEGA, o evento fecha o passo e nao ha reclamacao.
+    local ok1
+    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
+        function(_, isError) ok1 = not isError end)
+    check("troca que pega nao vira aviso", ok1, true)
+    check("e a aparencia entrou", state.outfit, 71)
+
+    -- O CASO QUE SOBROU DEPOIS DO RELATO: nada bloqueando, chamada aceita, e nada muda. Sem
+    -- evento, quem responde e o PRAZO -- e ele nao pode deixar a corrente pendurada.
+    state.outfit = nil
+    state.silentRefusal = true
 
     local texto, houveErro
     ns.Data.Apply({ name = "So aparencia", transmog = 71 },
         function(t, isError) texto, houveErro = t, isError end)
 
-    check("troca que nao pega e reportada", houveErro, true)
+    -- Antes do prazo a corrente esta ABERTA: o unico relato ate aqui e o "Carregando...", que
+    -- nao e erro. Se o passo fechasse sozinho, ja haveria veredito.
+    check("sem o evento, o passo nao da veredito", houveErro, false)
+    check("e a aplicacao continua em curso", ns.Data.IsApplying(), true)
 
-    -- E quando pega, nao reclama.
-    C_TransmogOutfitInfo.ChangeToOutfit = function(index)
-        for _, o in ipairs(OUTFITS) do
-            if o.playerFacingOutfitIndex == index then state.outfit = o.outfitID end
-        end
-        return true
-    end
+    RunTimers()
+    check("e o prazo e quem reporta", houveErro, true)
+    check("dizendo o que houve", texto ~= nil and texto ~= "", true)
+    check("e a corrente nao fica pendurada", ns.Data.IsApplying(), false)
+
+    -- O EVENTO NAO DIZ QUAL conjunto entrou -- nao tem carga util
+    -- (`TransmogOutfitInfoDocumentation.lua:818-821`). Entao ele so avisa que ALGO mudou, e quem
+    -- responde "mudou para o certo?" continua sendo a leitura. Sem essa leitura, o passo daria
+    -- por bom qualquer troca -- inclusive a que o JOGADOR fez a mao no meio da aplicacao.
     state.outfit = nil
-    local ok2
-    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
-        function(_, isError) ok2 = not isError end)
-    check("troca que pega nao vira aviso", ok2, true)
+    state.silentRefusal = true          -- a nossa chamada nao pega...
 
-    C_TransmogOutfitInfo.ChangeToOutfit = realChange
+    local texto3, houveErro3
+    ns.Data.Apply({ name = "So aparencia", transmog = 71 },
+        function(t, isError) texto3, houveErro3 = t, isError end)
+
+    state.outfit = 88                   -- ...e o jogador troca para OUTRO conjunto
+    fire("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
+
+    check("evento com o conjunto ERRADO nao passa por bom", houveErro3, true)
+    check("e a corrente fecha assim mesmo", ns.Data.IsApplying(), false)
+
+    state.silentRefusal = false
+    state.outfit = nil
 end
 
 print("== comandos ==")
