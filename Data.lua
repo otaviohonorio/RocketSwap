@@ -37,11 +37,6 @@ ns.Data = Data
 -- Prazo de cada passo. Trocar de spec é o mais lento: tem cast e o servidor responde.
 local STEP_TIMEOUT = 12
 
--- Um quadro de folga antes de conferir se a aparencia trocou. Ver `Steps.transmog`: nao esta
--- verificado que a troca vale no mesmo quadro da chamada, e conferir cedo demais transformaria
--- uma troca que funciona num aviso de falha.
-local TRANSMOG_CONFIRM_DELAY = 0.1
-
 -- A MAGIA QUE A TROCA MANUAL DE APARENCIA GASTA, e a razao de ela ter uma.
 --
 -- Trocar de conjunto a mao nao e de graca no Midnight: consome
@@ -457,10 +452,18 @@ end
 ---o que está vestido. Trocar a roupa antes das peças seria escrever por cima do que o passo
 ---seguinte vai mudar.
 ---
----Este passo é o único que NÃO tem evento de confirmação amarrado: `TRANSMOG_OUTFITS_CHANGED`
----dispara quando a LISTA muda (criar, apagar), não quando a aparência ativa troca. Então ele
----confirma lendo `GetActiveOutfitID` logo depois — e se a leitura não bater, avisa em vez de
----dizer "pronto".
+---CONFIRMA POR EVENTO, como todos os outros passos.
+---
+---Isto aqui dizia, por escrito, que "este passo é o único que NÃO tem evento de confirmação
+---amarrado". **Era falso**, e a afirmação custou caro: em cima dela o passo passou a conferir com
+---um `C_Timer.After(0.1)` — número escolhido no olho, sem nada que garantisse que a troca vale
+---dentro dele. Se a troca demora mais que isso, o passo acusa falha numa troca que funcionou.
+---
+---O evento existe e é `TRANSMOG_DISPLAYED_OUTFIT_CHANGED`
+---(`TransmogOutfitInfoDocumentation.lua:818-821`, `SynchronousEvent = true`), e é ele que a
+---própria janela de transmog escuta para se redesenhar (`Blizzard_Transmog.lua:85,184`). O que eu
+---tinha olhado era o `TRANSMOG_OUTFITS_CHANGED` — esse sim avisa que a LISTA mudou (criar,
+---apagar), e não qual está ativa. Dois eventos de nome parecido, e eu conferi só um.
 function Steps.transmog(preset)
     if not preset.transmog then return "skip" end
     if Data.GetActiveOutfitID() == preset.transmog then return "skip" end
@@ -487,6 +490,19 @@ function Steps.transmog(preset)
 
     Report(L["Changing appearance..."], false)
 
+    -- `Arm()` ANTES DA CHAMADA, e a ordem é obrigatória.
+    --
+    -- `TRANSMOG_DISPLAYED_OUTFIT_CHANGED` é `SynchronousEvent = true`
+    -- (`TransmogOutfitInfoDocumentation.lua:818-821`): ele dispara DENTRO da chamada, não no
+    -- quadro seguinte. Como a aparência é o último passo, o ouvinte chama `RunNext`, que chega ao
+    -- fim da corrente e zera `running` ali mesmo — e qualquer linha depois disso indexaria
+    -- `running` já nulo. Armando antes, o prazo existe quando a chamada volta e não há nada a
+    -- fazer depois dela.
+    --
+    -- Não é teórico: foi o que o harness pegou assim que o stub passou a disparar o evento como o
+    -- jogo dispara. A versão anterior desta função tinha a armadilha na direção contrária.
+    Arm()
+
     -- `allowRemoveOutfit = false` é obrigatório aqui, e o motivo está escrito na própria
     -- Blizzard: *"if applying the same outfit that is already applied, it will be treated as a
     -- **clear** unless the index is prefixed by '!'"* (`SlashCommands.lua:1716`). Com `true`,
@@ -494,37 +510,11 @@ function Steps.transmog(preset)
     local ok = pcall(C_TransmogOutfitInfo.ChangeToOutfit, index, false)
     if not ok then return "fail", L["the transmog outfit could not be applied."] end
 
-    -- CONFERE, em vez de presumir. O comentário acima desta função já prometia isso desde a
-    -- 0.3.0 e o código não fazia: devolvia "skip" logo depois da chamada. Como não há evento de
-    -- confirmação para a troca de aparência (`TRANSMOG_OUTFITS_CHANGED` avisa que a LISTA mudou,
-    -- não qual está ativa), ler o estado de volta é a única verificação possível.
+    -- "wait": ou o evento fecha o passo, ou o prazo do `Arm()` anota a falha e segue. Nos dois
+    -- caminhos o jogador fica com tudo o que era possível aplicar.
     --
-    -- **Não imediatamente**, e este cuidado é deliberado: não está verificado que a troca vale
-    -- no mesmo quadro da chamada. Conferir na hora e errar transformaria uma troca que funciona
-    -- num aviso de falha — pior que o defeito original. Um quadro de espera custa nada e tira o
-    -- palpite da conta.
-    -- `Arm()` ANTES de agendar: a confirmação chama `RunNext`, que pode terminar a corrente e
-    -- zerar `running` ali mesmo. Armar depois disso indexaria `running` já nulo — e não é
-    -- teórico, foi o que o harness pegou na primeira versão desta função.
-    Arm()
-
-    local token = running
-    C_Timer.After(TRANSMOG_CONFIRM_DELAY, function()
-        -- Outra aplicação pode ter começado nesse meio tempo; esta já não manda mais.
-        if not running or running ~= token then return end
-
-        if Data.GetActiveOutfitID() ~= preset.transmog then
-            -- Uma porta pode ter fechado ENTRE a consulta e a chamada -- a recarga, tipicamente,
-            -- se outra troca aconteceu no meio. Perguntar de novo aqui troca "nao deu" pelo
-            -- motivo, que e a diferenca entre o usuario saber e o usuario adivinhar.
-            local porque = Data.TransmogBlockedBy(preset.transmog)
-            running.failures = running.failures or {}
-            running.failures[#running.failures + 1] =
-                porque or L["the transmog outfit could not be applied."]
-        end
-        RunNext()
-    end)
-
+    -- E se o evento já correu lá em cima, `running` é nulo e este "wait" não faz nada: `RunNext`
+    -- só olha o resultado para decidir se CONTINUA, e não há mais o que continuar.
     return "wait"
 end
 
@@ -608,6 +598,7 @@ function Data.EnsureListener()
     listener:RegisterEvent("SPECIALIZATION_CHANGE_CAST_FAILED")
     listener:RegisterEvent("TRAIT_CONFIG_UPDATED")
     listener:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
+    listener:RegisterEvent("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
 
     listener:SetScript("OnEvent", function(_, event, arg1)
         if not running then return end
@@ -620,6 +611,22 @@ function Data.EnsureListener()
             RunNext()
 
         elseif event == "TRAIT_CONFIG_UPDATED" and step == "talent" then
+            RunNext()
+
+        elseif event == "TRANSMOG_DISPLAYED_OUTFIT_CHANGED" and step == "transmog" then
+            -- O EVENTO NÃO DIZ QUAL conjunto entrou — não tem carga útil
+            -- (`TransmogOutfitInfoDocumentation.lua:818-821`). Então ele é o sinal de que
+            -- ALGO mudou, e quem responde "mudou para o certo?" continua sendo a leitura.
+            --
+            -- E se mudou para o ERRADO, isso não é falha a repetir: é o jogador tendo trocado a
+            -- aparência à mão no meio da aplicação. O relatório diz o que houve e a corrente
+            -- segue, como em todo passo que não deu.
+            if Data.GetActiveOutfitID() ~= running.preset.transmog then
+                local porque = Data.TransmogBlockedBy(running.preset.transmog)
+                running.failures = running.failures or {}
+                running.failures[#running.failures + 1] =
+                    porque or L["the transmog outfit could not be applied."]
+            end
             RunNext()
 
         elseif event == "EQUIPMENT_SWAP_FINISHED" and step == "gear" then
