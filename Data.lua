@@ -777,8 +777,18 @@ function Data.Apply(preset, report, byClick)
     -- dizer isso — e registrar, porque o caso interessante é justamente a corrente que ficou
     -- presa e nunca terminou.
     if running then
-        if ns.Log then ns.Log.Add("recusado", { motivo = "ja ha uma troca em curso" }) end
-        if report then report(L["another swap is still running."], true) end
+        -- DIZ DE QUE PASSO ESTA ESPERANDO. O diário do usuário trouxe oito segundos de "recusado"
+        -- em fila, e a mensagem não dizia nada — daí *"teve mensagem de ainda tá pendente, mas
+        -- não ficou carregando nada"*. Nomear o passo transforma o silêncio em informação: se
+        -- ficar parado no mesmo por muito tempo, o próprio jogador vê que travou.
+        local passo = StepName(running.steps[running.at])
+        if ns.Log then
+            ns.Log.Add("recusado", { motivo = "ja ha uma troca em curso", esperando = passo })
+        end
+        if report then
+            report(format(L["still applying %s: waiting for %s."],
+                running.preset.name or "?", passo), true)
+        end
         return false
     end
 
@@ -829,8 +839,11 @@ function Data.EnsureListener()
         -- responde a hipótese que eu não tinha como testar: estes eventos são GLOBAIS e disparam
         -- quando o JOGADOR mexe à mão ou quando outro addon mexe. Se o log mostrar um evento
         -- fechando um passo que não era nosso, é isso.
+        -- OS DOIS ARGUMENTOS. `EQUIPMENT_SWAP_FINISHED` traz `result, setID`, e sem o segundo
+        -- não dá para saber se o evento era do nosso conjunto — foi exatamente a pergunta que
+        -- ficou sem resposta ao ler o diário de 02:05.
         local emCurso = running and running.steps[running.at] or nil
-        if ns.Log then ns.Log.Event(event, emCurso, running ~= nil, arg1) end
+        if ns.Log then ns.Log.Event(event, emCurso, running ~= nil, arg1, arg2) end
 
         if not running then return end
         local step = running.steps[running.at]
@@ -893,22 +906,36 @@ function Data.EnsureListener()
             RunNext()
 
         elseif event == "EQUIPMENT_SWAP_FINISHED" and step == "gear" then
-            -- MESMO PADRÃO: o evento acorda, a leitura decide.
+            -- O EVENTO DIZ QUE TERMINOU. É nele que se confia, e esta linha é a SEGUNDA retirada
+            -- do mesmo erro meu nesta sequência.
             --
-            -- Trocar de spec faz o jogo equipar sozinho o conjunto amarrado àquela spec, e o
-            -- evento DESSA troca fechava o nosso passo antes do nosso conjunto entrar. Comparar o
-            -- `setID` do payload resolvia isso, mas pelo mesmo caminho frágil do ramo de talentos
-            -- — e um payload diferente do esperado deixaria o passo pendurado até o prazo.
+            -- A 0.13.2 trocou a confirmação por uma leitura de estado —
+            -- `Data.IsGearSetEquipped(preset.gear)` — achando que perguntar ao mundo era mais
+            -- honesto que confiar no evento. O diário do usuário provou o contrário, e de forma
+            -- mecânica: às 02:05:35 chegou `EQUIPMENT_SWAP_FINISHED` com `result = true`, ou seja
+            -- **a troca terminou com sucesso**, e a leitura de estado ainda respondia que o
+            -- conjunto não estava vestido. A corrente não avançou, e a partir dali todo clique do
+            -- jogador bateu em "já há uma troca em curso" — oito segundos de "recusado" seguidos
+            -- no diário.
             --
-            -- `false` continua virando ANOTAÇÃO e não fim de corrente: um `false` de uma troca
-            -- alheia matava a nossa e jogava fora as falhas já anotadas.
-            if arg1 == false and (arg2 == nil or arg2 == running.preset.gear) then
+            -- A LIÇÃO É A MESMA DO RAMO DE TALENTOS, duas versões atrás: o estado do jogo pode
+            -- atrasar em relação ao evento, então exigir que ele já tenha virado transforma uma
+            -- confirmação em armadilha. O evento é o fato; a leitura, no máximo, um detalhe.
+            --
+            -- O `arg2` continua servindo para RECUSAR o que é claramente de outro conjunto —
+            -- trocar de spec faz o jogo equipar sozinho o conjunto amarrado àquela spec — mas
+            -- recusar é tudo o que ele faz. Sem `arg2`, seguimos.
+            if arg2 ~= nil and running.preset.gear ~= nil and arg2 ~= running.preset.gear then
+                return      -- é de outro conjunto; o nosso ainda vem
+            end
+
+            -- `false` é ANOTAÇÃO, não fim de corrente: um `false` alheio matava a nossa e jogava
+            -- fora as falhas já anotadas.
+            if arg1 == false then
                 running.failures = running.failures or {}
                 running.failures[#running.failures + 1] = L["the gear set could not be equipped."]
-                RunNext()
-            elseif Data.IsGearSetEquipped(running.preset.gear) then
-                RunNext()
             end
+            RunNext()
         end
     end)
 

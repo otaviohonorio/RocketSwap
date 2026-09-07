@@ -147,10 +147,10 @@ L["shows the log of the last swaps"] = "mostra o diário das últimas trocas"
 L["the talents were staged but not applied; open the talent window and apply."] =
     "os talentos foram preparados mas não aplicados; abra a janela de talentos e aplique."
 L["an internal error interrupted this step."] = "um erro interno interrompeu este passo."
-L["another swap is still running."] = "ainda há uma troca em andamento."
 L["the specialization did not change, so the talents were left alone."] =
     "a especialização não trocou, então os talentos não foram mexidos."
 -- O jogo recusa trocar de spec quando a anterior foi ha pouco. O diario real mostrou isso em
 -- quatro das nove trocas: sempre a segunda, poucos segundos depois da primeira.
 L["the game refused to change specialization now; wait a few seconds."] =
     "o jogo não deixou trocar de especialização agora; espere alguns segundos."
+L["still applying %s: waiting for %s."] = "ainda aplicando %s: esperando %s."
