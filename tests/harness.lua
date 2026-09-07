@@ -411,6 +411,15 @@ C_EquipmentSet = {
         return nil
     end,
     EquipmentSetContainsLockedItems = function() return state.locked == true end,
+    -- EQUIPAR DE VERDADE, e nao so registrar o pedido. O stub guardava so `pendingSet`, entao
+    -- `isEquipped` do conjunto alvo continuava falso depois da troca -- e o addon, que agora
+    -- confirma o passo LENDO O ESTADO (e nao pelo id do evento), ficaria esperando para sempre um
+    -- estado que o simulador nunca produzia.
+    --
+    -- `pendingSet` fica como sonda de "o que foi pedido"; `equippedSet` e o mundo.
+    -- SO PEDE. O conjunto fica vestido quando o EVENTO chega, nao na chamada -- e a diferenca
+    -- importa: o addon confirma o passo lendo o estado, e equipar cedo demais aqui fazia o
+    -- primeiro evento (ate o de OUTRO conjunto) encontrar o alvo ja vestido e fechar o passo.
     UseEquipmentSet = function(setID)
         state.pendingSet = setID
         return true
@@ -651,6 +660,17 @@ end
 
 --------------------------------------------------------------------------------
 fire = function(event, ...)
+    -- O MUNDO MUDA ANTES DO EVENTO CHEGAR. `EQUIPMENT_SWAP_FINISHED` com sucesso significa que a
+    -- troca TERMINOU: quando o addon o recebe, o conjunto ja esta vestido. Sem isto o simulador
+    -- entregava o evento com o mundo ainda no estado antigo, e o addon -- que confirma lendo o
+    -- estado -- nunca via a troca acontecer.
+    if event == "EQUIPMENT_SWAP_FINISHED" then
+        local resultado, setID = ...
+        if resultado == true and type(setID) == "number" then
+            state.equippedSet = setID
+        end
+    end
+
     for _, f in ipairs(frames) do
         if f.__events[event] and f.__scripts.OnEvent then
             local ok, err = pcall(f.__scripts.OnEvent, f, event, ...)
@@ -744,6 +764,9 @@ check("a falha de equipar foi reportada", erro ~= nil, true)
 check("e o addon nao ficou preso aplicando", ns.Data.IsApplying(), false)
 
 print("== peca travada e cast em andamento ==")
+-- Reseta o conjunto vestido: agora que o stub EQUIPA de verdade, o bloco anterior deixa o 4
+-- vestido, e a corrente recusaria com "nada a fazer" antes de chegar na peca travada.
+state.equippedSet = 1
 state.locked = true
 erro = nil
 ns.Data.Apply({ name = "Arena", spec = 2, talent = nil, gear = 4 }, function(text, isError)
@@ -1183,18 +1206,44 @@ do
     state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
     state.pendingSet, state.pendingLoadout = nil, nil
 
-    -- TALENTOS: o evento carrega `configID`, e a Blizzard avisa por escrito que ele chega mais de
-    -- uma vez por gravacao -- o do config base da spec vem ANTES do loadout
-    -- (`Blizzard_ClassTalentsFrame.lua:407-411`). Fechavamos no primeiro.
+    -- TALENTOS: o evento FECHA o passo, e isso e uma retirada deliberada.
+    --
+    -- A 0.13.0 filtrou pelo `configID`, porque a Blizzard avisa que a gravacao gera evento para o
+    -- config base E depois para o loadout (`Blizzard_ClassTalentsFrame.lua:407-411`). Mas a fonte
+    -- nao diz QUAL dos dois fecha, e o filtro recusou o que funcionava: o passo esperava ate o
+    -- prazo. O usuario sentiu como "apertei duas, tres vezes pra funcionar".
+    --
+    -- Trocar um caminho que funciona por um palpite mais preciso e o pior negocio possivel. O
+    -- diario grava o `arg1` de cada evento; quando houver dado, decide-se com dado.
+    state.activeLoadout[251] = 10
     ns.Data.Apply({ name = "So talento", spec = 2, talent = 11 }, function() end)
     check("o passo de talentos esperou", ns.Data.IsApplying(), true)
 
-    fire("TRAIT_CONFIG_UPDATED", 999)          -- de outro config
-    check("evento de OUTRO config nao fecha o passo", ns.Data.IsApplying(), true)
+    fire("TRAIT_CONFIG_UPDATED", 999)
+    check("o evento fecha o passo", ns.Data.IsApplying(), false)
 
-    state.activeLoadout[251] = 11
-    fire("TRAIT_CONFIG_UPDATED", state.activeConfigID)
-    check("e o do config ativo fecha", ns.Data.IsApplying(), false)
+    -- E A ESCRITA DE "QUAL LOADOUT VALE" SO ACONTECE DEPOIS DA CONFIRMACAO. Feita antes, e como o
+    -- estado alheio foi corrompido -- e ela ainda envenenava a propria confirmacao, porque o
+    -- addon escrevia a resposta e depois a lia como prova.
+    check("e so entao o jogo registra o loadout", state.activeLoadout[251], 11)
+
+    -- COM A SPEC ERRADA ELA NAO ACONTECE, nem mesmo na confirmacao: um loadout pertence a uma
+    -- especializacao, e grava-lo em outra corrompe estado que sobrevive ao /reload.
+    state.activeLoadout[250] = nil
+    state.specIndex = 2
+    ns.Data.Apply({ name = "Tank", spec = 1, talent = 12 }, function() end)
+    fire("TRAIT_CONFIG_UPDATED", 999)
+    check("spec errada nao grava nada", state.activeLoadout[251], 11)
+    check("nem na spec alvo", state.activeLoadout[250], nil)
+
+    -- FECHA A CORRENTE que este trecho deixou esperando a spec. Bloco de teste que sai deixando
+    -- corrente aberta faz o SEGUINTE receber "ja ha uma troca em curso" -- e o defeito aparece
+    -- longe de onde nasceu, que foi exatamente o que aconteceu ao escrever isto.
+    state.specIndex = 1
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+    RunTimers()
+    state.specIndex = 2
+    check("a corrente anterior foi fechada", ns.Data.IsApplying(), false)
 
     -- ITENS: o payload e `result, setID`. Trocar de spec faz o jogo equipar sozinho o conjunto
     -- amarrado aquela spec, e o evento DESSA troca fechava o nosso passo antes do nosso entrar.
