@@ -439,7 +439,12 @@ end
 --------------------------------------------------------------------------------
 -- Aplicação: a corrente de passos
 --------------------------------------------------------------------------------
-local running          -- { preset, steps, at, timer, report }
+local running          -- { preset, steps, at, timer, report, progress, startedAt }
+
+-- O RETRATO DO FIM DA ÚLTIMA TROCA. `running` é zerado no `Finish` — e é exatamente aí que o
+-- resultado interessa: qual passo entrou, qual foi pulado, qual não deu. Sem guardar isto, a
+-- tela de progresso sumiria no instante em que ela tem algo a dizer.
+local lastRun
 local listener
 
 local function Report(text, isError)
@@ -456,6 +461,25 @@ local function Finish(ok, message)
     local preset = running and running.preset
     local report = running and running.report
     local failures = running and running.failures
+
+    if running then
+        -- PASSO QUE FICOU EM "doing" NA HORA DO FIM É PASSO QUE NÃO CONFIRMOU. Chegar aqui com
+        -- um passo em andamento só acontece por desistência ou por prazo vencido — quando o jogo
+        -- confirma, o `RunNext` já fechou o passo como "done" antes de vir parar neste `Finish`.
+        for _, key in ipairs(running.steps) do
+            if running.progress and running.progress[key] == "doing" then
+                running.progress[key] = "failed"
+            end
+        end
+        lastRun = {
+            preset = running.preset,
+            steps = running.steps,
+            progress = running.progress or {},
+            startedAt = running.startedAt,
+            tries = running.specTries or 0,
+        }
+    end
+
     running = nil
 
     -- Correu tudo, mas algum passo não deu: o resultado não é sucesso nem fracasso, é
@@ -510,6 +534,16 @@ local function Arm()
 
     running.timer = C_Timer.NewTimer(prazo, function()
         if not running then return end
+
+        -- O PASSO NÃO CONFIRMOU, E ISSO PRECISA FICAR MARCADO **ANTES** DO `RunNext`.
+        --
+        -- Sem esta linha o `RunNext` encontraria o passo ainda em "doing" e o promoveria a
+        -- "done" — porque é assim que ele fecha um passo que o jogo confirmou. O prazo vencido é
+        -- o caso oposto, e o resultado seria um ✓ verde num passo que o jogo nunca confirmou:
+        -- a pior mentira que esta tela pode contar, porque ela contradiz a mensagem de falha que
+        -- sai logo abaixo.
+        if running.progress then running.progress[passo] = "failed" end
+
         running.failures = running.failures or {}
         running.failures[#running.failures + 1] =
             format(L["%s: the game did not confirm in time."], qual)
@@ -794,13 +828,16 @@ function Steps.gear(preset)
     return "wait"           -- confirma em EQUIPMENT_SWAP_FINISHED
 end
 
----A aparência entra POR ÚLTIMO, depois dos itens.
+---A aparência é o ÚLTIMO da corrente — mas quem a troca já trocou lá no começo.
 ---
----Motivo concreto: equipar um conjunto de itens mexe nas peças, e a aparência se aplica sobre
----o que está vestido. Trocar a roupa antes das peças seria escrever por cima do que o passo
----seguinte vai mudar.
+---A razão escrita aqui antes ("equipar itens mexe nas peças, então a roupa vem depois") descrevia
+---um pedido que este addon **não faz mais**. Trocar de conjunto de aparência é privilégio de
+---código seguro: quem dispara é a ação `outfit` armada no botão, dentro do próprio clique, antes
+---de `Data.Apply` sequer existir. O addon aqui **confere e espera**, não pede.
 ---
----CONFERE, mas NÃO troca: trocar de conjunto de aparência é privilégio de código seguro.
+---Então o que a última posição resolve é a CONFERÊNCIA: perguntar "a roupa entrou?" depois de os
+---itens terem sido equipados, e não antes. Deixar a frase antiga no lugar era garantir que a
+---próxima leitura refizesse o mesmo raciocínio errado.
 ---
 ---Isto aqui dizia, por escrito, que "este passo é o único que NÃO tem evento de confirmação
 ---amarrado". **Era falso**, e a afirmação custou caro: em cima dela o passo passou a conferir com
@@ -894,6 +931,13 @@ end
 RunNext = function()
     if not running then return end
 
+    -- O PASSO QUE ESTAVA ESPERANDO ACABOU DE SER CONFIRMADO. Quem chama `RunNext` de fora e o
+    -- ouvinte de eventos, e chegar aqui com o passo em "doing" significa que o jogo confirmou.
+    local anterior = running.steps[running.at]
+    if anterior and running.progress and running.progress[anterior] == "doing" then
+        running.progress[anterior] = "done"
+    end
+
     running.at = running.at + 1
     local name = running.steps[running.at]
 
@@ -909,6 +953,10 @@ RunNext = function()
     --
     -- Com o `pcall`, o erro vira uma falha anotada como qualquer outra: a corrente segue, o
     -- diário registra a mensagem de Lua, e o addon continua vivo.
+    -- O PASSO COMECOU. A janela le isto para mostrar em qual etapa a troca esta.
+    running.progress = running.progress or {}
+    running.progress[name] = "doing"
+
     local okStep, outcome, message = pcall(Steps[name], running.preset)
     if not okStep then
         if ns.Log then ns.Log.Step(name, "erro de lua", tostring(outcome)) end
@@ -916,6 +964,16 @@ RunNext = function()
         outcome = "fail"
     elseif ns.Log then
         ns.Log.Step(name, outcome or "wait", message)
+    end
+
+    -- E COMO ELE FECHOU. "wait" continua "doing": o passo esta em andamento, esperando o jogo.
+    --
+    -- `"skip"` só vira "pulado" quando o retrato de antes diz que já estava certo. Sem essa
+    -- consulta, tudo o que virou no meio da corrente era anunciado como "nada a mudar".
+    if outcome == "skip" then
+        running.progress[name] = (running.already or {})[name] and "skipped" or "done"
+    elseif outcome == "fail" or outcome == "abort" then
+        running.progress[name] = "failed"
     end
 
     if outcome == "skip" then
@@ -994,6 +1052,40 @@ function Data.Apply(preset, report, byClick)
     running = {
         preset = preset, steps = { "spec", "talent", "gear", "transmog" }, at = 0,
         report = report, byClick = byClick and true or false,
+        progress = {},
+        -- QUEM MARCA A HORA É QUEM COMEÇA. A janela pode ser aberta no meio da troca, e um
+        -- relógio zerado na abertura contaria uma espera menor do que a real.
+        startedAt = GetTime and GetTime() or 0,
+
+        -- O QUE JÁ ESTAVA CERTO ANTES DE A CORRENTE COMEÇAR.
+        --
+        -- `Steps.*` devolve `"skip"` por três razões diferentes, e as três chegavam à tela como a
+        -- mesma frase — "nada a mudar". Numa delas isso é mentira, e justamente na mais comum:
+        --
+        --   1. o conjunto não define o campo         → não é passo, e nem vira linha (`GetProgress`)
+        --   2. já estava certo antes de começar      → "nada a mudar" é verdade
+        --   3. **ficou certo DURANTE a corrente**    → mudou, e a tela dizia que não
+        --
+        -- O caso 3 é o da aparência: quem troca a roupa é o clique seguro, no primeiro instante;
+        -- quando o passo dela finalmente roda, dois ou três passos depois, a roupa já está certa e
+        -- `Steps.transmog` devolve `"skip"`. O painel então anunciava **"Aparência — nada a
+        -- mudar"** sobre a peça que aquele mesmo clique acabara de trocar — o oposto exato do que
+        -- este painel existe para dizer.
+        --
+        -- O retrato tirado agora separa os dois: pulado só é "nada a mudar" se já estava assim
+        -- ANTES. O que virou no meio do caminho é conclusão, e é assim que aparece.
+        already = {
+            spec = preset.spec and Data.GetCurrentSpecIndex() == preset.spec or nil,
+            gear = preset.gear and Data.GetEquippedSetID() == preset.gear or nil,
+            transmog = preset.transmog and Data.GetActiveOutfitID() == preset.transmog or nil,
+            -- O talento depende da spec, e a spec pode virar no meio. Só dá para afirmar que ele
+            -- "já estava certo" quando a corrente não vai mexer na especialização.
+            talent = preset.talent and (not preset.spec
+                or preset.spec == Data.GetCurrentSpecIndex()) and (function()
+                    local spec = Data.GetSpecByIndex(Data.GetCurrentSpecIndex())
+                    return spec and Data.GetActiveLoadoutID(spec.id) == preset.talent or nil
+                end)() or nil,
+        },
     }
 
     -- O RETRATO DE ANTES. É a linha que responde "a troca nem precisava acontecer" e "ela pedia
@@ -1008,6 +1100,59 @@ end
 
 function Data.IsApplying()
     return running ~= nil
+end
+
+---O estado de cada passo da troca, na ordem em que acontecem — a da troca em curso, ou o retrato
+---da última que terminou.
+---
+---É a API mínima para a janela desenhar o progresso: a lista dos passos, e uma tabela com o
+---contexto que ela precisa para escrever uma linha de estado. A janela **não** enxerga `running`,
+---prazos nem a mecânica dos eventos — se enxergasse, duas partes do addon saberiam a mesma coisa,
+---e a segunda divergiria na primeira mudança.
+---
+---Estados possíveis, e são exatamente os que a corrente já produz — nenhum inventado:
+---
+---  `pending`  ainda não chegou a vez
+---  `doing`    em andamento (inclui o passo que espera o jogo confirmar)
+---  `done`     o jogo confirmou
+---  `skipped`  não havia o que fazer — **não é falha**, e a tela não pode dizer que é
+---  `failed`   não deu, e o motivo já foi para o relatório e para o diário
+---
+---`info.live` separa as duas leituras: `true` é troca acontecendo agora, `false` é o retrato do
+---fim. A janela precisa da diferença para saber quando parar a animação e quando devolver o
+---editor — e ler "acabou" como "nunca começou" apagaria o resultado bem na hora de mostrá-lo.
+---
+---@return table[]|nil passos lista de `{ key, label, state }`
+---@return table|nil info `{ preset, live, startedAt, tries }`
+function Data.GetProgress()
+    local src = running or lastRun
+    if not src then return nil end
+
+    -- FORA O QUE O CONJUNTO NÃO PEDE. Um conjunto só de itens abria quatro linhas, três delas
+    -- dizendo "nada a mudar" — o que faz a troca parecer maior do que é e enterra a única linha
+    -- que importa no meio de ruído. É a mesma regra que o `Subtitle` da lista já pratica: só
+    -- entra o que o conjunto define.
+    local out = {}
+    for _, key in ipairs(src.steps) do
+        if src.preset and src.preset[key] then
+            out[#out + 1] = {
+                key = key,
+                label = StepName(key),
+                state = (src.progress and src.progress[key]) or "pending",
+            }
+        end
+    end
+
+    return out, {
+        preset = src.preset,
+        live = running ~= nil,
+        startedAt = src.startedAt or 0,
+        -- Quantas vezes o passo de especialização já insistiu, e quantas ele ainda pode. O teto
+        -- vai junto porque é ele que separa "esperando de propósito" de "travado": "tentativa 2"
+        -- sozinho não diz se ainda há esperança.
+        tries = src.specTries or src.tries or 0,
+        maxTries = SPEC_RETRY_MAX,
+    }
 end
 
 --------------------------------------------------------------------------------

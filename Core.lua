@@ -74,6 +74,34 @@ function ns.FirstIcon(paths)
 end
 
 --------------------------------------------------------------------------------
+---Aplica um atlas SO SE ele existir neste cliente, e diz se conseguiu.
+---
+---Esta funcao ja era chamada em dois lugares (`UI.lua:365` e `:472`) e **nunca existiu**: a
+---guarda `if not ns.SetAtlasSafe` sempre caia no plano B, entao o divisor da coluna nunca chegou
+---a tentar a arte da Blizzard. Codigo que se le como "tenta o atlas, senao usa a cor" fazendo
+---so a segunda metade -- e sem nada acusando, porque a guarda estava certa.
+---
+---`SetAtlas` com nome inexistente falha em SILENCIO e deixa a textura em branco, que e o
+---sintoma mais dificil de diagnosticar: nao ha erro, so um retangulo vazio. `GetAtlasInfo`
+---devolve nil para atlas que nao existe, e `GetAtlas()` depois do `SetAtlas` confirma que
+---pegou -- as duas conferencias, porque uma sozinha ja deixou passar um cabecalho azul aqui.
+---@param texture table
+---@param atlas string
+---@return boolean aplicou
+function ns.SetAtlasSafe(texture, atlas)
+    if not texture or not atlas or not texture.SetAtlas then return false end
+
+    if C_Texture and C_Texture.GetAtlasInfo then
+        local ok, info = pcall(C_Texture.GetAtlasInfo, atlas)
+        if not ok or not info then return false end
+    end
+
+    if not pcall(texture.SetAtlas, texture, atlas) then return false end
+    if not texture.GetAtlas then return false end
+    return texture:GetAtlas() ~= nil
+end
+
+--------------------------------------------------------------------------------
 ---Carrega o conjunto usado por ultimo. E o que o botao direito do minimapa faz: o caso
 ---comum e alternar entre dois conjuntos, e para isso nao vale abrir janela.
 function ns.LoadLast()

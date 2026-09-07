@@ -420,6 +420,238 @@ local function BuildEditor()
 end
 
 --------------------------------------------------------------------------------
+-- O progresso da troca
+--------------------------------------------------------------------------------
+-- POR QUE ISTO EXISTE. O relato foi: *"quando clica para carregar, ele demora para iniciar o
+-- 'cast', o usuário vai pensar que nada aconteceu"* — e o pedido junto, *"algo animado e bem
+-- didático que o usuário entenda"* que a troca *"é um processo de troca por etapas"*.
+--
+-- **E não é uma barra de progresso.** A corrente não sabe quanto vai demorar: o passo da
+-- especialização espera o servidor e reinsiste de 4 em 4 segundos, e o diário real mostrou a
+-- mesma troca sendo aceita ora em 4, ora em 14 segundos. Barra que anda sozinha inventa uma
+-- previsão que ninguém tem, e barra que trava no meio é pior que barra nenhuma. O que dá para
+-- mostrar com honestidade — e é o que a pessoa quer saber — são quatro coisas verdadeiras a cada
+-- quadro: **quais são as etapas**, **em qual delas estamos**, **quais já fecharam** e **há
+-- quanto tempo**. As três primeiras vêm de `Data.GetProgress()`; a quarta é um relógio.
+--
+-- ONDE: na coluna da direita, no lugar do editor. Durante a troca o editor não é usável — mexer
+-- no conjunto que está sendo aplicado é mudar o chão no meio do passo —, então o espaço está
+-- livre. E é onde os campos do conjunto já moram: os rótulos aqui são **os mesmos** do editor
+-- (`Especialização`, `Talentos`, `Itens`, `Aparência`) e **na mesma ordem**. Quem acabou de ler
+-- aqueles nomes ao lado dos combos reconhece a lista sem precisar de legenda — é isso que torna
+-- a tela didática, e não um texto explicando o que ela é.
+--
+-- E entram **só as etapas que o conjunto pede** (`Data.GetProgress` filtra): um conjunto só de
+-- itens mostra uma linha, não quatro, das quais três diriam "nada a mudar".
+
+local PROGRESS_ROW = 22       -- ritmo de LISTA (`Blizzard_CategoryList.xml:51` + `.lua:214`)
+local PROGRESS_ICON = 16      -- o tamanho do ✓ nativo (`Blizzard_UIWidgetTemplateBase.xml:185`)
+local PROGRESS_ICON_GAP = 5   -- ícone → rótulo pequeno (`Blizzard_AutoCompletePopupList.xml:32`,
+                              -- que é ícone + `GameFontHighlightSmall`, o mesmo par daqui)
+local PROGRESS_TITLE_GAP = 13 -- abaixo do título, como no cabeçalho de seção: bloco 45, título a
+                              -- y=-16 e 16 de tinta ⇒ 45 − 16 − 16 (`Blizzard_SettingControls.xml:14,19`)
+local PROGRESS_TITLE_INK = 16 -- `GameFontNormal` a 14pt, arredondado pela caixa da fonte
+local PROGRESS_CLOCK_W = 70
+
+-- QUANTO TEMPO O RESULTADO FICA NA TELA depois de a troca acabar. Sem esta pausa o painel some
+-- no instante em que ele finalmente tem algo a dizer — qual passo foi pulado, qual não deu — e o
+-- jogador ficaria só com a linha de status lá embaixo, que é justamente o aviso que *"mostra e
+-- some, o usuário pode nem ver"*.
+local PROGRESS_HOLD = 5
+
+-- Um sinal por estado, e nenhum deles inventado: os três atlas foram conferidos na fonte do
+-- 12.1.0 (`common-icon-checkmark` em 7 arquivos, `common-icon-redx` em 3, `common-icon-forwardarrow`
+-- em 3). A skill do workspace é explícita quanto ao resto: cor de classe é vocabulário reservado,
+-- então o destaque se faz somando **sinais fracos** — aqui, arte + brilho + a pulsação.
+--
+-- `skipped` NÃO É FALHA e não pode parecer uma: nada de ✗, nada de vermelho. Ele ganha o mesmo
+-- ponto neutro de quem ainda não começou, mais a razão escrita no próprio rótulo.
+local PROGRESS_STATE = {
+    pending = {                                     alpha = 0.40 },
+    doing   = { atlas = "common-icon-forwardarrow", alpha = 1.00 },
+    done    = { atlas = "common-icon-checkmark",    alpha = 0.85 },
+    skipped = {                                     alpha = 0.45 },
+    failed  = { atlas = "common-icon-redx",         alpha = 0.90 },
+}
+
+---Fecha o painel e devolve a coluna ao editor.
+local function ConcludeProgress(panel)
+    if not panel:IsShown() then return end
+    panel:Hide()
+    for _, row in ipairs(panel.rows) do
+        if row.__pulsing then
+            row.pulse:Stop()
+            row:SetAlpha(1)
+            row.__pulsing = false
+        end
+    end
+    UI.RefreshEditor()
+end
+
+---Monta o painel uma vez; quem escreve nele é `UI.RefreshProgress`.
+local function BuildProgress()
+    local panel = CreateFrame("Frame", nil, frame)
+    panel:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, -60)
+    panel:SetPoint("RIGHT", frame, "RIGHT", -20, 0)
+    panel:Hide()
+
+    -- O relógio à direita do título. É o que responde *"aconteceu alguma coisa?"* antes de
+    -- qualquer passo fechar: um número que anda de segundo em segundo prova que o addon está
+    -- vivo, mesmo nos 4 segundos em que ele está de propósito esperando o jogo liberar.
+    panel.clock = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    panel.clock:SetPoint("TOPRIGHT", 0, 0)
+    panel.clock:SetWidth(PROGRESS_CLOCK_W)
+    panel.clock:SetJustifyH("RIGHT")
+    panel.clock:SetWordWrap(false)
+
+    panel.title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    panel.title:SetPoint("TOPLEFT", 0, 0)
+    panel.title:SetPoint("RIGHT", panel.clock, "LEFT", -PROGRESS_ICON_GAP, 0)
+    panel.title:SetJustifyH("LEFT")
+    panel.title:SetWordWrap(false)
+
+    panel.rows = {}
+    for i = 1, 4 do
+        local row = CreateFrame("Frame", nil, panel)
+        row:SetHeight(PROGRESS_ROW)
+        if i == 1 then
+            row:SetPoint("TOPLEFT", panel.title, "BOTTOMLEFT", 0, -PROGRESS_TITLE_GAP)
+        else
+            row:SetPoint("TOPLEFT", panel.rows[i - 1], "BOTTOMLEFT", 0, 0)
+        end
+        row:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+
+        row.icon = row:CreateTexture(nil, "ARTWORK")
+        row.icon:SetSize(PROGRESS_ICON, PROGRESS_ICON)
+        row.icon:SetPoint("LEFT", 0, 0)
+
+        -- O PONTO DE ESPERA. Nos estados sem arte (ainda não chegou a vez, e o pulado) a coluna
+        -- do ícone não pode ficar vazia: buraco no meio de uma lista faz ela parecer quebrada, e
+        -- o rótulo perde a margem que os outros três têm. Um ponto neutro segura a coluna, e ele
+        -- some por baixo do ✓ ou do ✗ quando eles entram.
+        row.dot = row:CreateTexture(nil, "ARTWORK")
+        row.dot:SetSize(4, 4)
+        row.dot:SetPoint("CENTER", row.icon, "CENTER", 0, 0)
+        row.dot:SetColorTexture(1, 1, 1, 1)
+
+        -- Largura por ancoragem nos dois lados, e não por `SetWidth` chutado: o rótulo tem que
+        -- caber em alemão e russo, onde ele cresce sozinho.
+        row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.label:SetPoint("LEFT", row.icon, "RIGHT", PROGRESS_ICON_GAP, 0)
+        row.label:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+        row.label:SetJustifyH("LEFT")
+        row.label:SetWordWrap(false)
+
+        -- A PULSAÇÃO, e ela é a única animação da tela. Serve para o caso "indeterminado": não
+        -- se sabe quanto falta, então o que se anima é a presença do passo, não um avanço.
+        -- Alfa e não rotação — pulsar não disputa atenção com nada, e não exige arte nova.
+        row.pulse = row:CreateAnimationGroup()
+        row.pulse:SetLooping("BOUNCE")
+        local fade = row.pulse:CreateAnimation("Alpha")
+        fade:SetFromAlpha(1)
+        fade:SetToAlpha(0.4)
+        fade:SetDuration(0.7)
+
+        panel.rows[i] = row
+    end
+
+    panel:SetHeight(PROGRESS_ROW * 4 + PROGRESS_TITLE_GAP + PROGRESS_TITLE_INK)
+    frame.progress = panel
+end
+
+---Redesenha o progresso. Roda no `OnUpdate` da janela, represado — o relógio é em segundos
+---inteiros, então dez quadros por segundo já é folga.
+function UI.RefreshProgress()
+    if not frame or not frame.progress then return end
+    local panel = frame.progress
+
+    local passos, info = ns.Data.GetProgress()
+    if not passos then
+        ConcludeProgress(panel)     -- nunca houve troca nesta sessão
+        return
+    end
+
+    -- AS DUAS TRANSIÇÕES. `info.live` diz se a troca está acontecendo AGORA; `panel.live` é o que
+    -- a janela viu da última vez. A diferença entre os dois é o que marca começo e fim — e é o
+    -- fim que precisa da pausa, para o resultado ser lido antes de o editor voltar.
+    if info.live and not panel.live then
+        panel.live, panel.holdUntil = true, nil
+    elseif not info.live and panel.live then
+        panel.live, panel.holdUntil = false, GetTime() + PROGRESS_HOLD
+    end
+
+    -- Retrato de uma troca que já terminou e já foi mostrada (ou que aconteceu com a janela
+    -- fechada): ele não abre o painel. Progresso é sobre agora.
+    if not info.live and (not panel.holdUntil or GetTime() >= panel.holdUntil) then
+        panel.holdUntil = nil
+        ConcludeProgress(panel)
+        return
+    end
+
+    if not panel:IsShown() then
+        panel:Show()
+        UI.RefreshEditor()          -- a coluna passa a ser do progresso
+    end
+
+    -- A ALTURA ACOMPANHA QUANTAS ETAPAS O CONJUNTO PEDE. Reservar as quatro vagas sempre deixa
+    -- um vazio embaixo do painel de um conjunto so de itens -- e espaco guardado para conteudo
+    -- que nao existe e o que mais faz uma janela parecer quebrada.
+    panel:SetHeight(PROGRESS_ROW * #passos + PROGRESS_TITLE_GAP + PROGRESS_TITLE_INK)
+
+    panel.title:SetText(format(L["Switching to %s"],
+        info.preset and info.preset.name or "?"))
+
+    -- O relógio PARA quando a troca para. Deixá-lo correndo durante a pausa faria o número
+    -- contar o tempo de leitura como se fosse tempo de troca.
+    if info.live then
+        local secs = math.max(0, math.floor(GetTime() - (info.startedAt or 0)))
+        -- COM O TETO JUNTO. "tentativa 2" sozinho nao diz se ainda ha esperanca; "tentativa 2
+        -- de 8" e o que separa "esperando de proposito" de "travado".
+        if (info.tries or 0) > 0 then
+            panel.clock:SetText(format(L["attempt %d of %d"],
+                info.tries + 1, info.maxTries or info.tries + 1))
+        else
+            panel.clock:SetText(secs .. "s")
+        end
+    end
+
+    for i, row in ipairs(panel.rows) do
+        local passo = passos[i]
+        row:SetShown(passo ~= nil)
+        if passo then
+            local visual = PROGRESS_STATE[passo.state] or PROGRESS_STATE.pending
+            local temArte = visual.atlas and ns.SetAtlasSafe(row.icon, visual.atlas) or false
+
+            row.icon:SetShown(temArte)
+            row.icon:SetAlpha(visual.alpha)
+            row.dot:SetShown(not temArte)
+            row.dot:SetVertexColor(1, 1, 1, visual.alpha)
+
+            -- O PULADO DIZ POR QUE FOI PULADO, no próprio rótulo. Sem isso ele fica igual a um
+            -- passo que ainda não começou, e o jogador termina a troca sem saber se a aparência
+            -- foi aplicada ou esquecida.
+            row.label:SetText(passo.state == "skipped"
+                and format(L["%s — nothing to change"], passo.label)
+                or passo.label)
+            row.label:SetAlpha(visual.alpha)
+
+            -- A pulsação segue o passo em andamento, e só enquanto a troca está viva: ela é
+            -- reancorada em vez de recriada, porque animação começada de novo a cada quadro não
+            -- anima nada — pisca.
+            local deve = passo.state == "doing" and info.live
+            if deve and not row.__pulsing then
+                row.pulse:Play()
+                row.__pulsing = true
+            elseif not deve and row.__pulsing then
+                row.pulse:Stop()
+                row:SetAlpha(1)
+                row.__pulsing = false
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------
 -- Estado vazio
 --------------------------------------------------------------------------------
 ---Bloco centralizado. A Blizzard não tem tela de vazio com arte: em ~20 sistemas o padrão é
@@ -636,7 +868,21 @@ local function Create()
     frame.status:SetJustifyH("LEFT")
     frame.status:SetWordWrap(false)
 
+    -- O RELÓGIO DA JANELA. É o único `OnUpdate` do addon, e ele só corre com a janela aberta —
+    -- represado em 0,1 s porque o que ele desenha muda de segundo em segundo.
+    --
+    -- Ele fica na janela, e não no painel, de propósito: `OnUpdate` de frame escondido não roda,
+    -- e o painel começa escondido. Preso nele, o progresso nunca apareceria sozinho.
+    frame.__tick = 0
+    frame:SetScript("OnUpdate", function(self, elapsed)
+        self.__tick = self.__tick + (elapsed or 0)
+        if self.__tick < 0.1 then return end
+        self.__tick = 0
+        UI.RefreshProgress()
+    end)
+
     BuildEditor()
+    BuildProgress()
     BuildEmptyState()
     BuildToggles()
     return frame
@@ -652,6 +898,26 @@ function UI.DebugList()
 end
 
 ---Acesso à faixa de avisos, para o harness poder clicar nas caixas.
+---O painel de progresso, para o teste poder olhar o que a janela mostra. Sem esta porta o
+---harness so conseguiria afirmar que "nao deu erro" -- que e o que ele ja dizia enquanto o
+---passo pulado aparecia igual ao passo que nao comecou.
+function UI.DebugProgress()
+    return frame and frame.progress, editor
+end
+
+---As medidas do painel. O que se trava aqui e a RAZAO entre os vaos, nao o numero cru: os
+---numeros mudam quando a tela mudar; a razao e o que nao pode voltar a quebrar.
+function UI.DebugMetrics()
+    return {
+        row = PROGRESS_ROW,
+        icon = PROGRESS_ICON,
+        iconGap = PROGRESS_ICON_GAP,
+        titleGap = PROGRESS_TITLE_GAP,
+        hold = PROGRESS_HOLD,
+        states = PROGRESS_STATE,
+    }
+end
+
 function UI.DebugToggles()
     return frame and frame.toggles
 end
@@ -699,7 +965,12 @@ function UI.RefreshEditor()
     if not frame or not editor then return end
 
     local preset = UI.Selected()
-    local has = preset ~= nil
+
+    -- O EDITOR CEDE A COLUNA ENQUANTO O PROGRESSO ESTÁ NELA. Não é só para não sobrepor: mexer
+    -- nos combos de um conjunto que está sendo aplicado muda o alvo no meio do caminho, e a
+    -- corrente já leu o que ia ler. Sumir com os campos é a forma mais direta de dizer "agora
+    -- não" — mais do que desabilitar cada um deles.
+    local has = preset ~= nil and not (frame.progress and frame.progress:IsShown())
 
     editor.name:SetShown(has)
     for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
@@ -839,6 +1110,10 @@ function UI.Load(preset)
     if not preset then return end
     ns.db.last = preset.name
     ns.Data.Apply(preset, UI.SetStatus, true)
+    -- NO MESMO QUADRO DO CLIQUE. O `OnUpdate` traria o painel em até 0,1 s, mas o defeito que
+    -- este painel conserta é justamente a sensação de que o clique não fez nada — então ele não
+    -- pode ser a primeira coisa a chegar atrasada.
+    UI.RefreshProgress()
 end
 
 --------------------------------------------------------------------------------

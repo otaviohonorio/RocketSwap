@@ -15,6 +15,24 @@ local ADDON = "RocketSwap"
 local function widget(kind)
     local self = { __kind = kind, __scripts = {}, __events = {} }
 
+    -- A GEOMETRIA FICA GUARDADA. `SetPoint` e `SetSize` caiam no no-op do metatable, entao a
+    -- skill `wow-ui-design` (secao "isto se testa fora do jogo") era impossivel de cumprir aqui:
+    -- nao havia como perguntar onde uma coisa foi parar. E o proprio texto dela avisa que medir
+    -- so `x` e `width` deixou TRES reprovacoes verticais passarem -- todas colisao de altura.
+    self.__points = {}
+    function self.SetPoint(_, ...) self.__points[#self.__points + 1] = { ... } end
+    function self.ClearAllPoints() self.__points = {} end
+    function self.SetHeight(_, h) self.__h = h end
+    function self.SetWidth(_, w) self.__w = w end
+    function self.SetSize(_, w, h) self.__w, self.__h = w, h end
+
+    ---O deslocamento de uma ancora, pelo canto que ela prende. Devolve x, y.
+    function self.PointOffset(_, corner)
+        for _, pt in ipairs(self.__points) do
+            if pt[1] == corner then return pt[4], pt[5] end
+        end
+    end
+
     function self.SetScript(_, name, fn) self.__scripts[name] = fn end
     function self.GetScript(_, name) return self.__scripts[name] end
     function self.RegisterEvent(_, event) self.__events[event] = true end
@@ -22,22 +40,36 @@ local function widget(kind)
         local fs = widget("FontString")
         fs.__hasFont = template ~= nil
         function fs.SetFont() fs.__hasFont = true end
-        function fs.SetText(_, ...)
+        -- A FONTSTRING GUARDA O QUE ESCREVERAM NELA. Sem isto o `GetText` do widget generico
+        -- devolvia sempre "" -- e todo teste que perguntasse "o que apareceu na tela?" comparava
+        -- vazio com vazio e passava. O rotulo do passo PULADO, que existe justamente para nao
+        -- ser confundido com um passo que nao comecou, seria invisivel ao harness.
+        function fs.SetText(_, text, ...)
             if not fs.__hasFont then error("FontString:SetText(): Font not set", 2) end
-            return ...
+            fs.__text = text
+            return text, ...
         end
         function fs.HasFocus() return false end
         return fs
     end
-    function self.CreateTexture() return widget("Texture") end
+    -- A TEXTURA GUARDA O ATLAS QUE RECEBEU. Sem isto o `__index` generico respondia `GetAtlas`
+    -- com uma funcao que devolve outro widget -- sempre nao-nil --, e a conferencia de
+    -- `ns.SetAtlasSafe` ("pegou mesmo?") dava certo para QUALQUER nome, inclusive inventado.
+    -- O stub concordava com o defeito exato que a funcao existe para pegar.
+    function self.CreateTexture()
+        local t = widget("Texture")
+        function t.SetAtlas(_, atlas) t.__atlas = atlas end
+        function t.GetAtlas() return t.__atlas end
+        return t
+    end
     function self.GetName() return ADDON .. kind end
     function self.GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
     function self.IsShown() return self.__shown == true end
     function self.SetShown(_, v) self.__shown = v end
     function self.Show() self.__shown = true end
     function self.Hide() self.__shown = false end
-    function self.GetWidth() return 280 end
-    function self.GetHeight() return 400 end
+    function self.GetWidth() return self.__w or 280 end
+    function self.GetHeight() return self.__h or 400 end
     function self.GetEffectiveScale() return 1 end
     function self.GetCenter() return 400, 300 end
     function self.GetFrameLevel() return 1 end
@@ -376,7 +408,11 @@ C_SpecializationInfo = {
         if not s then return nil end
         return s.id, s.name, "desc", s.icon
     end,
+    -- A RECUSA TRANSITORIA DO JOGO, que o diario real do usuario registrou em quatro das nove
+    -- trocas: `SetSpecialization` devolve `false` e nao faz nada. O stub precisa saber produzi-la,
+    -- senao o caminho da insistencia -- e o da desistencia no teto -- nao existe para o teste.
     SetSpecialization = function(i)
+        if state.refuseSpec then return false end
         state.pendingSpec = i
         return true
     end,
@@ -548,8 +584,30 @@ C_TransmogOutfitInfo = {
 -- O STUB PRECISA SABER PRODUZIR ESSAS COMBINACOES. Enquanto ele devolvia `duration = 0` junto
 -- com `startTime = 0`, um addon que so olhasse `duration` passava no teste -- o stub estava
 -- concordando com o defeito. `state.cooldownShape` escolhe qual caso representar.
+-- OS ATLAS QUE EXISTEM NESTE CLIENTE, e a lista e curta de proposito: sao os que o addon usa,
+-- todos conferidos na fonte do 12.1.0. `GetAtlasInfo` devolvendo nil para nome desconhecido e o
+-- que da ao teste como reprovar um atlas inventado -- que `SetAtlas` sozinho nunca faria, porque
+-- ele falha em SILENCIO.
+local ATLAS = {
+    ["common-icon-checkmark"] = true,       -- Blizzard_UIWidgetTemplateBase.xml:184
+    ["common-icon-redx"] = true,            -- Blizzard_CharacterCreate.xml:507
+    ["common-icon-forwardarrow"] = true,    -- Blizzard_RotateControlFrame.xml:55
+    ["Options_HorizontalDivider"] = true,   -- Blizzard_SettingsList.xml:20
+}
+C_Texture = {
+    GetAtlasInfo = function(name)
+        if not ATLAS[name] then return nil end
+        return { file = 1, width = 16, height = 16, leftTexCoord = 0, rightTexCoord = 1,
+                 topTexCoord = 0, bottomTexCoord = 1 }
+    end,
+}
+
 local fakeNow = 1000
 function GetTime() return fakeNow end
+
+---Adianta o relogio do simulador. E o que permite testar a PAUSA em que o resultado fica na
+---tela: sem mover o tempo, ela nunca vence e o painel pareceria eterno.
+function AdvanceClock(seconds) fakeNow = fakeNow + seconds end
 
 state.cooldownShape = "normal"      -- "normal" | "semInicio" | "desligada"
 
@@ -662,12 +720,25 @@ local timers = {}
 ---Sem isto nao havia como testar o caminho do PRAZO -- `C_Timer.After` roda na hora neste
 ---simulador, mas `NewTimer` so guarda. E o prazo e justamente quem responde quando o jogo aceita
 ---a chamada e nao faz nada.
-function RunTimers()
-    local pendentes = timers
+---@param ate number|nil so dispara o que vence dentro deste tanto de segundos
+function RunTimers(ate)
+    -- ATE ONDE O RELOGIO ANDOU. Sem este corte o simulador tratava 4 e 45 segundos como o MESMO
+    -- instante: uma chamada disparava a reinsistencia da spec (4 s) e o prazo do passo (45 s)
+    -- juntos, e o prazo sempre chegava primeiro. O caminho da DESISTENCIA -- insistir ate o teto
+    -- e so entao desistir -- ficava inalcancavel pelo teste, e com ele a unica linha que marca o
+    -- passo abandonado como falha. Sabotar essa linha nao reprovava nada.
+    local pendentes, sobra = timers, {}
     timers = {}
     for _, t in ipairs(pendentes) do
-        if not t.cancelled then t.fn() end
+        if t.cancelled then
+            -- descartado
+        elseif ate and t.at > ate then
+            sobra[#sobra + 1] = t
+        else
+            t.fn()
+        end
     end
+    for _, t in ipairs(sobra) do timers[#timers + 1] = t end
 end
 C_Timer = {
     NewTimer = function(seconds, fn)
@@ -730,6 +801,25 @@ fire = function(event, ...)
             local ok, err = pcall(f.__scripts.OnEvent, f, event, ...)
             if not ok then
                 print("  ERRO em " .. event .. ": " .. tostring(err))
+                os.exit(1)
+            end
+        end
+    end
+end
+
+---Roda um QUADRO, como o jogo faria: adianta o relogio e chama o `OnUpdate` de quem tiver um.
+---
+---Sem isto o simulador nao tinha quadros, e metade do ciclo do painel de progresso ficava fora
+---do teste -- quem ABRE o painel e o clique, mas quem o FECHA e o quadro seguinte. O ciclo que
+---nao se pode rodar e o ciclo que ninguem descobre quebrado.
+function TickUI(seconds)
+    seconds = seconds or 0.2
+    AdvanceClock(seconds)
+    for _, f in ipairs(frames) do
+        if f.__scripts.OnUpdate and f.IsShown and f:IsShown() then
+            local ok, err = pcall(f.__scripts.OnUpdate, f, seconds)
+            if not ok then
+                print("  ERRO em OnUpdate: " .. tostring(err))
                 os.exit(1)
             end
         end
@@ -2123,6 +2213,276 @@ local paraApagar = ns.UI.Selected()
 ns.UI.Delete()
 check("apagou um", #ns.db.presets, antes - 1)
 check("e foi o selecionado", ns.db.presets[1] ~= paraApagar, true)
+
+print("== o painel de etapas: a troca vista de fora ==")
+-- Pedido do usuario: *"quando clica para carregar, ele demora para iniciar o cast, o usuario vai
+-- pensar que nada aconteceu... algo animado e bem didatico que o usuario entenda"* que a troca
+-- *"e um processo de troca por etapas"*.
+--
+-- O simulador nao desenha; o que estes checks travam sao as afirmacoes que o painel FAZ, e cada
+-- uma delas ja foi falsa em alguma versao desta corrente.
+
+ns.db.presets = {}
+if not ns.UI.IsShown() then ns.UI.Toggle() end
+local painel = ns.UI.DebugProgress()
+check("a janela tem o painel", painel ~= nil, true)
+
+-- QUEM FECHA O PAINEL NAO E QUEM O ABRIU. A secao anterior deixou uma troca terminada com o
+-- painel aberto; o quadro seguinte tem que dar conta dela sozinho. E o motivo de o `OnUpdate`
+-- morar na JANELA e nao no painel: `OnUpdate` de frame escondido nao roda, e o painel comeca
+-- escondido -- preso nele, o progresso nunca apareceria nem sumiria por conta propria.
+TickUI()
+check("a troca que terminou ainda mostra o resultado", painel:IsShown(), true)
+AdvanceClock(ns.UI.DebugMetrics().hold + 1)
+TickUI()
+check("e o quadro seguinte fecha o painel sozinho", painel:IsShown(), false)
+
+do
+    -- O MUNDO ANTES DA TROCA. Sem acertar isto o passo de talentos recusa por estar na spec
+    -- errada, e o teste mediria uma falha DELE em vez do painel.
+    state.specIndex, state.equippedSet, state.outfit = 2, 9, nil
+
+    -- E UM CONJUNTO DE VERDADE, SELECIONADO. Sem ele o editor ja estaria escondido por nao ter o
+    -- que editar, e o check "o editor cede a coluna" passaria sem o painel ter feito nada.
+    ns.UI.New()
+    local preset = ns.UI.Selected()
+    preset.name, preset.spec, preset.talent, preset.gear, preset.transmog = "Tank", 1, 12, 3, nil
+    ns.UI.RefreshEditor()
+    local _, ed = ns.UI.DebugProgress()
+    check("com conjunto selecionado, o editor esta em cena", ed.name:IsShown(), true)
+
+    ns.Data.Apply(preset, function() end)
+    check("e o quadro seguinte abre o painel, sem ninguem mandar", (function()
+        TickUI()
+        return painel:IsShown()
+    end)(), true)
+
+    -- SO OS PASSOS QUE O CONJUNTO PEDE. Este conjunto nao tem aparencia, entao ele NAO ganha uma
+    -- quarta linha dizendo "nada a mudar" -- linha que so nega e ruido, e enterra as que importam.
+    local passos, info = ns.Data.GetProgress()
+    check("tres passos, nao quatro", #passos, 3)
+    check("e nenhum deles e a aparencia", passos[3].key, "gear")
+
+    check("a troca esta viva", info.live, true)
+    check("o primeiro passo esta em andamento", passos[1].state, "doing")
+    check("e os seguintes ainda nao", passos[3].state, "pending")
+
+    -- O EDITOR CEDE A COLUNA. Nao e so para nao sobrepor: mexer nos combos do conjunto que esta
+    -- sendo aplicado muda o alvo no meio do caminho, e a corrente ja leu o que ia ler.
+    check("o editor sai de cena enquanto o painel esta nela", ed.name:IsShown(), false)
+
+    -- O PASSO EM ANDAMENTO PULSA, e so ele.
+    check("pulsa exatamente um passo", (function()
+        local n = 0
+        for _, row in ipairs(painel.rows) do if row.__pulsing then n = n + 1 end end
+        return n
+    end)(), 1)
+
+    -- O RELOGIO ANDA. E a resposta a "aconteceu alguma coisa?" nos segundos em que o addon esta
+    -- de proposito esperando o jogo liberar a troca de spec.
+    local antes = painel.clock:GetText()
+    AdvanceClock(7)
+    ns.UI.RefreshProgress()
+    check("o relogio anda", painel.clock:GetText() ~= antes, true)
+
+    state.specIndex = 1                      -- o jogo virou a spec de verdade
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+    passos = ns.Data.GetProgress()
+    check("spec confirmada vira concluida", passos[1].state, "done")
+    check("e o passo seguinte assume o andamento", passos[2].state, "doing")
+
+    fire("TRAIT_CONFIG_UPDATED", 999)
+    check("talentos confirmados", ns.Data.GetProgress()[2].state, "done")
+
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+    passos = ns.Data.GetProgress()
+    check("itens confirmados", passos[3].state, "done")
+
+    ns.UI.RefreshProgress()
+    check("o rotulo e o mesmo do editor", painel.rows[1].label:GetText(), ns.L["Specialization"])
+    check("a altura acompanha as tres etapas", painel:GetHeight(),
+        ns.UI.DebugMetrics().row * 3 + ns.UI.DebugMetrics().titleGap + 16)
+
+    -- A PAUSA. O resultado fica na tela tempo de ser lido -- senao o painel some no instante em
+    -- que ele finalmente tem algo a dizer.
+    local _, depois = ns.Data.GetProgress()
+    check("a troca acabou", depois.live, false)
+    check("mas o resultado continua na tela", painel:IsShown(), true)
+    check("e nada mais pulsa", (function()
+        for _, row in ipairs(painel.rows) do if row.__pulsing then return true end end
+        return false
+    end)(), false)
+
+    AdvanceClock(ns.UI.DebugMetrics().hold + 1)
+    ns.UI.RefreshProgress()
+    check("passada a pausa, o painel devolve a coluna", painel:IsShown(), false)
+    check("e o editor volta com ela", ed.name:IsShown(), true)
+end
+
+print("== 'pulado' nao pode mentir sobre o que acabou de mudar ==")
+-- O DEFEITO: `Steps.*` devolve "skip" por tres razoes, e as tres viravam a mesma frase na tela.
+-- A da aparencia e a pior: quem troca a roupa e o clique seguro, no primeiro instante; quando o
+-- passo dela roda, dois passos depois, a roupa ja esta certa e ele devolve "skip". O painel
+-- anunciava "Aparencia -- nada a mudar" sobre a peca que aquele clique acabara de trocar.
+do
+    state.specIndex, state.equippedSet, state.outfit = 2, 9, 70
+
+    -- `byClick = true`: a acao segura de aparencia JA disparou no proprio clique. Sem essa
+    -- bandeira o passo recusa por nao poder agir, e o teste mediria outra coisa.
+    local preset = { name = "Com roupa", spec = 1, transmog = 71 }
+    ns.Data.Apply(preset, function() end, true)
+
+    -- A ORDEM REAL, e ela e o coracao do defeito: a roupa troca no PRIMEIRO instante (foi o
+    -- clique), e a resposta do jogo chega enquanto a corrente ainda esta no passo de spec --
+    -- onde ela e descartada de proposito, porque o passo em curso nao e o da aparencia.
+    state.outfit = 71
+    fire("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
+
+    state.specIndex = 1
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+
+    -- Agora o passo da aparencia roda, ve que ja esta certo e devolve "skip". O que a tela NAO
+    -- pode dizer e "nada a mudar": mudou, e por causa deste mesmo clique.
+    local passos = ns.Data.GetProgress()
+    check("a aparencia mudou no meio do caminho", passos[2].state, "done")
+
+    state.outfit = nil
+end
+
+do
+    -- E O CASO EM QUE "nada a mudar" E VERDADE: ja estava certo ANTES de o clique acontecer.
+    state.specIndex, state.equippedSet, state.outfit = 2, 9, 71
+
+    local preset = { name = "Ja vestido", spec = 1, transmog = 71 }
+    ns.Data.Apply(preset, function() end, true)
+    ns.UI.RefreshProgress()          -- com a troca VIVA, senao o painel nem abre
+
+    state.specIndex = 1
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+
+    local passos = ns.Data.GetProgress()
+    check("o que ja estava certo antes e que e 'nada a mudar'", passos[2].state, "skipped")
+    check("e pulado nao tem arte de falha", ns.UI.DebugMetrics().states.skipped.atlas, nil)
+
+    ns.UI.RefreshProgress()
+    check("e o rotulo diz por que",
+        painel.rows[2].label:GetText():find("nada a mudar") ~= nil, true)
+
+    state.outfit = nil
+end
+
+do
+    -- CONJUNTO SO DE ITENS: uma linha, nao quatro.
+    state.equippedSet = 9
+    ns.Data.Apply({ name = "So itens", gear = 3 }, function() end)
+    check("uma etapa, uma linha", #ns.Data.GetProgress(), 1)
+    ns.UI.RefreshProgress()
+    check("o painel abriu", painel:IsShown(), true)
+    check("e as outras vagas ficam fechadas", painel.rows[2]:IsShown(), false)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+end
+
+do
+    -- O PRAZO VENCIDO NAO PODE VIRAR VISTO VERDE. Este e o defeito que eu mesmo plantei ao ligar
+    -- o painel: o prazo chama `RunNext`, e o `RunNext` fecha como "done" o passo que ainda estava
+    -- em "doing" -- porque e assim que ele registra uma confirmacao do jogo. Sem marcar a falha
+    -- antes, um passo que o jogo NUNCA confirmou ganharia um checkmark ao lado da mensagem de
+    -- falha logo abaixo dele.
+    state.equippedSet = 9
+    ns.Data.Apply({ name = "Vai vencer", gear = 3 }, function() end)
+    check("itens em andamento", ns.Data.GetProgress()[1].state, "doing")
+
+    RunTimers()          -- o prazo do passo vence sem o evento chegar
+
+    local passos = ns.Data.GetProgress()
+    check("prazo vencido e FALHA, nao conclusao", passos[1].state, "failed")
+    check("e nao ficou passo pendurado em andamento", (function()
+        for _, passo in ipairs(passos) do
+            if passo.state == "doing" then return passo.key end
+        end
+        return false
+    end)(), false)
+end
+
+do
+    -- DESISTENCIA TAMBEM NAO DEIXA PASSO PENDURADO. Quando o jogo recusa a troca de spec ate o
+    -- teto de tentativas, a corrente desiste -- e o passo fica em "doing" ate alguem resolver.
+    -- Quem resolve e o `Finish`, e a regra dele e a mesma do prazo: passo que estava em andamento
+    -- na hora do fim e passo que NAO confirmou.
+    state.specIndex, state.equippedSet = 2, 9
+    state.refuseSpec = true
+    local ultimo
+    ns.Data.Apply({ name = "Recusado", spec = 1 }, function(t) ultimo = t end)
+    check("a spec esta insistindo", ns.Data.GetProgress()[1].state, "doing")
+
+    -- O TETO VAI JUNTO DO CONTADOR. "tentativa 2" sozinho nao diz se ainda ha esperanca -- e a
+    -- espera de proposito passa a parecer travamento, que e exatamente o que este painel existe
+    -- para desfazer.
+    RunTimers(5)                       -- uma reinsistencia, e o jogo recusa de novo
+    ns.UI.RefreshProgress()
+    local _, info = ns.Data.GetProgress()
+    check("o teto chega na janela", info.maxTries, 8)
+    check("e o relogio conta 'de quantas'",
+        painel.clock:GetText(), format(ns.L["attempt %d of %d"], info.tries + 1, info.maxTries))
+
+    -- SO AS REINSISTENCIAS (4 s), nunca o prazo do passo (45 s). E a diferenca entre medir a
+    -- DESISTENCIA -- insistiu ate o teto e parou -- e medir o prazo vencido, que e outro caminho
+    -- e ja tem teste proprio logo acima.
+    for _ = 1, 12 do RunTimers(5) end
+    state.refuseSpec = false
+
+    check("desistiu", ns.Data.IsApplying(), false)
+    -- E FOI PELO CAMINHO CERTO. Sem conferir a frase, este bloco passaria tambem quando a
+    -- corrente terminasse por PRAZO -- que e o outro caminho, ja coberto acima, e que marca o
+    -- passo por uma linha diferente. Dois caminhos, dois testes.
+    check("terminou por desistencia, nao por prazo",
+        (ultimo or ""):find("continuou recusando") ~= nil, true)
+    check("o passo abandonado e falha, nao andamento", ns.Data.GetProgress()[1].state, "failed")
+end
+
+print("== o painel: o ritmo, o lugar e a arte ==")
+do
+    local m = ns.UI.DebugMetrics()
+
+    -- A RAZAO, e nao os numeros crus (skill `wow-ui-design`): o vao entre as tintas de duas
+    -- linhas vizinhas contra o vao que separa o titulo do bloco. Foi 1,5x que produziu o
+    -- "ta tudo muito junto e grudado"; o piso praticado pela Blizzard e 2x.
+    local vaoEntreLinhas = m.row - m.icon                     -- 22 - 16 = 6
+    local vaoDoTitulo = m.titleGap + (m.row - m.icon) / 2     -- 13 + 3 = 16
+    check("vao entre linhas", vaoEntreLinhas, 6)
+    check("o titulo se separa do bloco em pelo menos o dobro",
+        vaoDoTitulo >= vaoEntreLinhas * 2, true)
+    check("a calha icone->rotulo e a minima praticada", m.iconGap >= 5, true)
+
+    -- O LUGAR. O painel tem que nascer na MESMA coluna do editor -- comparado contra o widget, e
+    -- nao contra a constante, senao o check compara o numero consigo mesmo.
+    local _, ed = ns.UI.DebugProgress()
+    local painelX = painel:PointOffset("TOPLEFT")
+    local editorX = ed.spec:PointOffset("TOPLEFT")
+    check("o painel nasce na coluna do editor", painelX, editorX)
+
+    -- E NAO INVADE A FAIXA DE AVISOS. E a colisao VERTICAL, que e exatamente a que a skill diz
+    -- ter escapado tres vezes por o probe guardar so `x` e `width`.
+    local _, painelY = painel:PointOffset("TOPLEFT")
+    local _, avisosY = ns.UI.DebugToggles():PointOffset("TOPLEFT")
+    local alturaCheia = m.row * 4 + m.titleGap + 16
+    check("com as quatro etapas ele ainda para antes dos Avisos",
+        -painelY + alturaCheia <= -avisosY, true)
+
+    -- TODO ATLAS CITADO EXISTE. `SetAtlas` falha em silencio, entao um nome errado nao daria erro
+    -- nenhum -- so um retangulo vazio no lugar do visto.
+    for estado, visual in pairs(m.states) do
+        if visual.atlas then
+            check("o atlas de " .. estado .. " existe",
+                ns.SetAtlasSafe(painel.rows[1].icon, visual.atlas), true)
+        end
+    end
+
+    -- E A CONFERENCIA CONFERE MESMO: nome inventado tem que reprovar. Sem este check, um
+    -- `SetAtlasSafe` que devolvesse `true` sempre passaria nos tres de cima.
+    check("atlas inventado reprova",
+        ns.SetAtlasSafe(painel.rows[1].icon, "nao-existe-este-atlas"), false)
+end
 
 print("== janela: o resto do ciclo ==")
 for _, step in ipairs({
