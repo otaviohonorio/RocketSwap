@@ -608,6 +608,26 @@ function Steps.spec(preset)
     -- apenas "estourou?", entao uma recusa imediata do jogo virava doze segundos de
     -- "Carregando..." seguidos de "o jogo nao confirmou a tempo" -- e a corrente seguia para os
     -- talentos com a spec ERRADA.
+    -- ENGOLE O ERRO VERMELHO QUE A NOSSA PRÓPRIA CHAMADA VAI PROVOCAR.
+    --
+    -- Relato: *"quando troco o preset aparece uma mensagem do jogo mesmo 'Você não pode fazer isso
+    -- agora', vai confundir o usuário, ele vai achar que não vai trocar nada, mas tá funcionando"*.
+    -- Ele está certo: a recusa é transitória e o addon já insiste sozinho, então o erro do jogo
+    -- descreve um estado que deixa de valer quatro segundos depois.
+    --
+    -- `SuppressMessagesThisFrame` é método da própria Blizzard
+    -- (`Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.lua:182-189`) e é do tamanho certo: vale por
+    -- **um quadro** e se desarma sozinho com um `C_Timer.After(0, …)`. Não é
+    -- `UnregisterEvent`, que apagaria erro alheio por tempo indeterminado — o erro que se engole
+    -- aqui é só o que a nossa linha seguinte provoca.
+    --
+    -- E não se perde informação: o motivo continua no diário, e o passo continua reportando o que
+    -- aconteceu na janela. O que sai da tela é a contradição — vermelho dizendo "não pode"
+    -- enquanto o addon está resolvendo.
+    if UIErrorsFrame and UIErrorsFrame.SuppressMessagesThisFrame then
+        pcall(UIErrorsFrame.SuppressMessagesThisFrame, UIErrorsFrame)
+    end
+
     local ok, aceito
     if C_SpecializationInfo and C_SpecializationInfo.SetSpecialization then
         ok, aceito = pcall(C_SpecializationInfo.SetSpecialization, wanted)

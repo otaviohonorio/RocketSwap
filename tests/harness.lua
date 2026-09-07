@@ -220,7 +220,16 @@ function StaticPopup_Show(which, arg1)
     return {}
 end
 
-UIErrorsFrame = { AddExternalWarningMessage = function() end }
+-- `SuppressMessagesThisFrame` e metodo da propria Blizzard
+-- (`Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.lua:182-189`): suprime as mensagens de erro por
+-- UM quadro e se desarma sozinho. Sem ele aqui nao dava para conferir que o addon engole o erro
+-- vermelho que a propria chamada dele provoca.
+-- Contador proprio, e nao `state`: este bloco roda ANTES de `state` existir no arquivo.
+suppressedFrames = 0
+UIErrorsFrame = {
+    AddExternalWarningMessage = function() end,
+    SuppressMessagesThisFrame = function() suppressedFrames = suppressedFrames + 1 end,
+}
 C_EventUtils = { IsEventValid = function() return true end }
 C_RestrictedActions = { GetAddOnRestrictionState = function() return 0 end }
 function GetMaxBattlefieldID() return 2 end
@@ -1359,6 +1368,37 @@ do
         if isError then aviso = t end
     end)
     check("o segundo clique e avisado, nao ignorado", aviso ~= nil, true)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+end
+
+print("== o erro vermelho do jogo nao aparece pela nossa chamada ==")
+-- Relato: "quando troco o preset aparece uma mensagem do jogo mesmo 'Voce nao pode fazer isso
+-- agora', vai confundir o usuario, ele vai achar que nao vai trocar nada, mas ta funcionando".
+--
+-- Ele esta certo: a recusa e TRANSITORIA e o addon ja insiste sozinho, entao o erro do jogo
+-- descreve um estado que deixa de valer quatro segundos depois. Vermelho na tela dizendo "nao
+-- pode" enquanto o addon resolve e contradicao pura.
+--
+-- `SuppressMessagesThisFrame` e da propria Blizzard e vale por UM QUADRO, desarmando sozinho
+-- (`UIErrorsFrame.lua:182-189`). Nao e `UnregisterEvent`, que apagaria erro alheio por tempo
+-- indeterminado -- o que se engole aqui e so o que a nossa linha seguinte provoca.
+do
+    state.specIndex, state.equippedSet = 2, 1
+    state.canChangeSpec = true
+    suppressedFrames = 0
+
+    ns.Data.Apply({ name = "Tank", spec = 1 }, function() end)
+
+    check("suprime o quadro da propria chamada", suppressedFrames >= 1, true)
+
+    state.specIndex = 1
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+
+    -- E SO QUANDO CHAMA. Passo que nem tenta trocar de spec nao pode apagar erro nenhum -- o
+    -- jogador tem direito aos erros que nao sao culpa nossa.
+    suppressedFrames = 0
+    ns.Data.Apply({ name = "So itens", gear = 3 }, function() end)
+    check("mas nao suprime quando nem tenta", suppressedFrames, 0)
     fire("EQUIPMENT_SWAP_FINISHED", true, 3)
 end
 
