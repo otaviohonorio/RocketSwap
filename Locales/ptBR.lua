@@ -88,8 +88,11 @@ L["...and %d more."] = "...e mais %d."
 L["Load %s"] = "Carregar %s"
 L["Don't warn here"] = "Não avise aqui"
 L["ready check:"] = "conferência:"
-L["(no talent loadout)"] = "(sem loadout de talentos)"
-L["(no gear set)"] = "(sem conjunto de itens)"
+-- As duas frases longas saíram na 0.11.2: com o rótulo na frente elas repetiam a própria
+-- etiqueta, e arrastavam "loadout" (que o cliente traduz como "equipamento") e "conjunto" (que
+-- aqui é o nome dos presets). O resumo usa `L["(none)"]`, que já existe e já é o que os combos
+-- do editor mostram no mesmo caso.
+L["Ready check"] = "Conferência"
 L["gear warning on."] = "aviso de equipamento ligado."
 L["gear warning off."] = "aviso de equipamento desligado."
 L["ready check summary on."] = "resumo no ready check ligado."

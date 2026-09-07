@@ -1168,10 +1168,19 @@ local quantas = select(2, emLinhas:gsub(NL, "")) + 1
 check("a caixa quebra em tres linhas", quantas, 3)
 check("e o chat continua em uma so", select(2, resumo:gsub(NL, "")), 0)
 
--- Sem conjunto de itens vestido, o resumo diz isso em vez de mentir ou ficar vazio.
+-- SEM CONJUNTO VESTIDO o resumo diz `Itens: (nenhum)` -- e nao mais "(sem conjunto de itens)".
+--
+-- A frase longa existia porque ELA era o unico contexto: sem rotulo, era a unica forma de saber
+-- de que campo se tratava. Com o rotulo na frente ela repetia a propria etiqueta e arrastava duas
+-- palavras que este addon evita: "loadout" (que o cliente traduz como "equipamento" em pt-BR) e
+-- "conjunto" -- que aqui e o nome dos PRESETS, entao o campo e o conteiner dividiam o nome.
+--
+-- `L["(none)"]` ja existe e ja e o que os combos do editor mostram no mesmo caso.
 state.equippedSet = 99
-check("sem conjunto, avisa que nao ha",
-    ns.Alert.Summary():find("sem conjunto", 1, true) ~= nil, true)
+check("sem conjunto, diz (nenhum)",
+    ns.Alert.Summary():find(ns.L["Gear"] .. ": " .. ns.L["(none)"], 1, true) ~= nil, true)
+check("e NAO repete o rotulo na frase",
+    ns.Alert.Summary():lower():find("conjunto de itens", 1, true), nil)
 state.equippedSet = 1
 
 -- E O RESUMO ESPERA UM OK. Pedido do usuario: "como mostra o aviso e some, o usuario pode nem
@@ -1199,6 +1208,18 @@ do
     -- Tres campos em tres linhas, mais o titulo e a linha em branco antes dele.
     check("e poe um campo por linha",
         select(2, naCaixa:gsub(string.char(10), "")) >= 4, true)
+
+    -- O TITULO DA CAIXA NAO LEVA DOIS-PONTOS. `L["ready check:"]` e PREFIXO de linha de chat, e
+    -- la o dois-pontos esta certo; como titulo, seguido de linha em branco, fica pendurado. A
+    -- linha de chat chegou a ter TRES: "RocketSwap: conferencia: Especializacao: Gelido".
+    -- `string.char(10)` e nao um escape: o shell desta maquina come a barra invertida em
+    -- heredoc, e o padrao chegou aqui com um 0x08 no lugar da quebra de linha. Construir o
+    -- caractere pelo codigo nao depende de escape nenhum.
+    local NL = string.char(10)
+    local titulo = naCaixa:match("^(.-)" .. NL) or naCaixa
+    check("o titulo da caixa nao termina em dois-pontos",
+        titulo and titulo:sub(-1) ~= ":", true)
+    check("e ainda diz que e a conferencia", titulo, ns.L["Ready check"])
 
     -- A CAIXA NAO PODE FECHAR SOZINHA: e o unico motivo de ela existir.
     local dialogo = StaticPopupDialogs["ROCKETSWAP_READY_CHECK"]
