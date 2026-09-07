@@ -206,27 +206,49 @@ end
 --------------------------------------------------------------------------------
 -- Ready check: o resumo antes de puxar
 --------------------------------------------------------------------------------
----O que você está usando agora, em uma linha.
+---O que você está usando agora: os três campos, com o RÓTULO de cada um.
 ---
 ---Não é aviso e não julga nada: é a conferência que o líder pede quando manda o ready check.
----"Gélido · SBA ST · Frost" responde sozinho se você esqueceu de trocar depois da última luta.
-function Alert.Summary()
+---
+---OS RÓTULOS SÃO OS DA PRÓPRIA JANELA DO ADDON — `Especialização`, `Talentos`, `Itens` — e essa
+---é a razão de eles serem esses e não outros. O jogador que abre `/rs` lê exatamente essas três
+---palavras ao lado dos três combos; o resumo usando outras o obrigaria a aprender dois
+---vocabulários para a mesma coisa. Nenhuma chave nova: `L["Specialization"]`, `L["Talents"]` e
+---`L["Gear"]` já existem e já são o que o editor mostra.
+---
+---E é por isso que o terceiro NÃO vem do jogo. As duas primeiras vêm (`SPECIALIZATION` e
+---`TALENTS`, via `FROM_GAME`), mas para itens não há global limpa e há uma armadilha registrada
+---em `Locales/enUS.lua`: em pt-BR o jogo chama **loadout de talentos** de "equipamento" e
+---**conjunto de itens** de "conjunto". Este addon foge das duas de propósito, porque ele existe
+---justamente para quem já confunde as duas coisas — e o pedido que trouxe estes rótulos
+---("não sei o que é o que") é essa confusão em pessoa.
+---
+---@param separator string|nil `nil` = uma linha (chat); `"\n"` = uma por linha (caixa)
+function Alert.Summary(separator)
     local parts = {}
+
+    ---Um campo do resumo. `rótulo: valor`, e o rótulo é o mesmo do editor.
+    local function Add(label, value)
+        parts[#parts + 1] = label .. ": " .. value
+    end
 
     local specIndex = ns.Data.GetCurrentSpecIndex()
     local spec = ns.Data.GetSpecByIndex(specIndex)
-    if spec then parts[#parts + 1] = spec.name end
+    if spec then Add(L["Specialization"], spec.name) end
 
     if spec then
         local configID = ns.Data.GetActiveLoadoutID(spec.id)
         local name = configID and ns.Data.LoadoutName(spec.id, configID)
-        parts[#parts + 1] = name or L["(no talent loadout)"]
+        Add(L["Talents"], name or L["(no talent loadout)"])
     end
 
     local setID = ns.Data.GetEquippedSetID()
-    parts[#parts + 1] = setID and ns.Data.GearSetName(setID) or L["(no gear set)"]
+    Add(L["Gear"], setID and ns.Data.GearSetName(setID) or L["(no gear set)"])
 
-    return table.concat(parts, "  ·  ")
+    -- UMA FUNÇÃO SÓ, com um separador, e não duas funções. A regra vem de tropeço próprio neste
+    -- projeto: duas fontes de verdade para a mesma informação divergem na primeira mudança —
+    -- foi assim que a lista de contornos do configurador ficou sem o "médio".
+    return table.concat(parts, separator or "  ·  ")
 end
 
 -- A CAIXA DE CONFIRMAÇÃO DO RESUMO.
@@ -272,8 +294,10 @@ function Alert.OnReadyCheck()
     -- (`StaticPopup.lua:302-304`, `error("Dialog "..which.." does not exist.")`) — e não existir é
     -- possível se outro addon limpar a tabela global.
     if StaticPopup_Show then
+        -- UMA LINHA POR CAMPO na caixa, e tudo numa só no chat. A caixa tem altura livre e o
+        -- chat não; e é na caixa que o jogador vai parar para ler.
         local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",
-            L["ready check:"] .. "\n\n" .. resumo)
+            L["ready check:"] .. "\n\n" .. Alert.Summary("\n"))
         if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
             -- Só então o aviso do meio da tela, como rede: melhor um aviso que some do que nada.
             pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
