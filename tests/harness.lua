@@ -1316,6 +1316,57 @@ do
     fire("EQUIPMENT_SWAP_FINISHED", true, 3)
 end
 
+print("== o que o DIARIO REAL mostrou (07/09, 02:05) ==")
+-- Estes tres testes nao saem de deducao: saem do arquivo que o usuario gerou jogando, lido em
+-- `WTF/Account/.../SavedVariables/RocketSwap.lua`. Vinte e uma linhas, nove trocas.
+do
+    state.specIndex, state.equippedSet = 2, 1
+    state.activeLoadout[251] = nil
+
+    -- 1. `LoadConfig` DEVOLVE `NoChangesNecessary` NA MAIORIA DAS VEZES -- seis das nove trocas
+    --    gravadas. Faz sentido: os nos da arvore ja estavam iguais.
+    --
+    --    E nesse caminho o passo nao espera evento nenhum. A 0.13.2 so registrava o loadout na
+    --    confirmacao POR EVENTO, entao o jogo nunca ficava sabendo qual passou a valer: a janela
+    --    de talentos seguia marcando o anterior, `IsLoaded` nunca dava verdadeiro, o check nao
+    --    aparecia, e o jogador clicava de novo. E o "nao chega a trocar tudo certo".
+    local realLoad = C_ClassTalents.LoadConfig
+    C_ClassTalents.LoadConfig = function() return 1, nil, {} end   -- NoChangesNecessary
+
+    ns.Data.Apply({ name = "So talento", spec = 2, talent = 11 }, function() end)
+
+    check("sem mudanca a fazer, a corrente fecha na hora", ns.Data.IsApplying(), false)
+    check("e o jogo REGISTRA qual loadout passou a valer", state.activeLoadout[251], 11)
+
+    C_ClassTalents.LoadConfig = realLoad
+
+    -- 2. `SetSpecialization` DEVOLVE `false` quando a troca vem logo depois de outra -- quatro das
+    --    nove. Trocar de spec tem custo no jogo, e insistir nao adianta.
+    state.activeLoadout[251] = 11
+    state.pendingSet = nil          -- limpa a sonda: o que interessa e se ESTA corrente mexeu
+    local realSet = C_SpecializationInfo.SetSpecialization
+    C_SpecializationInfo.SetSpecialization = function() return false end
+
+    local texto, houveErro
+    ns.Data.Apply({ name = "Tank", spec = 1, talent = 12, gear = 3, transmog = 71 },
+        function(t, isError) texto, houveErro = t, isError end)
+
+    check("recusa do jogo e reportada", houveErro, true)
+    check("dizendo para esperar",
+        texto and texto:lower():find("espere", 1, true) ~= nil, true)
+
+    -- 3. UMA CAUSA, UMA MENSAGEM. No diario real a recusa da spec derramou QUATRO falhas em fila
+    --    -- spec, talentos, itens e aparencia -- porque tudo depois dela depende dela. O usuario
+    --    leu isso como "fica bugado e dando erro".
+    check("e a corrente PARA, sem derramar as outras", ns.Data.IsApplying(), false)
+    check("com UMA mensagem, nao uma fila",
+        texto and texto:find("|", 1, true), nil)
+    check("e sem ter mexido nos itens", state.pendingSet, nil)
+
+    C_SpecializationInfo.SetSpecialization = realSet
+    state.activeLoadout[251] = 10
+end
+
 print("== o diario responde POR QUE nao trocou ==")
 -- Pergunta literal do usuario, depois de a troca falhar pela quarta vez: "tu ta salvando logs
 -- para poder entender os problemas?". A resposta era NAO, e por isso as rodadas anteriores foram
