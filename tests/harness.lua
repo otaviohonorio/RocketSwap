@@ -187,6 +187,23 @@ C_TooltipInfo = {
     end,
 }
 
+-- A tabela GLOBAL de caixas de confirmacao do jogo, e o `Show` que as abre. Ela existe sempre no
+-- cliente (o `Blizzard_StaticPopup` e addon base), e sem ela aqui o resumo do ready check nao era
+-- conferivel -- so daria para testar que NAO estourou.
+--
+-- `StaticPopup_Show` DA ERRO quando o dialogo nao existe (`StaticPopup.lua:302-304`), e o stub
+-- reproduz isso: e o motivo de o addon chamar por `pcall`.
+StaticPopupDialogs = {}
+OKAY = "OK"
+shownPopups = {}
+function StaticPopup_Show(which, arg1)
+    if not StaticPopupDialogs[which] then
+        error("Dialog " .. tostring(which) .. " does not exist.")
+    end
+    shownPopups[#shownPopups + 1] = { which = which, text = arg1 }
+    return {}
+end
+
 UIErrorsFrame = { AddExternalWarningMessage = function() end }
 C_EventUtils = { IsEventValid = function() return true end }
 C_RestrictedActions = { GetAddOnRestrictionState = function() return 0 end }
@@ -1128,6 +1145,33 @@ state.equippedSet = 99
 check("sem conjunto, avisa que nao ha",
     ns.Alert.Summary():find("sem conjunto", 1, true) ~= nil, true)
 state.equippedSet = 1
+
+-- E O RESUMO ESPERA UM OK. Pedido do usuario: "como mostra o aviso e some, o usuario pode nem
+-- ver". Ele tem razao -- o ready check e justamente o momento em que a pessoa esta olhando para
+-- o botao de "Pronto", e chat e aviso de raide somem sozinhos.
+do
+    wipe(shownPopups)
+    ns.db.readyCheck = true
+    ns.Alert.OnReadyCheck()
+
+    check("o ready check abre uma caixa", #shownPopups, 1)
+    check("e e a nossa", shownPopups[1].which, "ROCKETSWAP_READY_CHECK")
+    check("com o resumo dentro",
+        shownPopups[1].text and shownPopups[1].text:find("Gelido", 1, true) ~= nil, true)
+
+    -- A CAIXA NAO PODE FECHAR SOZINHA: e o unico motivo de ela existir.
+    local dialogo = StaticPopupDialogs["ROCKETSWAP_READY_CHECK"]
+    check("a caixa nao tem prazo", dialogo.timeout, 0)
+    check("e aparece mesmo morto", dialogo.whileDead, 1)
+
+    -- E DESLIGADO NAO ABRE NADA. A caixa e mais intrusiva que o chat; respeitar a opcao importa
+    -- mais aqui do que importava antes.
+    wipe(shownPopups)
+    ns.db.readyCheck = false
+    ns.Alert.OnReadyCheck()
+    check("desligado nao abre caixa nenhuma", #shownPopups, 0)
+    ns.db.readyCheck = true
+end
 
 print("== aparencia (transmog) e opcional ==")
 -- Pedido do usuario: "poderia por como opcional o transmog salvo tambem?". Opcional de

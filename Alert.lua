@@ -229,14 +229,55 @@ function Alert.Summary()
     return table.concat(parts, "  ·  ")
 end
 
+-- A CAIXA DE CONFIRMAÇÃO DO RESUMO.
+--
+-- O resumo era chat + aviso de raide, e os dois SOMEM sozinhos. Pedido do usuário: *"como mostra
+-- o aviso e some, o usuário pode nem ver"*. Ele tem razão, e o ready check é justamente o momento
+-- em que a pessoa está olhando para outra coisa — para o botão de "Pronto".
+--
+-- Espera um OK, e é o ponto: a caixa fica até alguém a fechar, então o resumo não depende de o
+-- jogador estar olhando na hora certa.
+--
+-- `timeout = 0` — não fecha sozinha, pelo mesmo motivo de existir.
+-- `whileDead = 1` — morto no meio de uma tentativa é exatamente quando se pede ready check.
+-- `hideOnEscape = 1` — Esc fecha, como em toda caixa do jogo; obrigar o clique seria birra.
+--
+-- O nome tem prefixo do addon porque `StaticPopupDialogs` é uma tabela GLOBAL, compartilhada com
+-- o jogo e com todos os addons: uma chave genérica sobrescreveria a de outro.
+-- Dentro do `if`: `StaticPopupDialogs` é global do jogo e sempre existe, mas indexar global nula
+-- em escopo de ARQUIVO derruba o addon inteiro no carregamento — e perder o addon por causa de
+-- uma caixa de aviso é troca ruim.
+if StaticPopupDialogs then
+    StaticPopupDialogs["ROCKETSWAP_READY_CHECK"] = {
+        text = "%s",
+        button1 = OKAY,
+        timeout = 0,
+        whileDead = 1,
+        hideOnEscape = 1,
+        -- Sem `OnAccept`: a caixa é informativa, o OK só a fecha. Ação escondida atrás de um OK
+        -- que diz "OK" é o tipo de coisa que o jogador não espera.
+    }
+end
+
 function Alert.OnReadyCheck()
     if not ns.db or ns.db.readyCheck == false then return end
 
-    ns.Print(L["ready check:"] .. " " .. Alert.Summary())
+    local resumo = Alert.Summary()
+    ns.Print(L["ready check:"] .. " " .. resumo)
 
-    -- Também no meio da tela, porque o ready check tem prazo e ninguém está lendo o chat.
-    if RaidWarningUtil and RaidWarningUtil.AddMessage then
-        pcall(RaidWarningUtil.AddMessage, Alert.Summary(), NORMAL_FONT_COLOR, 5)
+    -- A CAIXA É A PRINCIPAL, e o chat vira registro. O aviso de raide saiu: ele também some, e
+    -- somado à caixa seria a mesma informação em dois lugares, um deles inútil.
+    --
+    -- `pcall` porque `StaticPopup_Show` **dá erro** quando o diálogo não existe
+    -- (`StaticPopup.lua:302-304`, `error("Dialog "..which.." does not exist.")`) — e não existir é
+    -- possível se outro addon limpar a tabela global.
+    if StaticPopup_Show then
+        local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",
+            L["ready check:"] .. "\n\n" .. resumo)
+        if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
+            -- Só então o aviso do meio da tela, como rede: melhor um aviso que some do que nada.
+            pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
+        end
     end
 
     -- E de quebra: se o equipamento estiver errado para o conteúdo, é a hora de saber.
