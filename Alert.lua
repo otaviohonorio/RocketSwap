@@ -228,6 +228,17 @@ function Alert.Summary(separator)
     local parts = {}
 
     ---Um campo do resumo. `rótulo: valor`, e o rótulo é o mesmo do editor.
+    ---
+    ---VAZIO É `(nenhum)`, e não mais "(sem conjunto de itens)". As frases longas existiam porque
+    ---**elas eram o único contexto** — sem rótulo, "(sem conjunto de itens)" era a única forma de
+    ---saber de que campo se tratava. Com o rótulo na frente elas passaram a repetir a própria
+    ---etiqueta ("Itens: (sem conjunto de itens)") e ainda arrastavam duas palavras que este addon
+    ---evita: **"loadout"**, que o cliente traduz como "equipamento" em pt-BR, e **"conjunto"**,
+    ---que aqui é o nome dos PRESETS (`L["Presets"] = "Conjuntos"`) — o campo e o contêiner
+    ---passavam a dividir o nome.
+    ---
+    ---`L["(none)"]` já existe e já é o que os combos do editor mostram no mesmo caso. Mesmo
+    ---vocabulário, de novo.
     local function Add(label, value)
         parts[#parts + 1] = label .. ": " .. value
     end
@@ -239,11 +250,11 @@ function Alert.Summary(separator)
     if spec then
         local configID = ns.Data.GetActiveLoadoutID(spec.id)
         local name = configID and ns.Data.LoadoutName(spec.id, configID)
-        Add(L["Talents"], name or L["(no talent loadout)"])
+        Add(L["Talents"], name or L["(none)"])
     end
 
     local setID = ns.Data.GetEquippedSetID()
-    Add(L["Gear"], setID and ns.Data.GearSetName(setID) or L["(no gear set)"])
+    Add(L["Gear"], setID and ns.Data.GearSetName(setID) or L["(none)"])
 
     -- UMA FUNÇÃO SÓ, com um separador, e não duas funções. A regra vem de tropeço próprio neste
     -- projeto: duas fontes de verdade para a mesma informação divergem na primeira mudança —
@@ -296,8 +307,12 @@ function Alert.OnReadyCheck()
     if StaticPopup_Show then
         -- UMA LINHA POR CAMPO na caixa, e tudo numa só no chat. A caixa tem altura livre e o
         -- chat não; e é na caixa que o jogador vai parar para ler.
+        -- TÍTULO SEM DOIS-PONTOS. `L["ready check:"]` é PREFIXO de linha de chat, e lá o
+        -- dois-pontos está certo; como título de caixa, seguido de linha em branco, ele fica
+        -- pendurado. A linha de chat chegava a ter três: "RocketSwap: conferência: Especialização:
+        -- Gelido".
         local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",
-            L["ready check:"] .. "\n\n" .. Alert.Summary("\n"))
+            L["Ready check"] .. "\n\n" .. Alert.Summary("\n"))
         if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
             -- Só então o aviso do meio da tela, como rede: melhor um aviso que some do que nada.
             pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)

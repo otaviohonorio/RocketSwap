@@ -8,7 +8,7 @@
 ## Category-ptBR: Combate
 
 ## Author: Otávio Honório
-## Version: 0.11.1
+## Version: 0.11.2
 ## SavedVariablesPerCharacter: RocketSwapDB
 ## IconTexture: Interface\Icons\INV_Misc_MissileLarge_Red
 ## AllowAddOnTableAccess: 1
