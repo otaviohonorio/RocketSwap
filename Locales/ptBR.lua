@@ -148,3 +148,5 @@ L["the talents were staged but not applied; open the talent window and apply."] 
     "os talentos foram preparados mas não aplicados; abra a janela de talentos e aplique."
 L["an internal error interrupted this step."] = "um erro interno interrompeu este passo."
 L["another swap is still running."] = "ainda há uma troca em andamento."
+L["the specialization did not change, so the talents were left alone."] =
+    "a especialização não trocou, então os talentos não foram mexidos."

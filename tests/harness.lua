@@ -1137,6 +1137,44 @@ do
 end
 
 
+print("== talento nao entra na spec errada ==")
+-- Relato de 07/09: "cliquei para trocar para o preset de tank e ja gerou erro e fez coisa
+-- errada". O conjunto Tank pede spec 1; o jogador estava na 2.
+--
+-- Um loadout pertence a UMA especializacao. O passo resolvia pela spec ATUAL, entao quando a
+-- troca de spec falhava, estourava o prazo, ou simplesmente ainda nao tinha virado, ele pegava a
+-- spec VELHA e mandava `LoadConfig` com um id de OUTRA -- e o jogo reclama, com razao.
+--
+-- E o pior vinha depois: `UpdateLastSelectedSavedConfigID(specVelha, loadoutDaNova)` grava a
+-- associacao errada NO JOGO. Isso sobrevive ao `/reload` e reaparece na proxima vez que o jogador
+-- voltar aquela spec pela janela de talentos. E corromper estado alheio.
+do
+    state.specIndex = 2                    -- o jogador esta em Gelido
+    state.activeLoadout[250] = nil         -- e a spec de Sangue nao tem loadout ativo
+    state.activeLoadout[251] = 10
+    state.pendingLoadout, state.pendingSpec = nil, nil
+
+    -- A TROCA DE SPEC FALHA (o jogo recusa na hora).
+    local realSet = C_SpecializationInfo.SetSpecialization
+    C_SpecializationInfo.SetSpecialization = function() return false end
+
+    local texto, houveErro
+    ns.Data.Apply({ name = "Tank", spec = 1, talent = 11, gear = 3 },
+        function(t, isError) texto, houveErro = t, isError end)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+
+    C_SpecializationInfo.SetSpecialization = realSet
+
+    check("com a spec errada, o talento NAO e pedido", state.pendingLoadout, nil)
+    check("e a memoria do jogo nao e corrompida", state.activeLoadout[251], 10)
+    check("o addon avisa", houveErro, true)
+    check("dizendo que a spec nao trocou",
+        texto and texto:lower():find("especializa", 1, true) ~= nil, true)
+
+    -- E OS ITENS SEGUEM: falhar a spec nao pode impedir o que ainda da para aplicar.
+    check("mas os itens foram aplicados", state.pendingSet, 3)
+end
+
 print("== a corrente nao fecha passo com evento alheio ==")
 -- Estes eventos sao GLOBAIS: disparam quando o JOGADOR mexe a mao, quando outro addon mexe, e --
 -- o caso mais comum -- quando a propria troca de spec os enfileira. Fechar um passo com o evento
