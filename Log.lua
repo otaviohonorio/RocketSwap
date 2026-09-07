@@ -123,12 +123,15 @@ end
 ---Isto responde a hipótese que eu não tinha como testar: eventos como `TRAIT_CONFIG_UPDATED`
 ---são GLOBAIS e disparam quando o jogador mexe à mão ou quando outro addon mexe. Se o log
 ---mostrar um evento fechando um passo que não era o nosso, é isso.
-function Log.Event(event, step, paraNos, extra)
+function Log.Event(event, step, paraNos, arg1, arg2)
     Log.Add("evento", {
         evento = event,
         passoEmCurso = step or "nenhum",
         paraNos = paraNos and true or false,
-        extra = extra ~= nil and Describe(extra) or nil,
+        arg1 = arg1 ~= nil and Describe(arg1) or nil,
+        -- `EQUIPMENT_SWAP_FINISHED` traz `result, setID`; sem o segundo nao da para saber se o
+        -- evento era do NOSSO conjunto -- foi a pergunta que ficou sem resposta ao ler o diario.
+        arg2 = arg2 ~= nil and Describe(arg2) or nil,
     })
 end
 

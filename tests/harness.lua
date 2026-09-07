@@ -660,16 +660,17 @@ end
 
 --------------------------------------------------------------------------------
 fire = function(event, ...)
-    -- O MUNDO MUDA ANTES DO EVENTO CHEGAR. `EQUIPMENT_SWAP_FINISHED` com sucesso significa que a
-    -- troca TERMINOU: quando o addon o recebe, o conjunto ja esta vestido. Sem isto o simulador
-    -- entregava o evento com o mundo ainda no estado antigo, e o addon -- que confirma lendo o
-    -- estado -- nunca via a troca acontecer.
-    if event == "EQUIPMENT_SWAP_FINISHED" then
-        local resultado, setID = ...
-        if resultado == true and type(setID) == "number" then
-            state.equippedSet = setID
-        end
-    end
+    -- O SIMULADOR NAO ADIANTA O ESTADO, e esta ausencia e deliberada -- eu ja escrevi o contrario
+    -- aqui e o diario do usuario me desmentiu.
+    --
+    -- Eu tinha feito o `fire` equipar o conjunto ANTES de despachar, achando que "o evento so
+    -- chega quando a troca terminou, logo o mundo ja mudou". O diario de 07/09 02:05:35 mostra o
+    -- oposto: `EQUIPMENT_SWAP_FINISHED` com `result = true` chegou e a leitura de estado ainda
+    -- respondia que o conjunto NAO estava vestido. O addon, que naquela versao exigia a leitura,
+    -- travou -- e oito segundos de "recusado" seguiram no diario.
+    --
+    -- Quem quiser o estado virado que o vire explicitamente no teste. O simulador nao inventa
+    -- fidelidade que o jogo nao tem.
 
     for _, f in ipairs(frames) do
         if f.__events[event] and f.__scripts.OnEvent then
@@ -1313,6 +1314,43 @@ do
         if isError then aviso = t end
     end)
     check("o segundo clique e avisado, nao ignorado", aviso ~= nil, true)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+end
+
+print("== a troca de itens confirma pelo EVENTO, nao pelo estado ==")
+-- ESTE TESTE E A TRANSCRICAO DE OITO SEGUNDOS DO DIARIO DO USUARIO, 07/09 02:05:34-45:
+--
+--   02:05:34  passo   passo=gear  resultado=wait
+--   02:05:35  evento  EQUIPMENT_SWAP_FINISHED  passoEmCurso=gear  paraNos=true  extra=true
+--   02:05:37  recusado  motivo=ja ha uma troca em curso
+--   02:05:40  recusado  ...  (e assim por mais oito segundos)
+--
+-- O jogo confirmou a troca COM SUCESSO e a corrente nao avancou. A 0.13.2 exigia, alem do
+-- evento, que `Data.IsGearSetEquipped(preset.gear)` ja respondesse verdadeiro -- e no instante do
+-- evento ele ainda respondia falso. A partir dali todo clique do jogador batia em "ja ha uma
+-- troca em curso".
+--
+-- A LICAO E A MESMA DO RAMO DE TALENTOS, duas versoes antes: o estado do jogo pode ATRASAR em
+-- relacao ao evento, e exigir que ele ja tenha virado transforma a confirmacao em armadilha. Foi
+-- a segunda vez que troquei um caminho que funcionava por um palpite mais "honesto".
+do
+    state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
+    state.pendingSet = nil
+
+    ns.Data.Apply({ name = "So itens", gear = 3 }, function() end)
+    check("o passo de itens esperou", ns.Data.IsApplying(), true)
+
+    -- O ESTADO AINDA NAO VIROU quando o evento chega -- e este e o ponto do teste.
+    state.equippedSet = 1
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+
+    check("o evento fecha o passo mesmo com o estado atrasado", ns.Data.IsApplying(), false)
+
+    -- E O CLIQUE SEGUINTE FUNCIONA. Era isto que o jogador vivia como "dei um clique e deu erro":
+    -- a corrente presa recusava tudo depois.
+    state.equippedSet = 1
+    local voltou = ns.Data.Apply({ name = "De novo", gear = 3 }, function() end)
+    check("o clique seguinte nao e recusado", voltou, true)
     fire("EQUIPMENT_SWAP_FINISHED", true, 3)
 end
 
