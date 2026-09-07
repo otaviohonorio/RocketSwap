@@ -358,6 +358,11 @@ C_ClassTalents = {
         return out
     end,
     GetLastSelectedSavedConfigID = function(specID) return state.activeLoadout[specID] end,
+    -- O CONFIG ATIVO, que e como se sabe de quem e o `TRAIT_CONFIG_UPDATED`. Faltava, e sem ele o
+    -- addon nao tinha com que comparar: fechava o passo no PRIMEIRO evento, que a Blizzard avisa
+    -- por escrito ser o do config base da spec, e nao o do loadout
+    -- (`Blizzard_ClassTalentsFrame.lua:407-411`).
+    GetActiveConfigID = function() return state.activeConfigID end,
     UpdateLastSelectedSavedConfigID = function(specID, configID)
         state.activeLoadout[specID] = configID
     end,
@@ -501,19 +506,75 @@ function GetTime() return fakeNow end
 
 state.cooldownShape = "normal"      -- "normal" | "semInicio" | "desligada"
 
+-- O VALOR OPACO, e ele e o centro do pior defeito que esta corrente teve.
+--
+-- `C_Spell.GetSpellCooldown` e `SecretWhenCooldownsRestricted` (`SpellDocumentation.lua:271`), e
+-- esse predicado vale para combate, encontro, **modo desafio** e PvP -- a mitica+ inteira. Em
+-- `SpellCooldownInfo`, `isEnabled`, `isActive` e `isOnGCD` sao `NeverSecret`; **`startTime` e
+-- `duration` NAO SAO** (`SpellSharedDocumentation.lua:23-30`).
+--
+-- O stub nao sabia produzir isso, entao o addon podia comparar e somar os dois campos e o teste
+-- concordava. No jogo, dentro de uma chave, aquilo era erro de Lua -- e como nenhum prazo tinha
+-- sido armado ainda, a corrente ficava presa e todo clique seguinte voltava mudo.
+--
+-- `type()` num secret devolve o TIPO REAL: e por isso que a guarda de `type` do addon nao
+-- protegia nada, e e isso que este marcador reproduz.
+-- O MARCADOR SE COMPORTA COMO O DO JOGO, e sem isso ele nao testa nada:
+--
+--   * `type()` num secret devolve o **TIPO REAL** -- por isso a guarda `type(x) == "number"` do
+--     addon NAO protegia, e era exatamente essa falsa protecao que deixava a comparacao passar;
+--   * comparar ou fazer aritmetica com ele **estoura**.
+--
+-- Um marcador que fosse so uma tabela inerte faria `type()` devolver "table", a guarda barraria,
+-- e o teste concordaria com o defeito -- que foi o que aconteceu na primeira tentativa deste
+-- stub. Aqui `type` e trocado para mentir como o jogo mente, e o metatable faz comparacao e soma
+-- levantarem erro.
+local function proibido()
+    error("attempt to compare or perform arithmetic on a secret value", 2)
+end
+
+local SECRET = setmetatable({}, {
+    __tostring = function() return "secret" end,
+    __lt = proibido, __le = proibido, __add = proibido, __sub = proibido,
+})
+
+state.cooldownSecret = false
+-- O config base da spec, contra o qual os eventos de talento se conferem.
+state.activeConfigID = 4242
+
+local realIsSecretBase = issecretvalue
+function issecretvalue(v) return v == SECRET or realIsSecretBase(v) end
+
+local realType = type
+function type(v)
+    if v == SECRET then return "number" end     -- o tipo REAL, como no jogo
+    return realType(v)
+end
+
 C_Spell = {
     GetSpellCooldown = function()
+        local ativo = state.transmogCooldown > 0 and state.cooldownShape == "normal"
+
+        -- DENTRO DE MITICA+ os dois campos de tempo vem opacos, e so eles. `isActive` continua
+        -- legivel -- e e por isso que ele e a pergunta certa.
+        if state.cooldownSecret then
+            return { startTime = SECRET, duration = SECRET, isEnabled = true, isActive = ativo }
+        end
+
         if state.transmogCooldown <= 0 then
-            return { startTime = 0, duration = 0, isEnabled = true }
+            return { startTime = 0, duration = 0, isEnabled = true, isActive = false }
         end
         if state.cooldownShape == "semInicio" then
             -- duration > 0 mas start == 0: o caso contra o qual a Blizzard guarda.
-            return { startTime = 0, duration = state.transmogCooldown, isEnabled = true }
+            return { startTime = 0, duration = state.transmogCooldown,
+                     isEnabled = true, isActive = false }
         end
         if state.cooldownShape == "desligada" then
-            return { startTime = fakeNow, duration = state.transmogCooldown, isEnabled = false }
+            return { startTime = fakeNow, duration = state.transmogCooldown,
+                     isEnabled = false, isActive = false }
         end
-        return { startTime = fakeNow, duration = state.transmogCooldown, isEnabled = true }
+        return { startTime = fakeNow, duration = state.transmogCooldown,
+                 isEnabled = true, isActive = true }
     end,
 }
 
@@ -738,7 +799,9 @@ do
     state.transmogCooldown = 12
     local motivo = ns.Data.TransmogBlockedBy(71)
     check("a recarga e reportada", motivo ~= nil, true)
-    check("e diz quanto falta", motivo:find("%d") ~= nil, true)
+    -- A MENSAGEM NAO CONTA MAIS SEGUNDOS, e a troca e deliberada: contar exige `startTime` e
+    -- `duration`, que sao SECRET dentro de mitica+ -- e era essa conta que travava tudo.
+    check("e o motivo e a recarga", motivo ~= nil, true)
 
     -- E AS FORMAS QUE NAO SAO RECARGA. A Blizzard exige as TRES condicoes
     -- (`Blizzard_FrameXMLUtil/Cooldown.lua:3`), entao quem olhasse so `duration > 0` acusaria
@@ -757,6 +820,31 @@ do
     state.cooldownShape = "desligada"
     check("recarga desligada NAO e recarga", ns.Data.TransmogBlockedBy(71), nil)
     state.cooldownShape = "normal"
+
+
+    -- DENTRO DE MITICA+ OS CAMPOS DE TEMPO VEM OPACOS, e este e o teste que faltava -- o defeito
+    -- que ele cobre e o relato inteiro do usuario: "as vezes nao troca, gera erro".
+    --
+    -- `C_Spell.GetSpellCooldown` e `SecretWhenCooldownsRestricted` (`SpellDocumentation.lua:271`),
+    -- e o predicado vale para modo DESAFIO -- a chave inteira, nao so a luta. `startTime` e
+    -- `duration` nao sao `NeverSecret`; `isActive` e (`SpellSharedDocumentation.lua:23-30`).
+    --
+    -- A versao anterior comparava os dois com zero e ainda SOMAVA um ao outro, com uma guarda de
+    -- `type` que nao protegia nada: `type()` num secret devolve o TIPO REAL, entao ela passava e
+    -- a comparacao estourava. E o estrago nao era a mensagem errada -- erro de Lua ali, com a
+    -- corrente ja iniciada e nenhum prazo armado, deixava `running` preso PARA SEMPRE, e todo
+    -- clique seguinte voltava MUDO.
+    state.cooldownSecret = true
+    state.transmogCooldown = 12
+    local semEstourar, motivoSecreto = pcall(ns.Data.TransmogBlockedBy, 71)
+    check("com campos opacos NAO estoura", semEstourar, true)
+    check("e ainda assim reporta a recarga", motivoSecreto ~= nil, true)
+
+    state.transmogCooldown = 0
+    local ok2, semRecarga = pcall(ns.Data.TransmogBlockedBy, 71)
+    check("e sem recarga, com campos opacos, nao inventa", ok2 and semRecarga, nil)
+    state.cooldownSecret = false
+    state.transmogCooldown = 12
 
     LimpaPortas()
 
@@ -1048,6 +1136,98 @@ do
     state.outfit = nil
 end
 
+
+print("== a corrente nao fecha passo com evento alheio ==")
+-- Estes eventos sao GLOBAIS: disparam quando o JOGADOR mexe a mao, quando outro addon mexe, e --
+-- o caso mais comum -- quando a propria troca de spec os enfileira. Fechar um passo com o evento
+-- errado e "X esta pronto" com os talentos antigos.
+do
+    state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
+    state.pendingSet, state.pendingLoadout = nil, nil
+
+    -- TALENTOS: o evento carrega `configID`, e a Blizzard avisa por escrito que ele chega mais de
+    -- uma vez por gravacao -- o do config base da spec vem ANTES do loadout
+    -- (`Blizzard_ClassTalentsFrame.lua:407-411`). Fechavamos no primeiro.
+    ns.Data.Apply({ name = "So talento", spec = 2, talent = 11 }, function() end)
+    check("o passo de talentos esperou", ns.Data.IsApplying(), true)
+
+    fire("TRAIT_CONFIG_UPDATED", 999)          -- de outro config
+    check("evento de OUTRO config nao fecha o passo", ns.Data.IsApplying(), true)
+
+    state.activeLoadout[251] = 11
+    fire("TRAIT_CONFIG_UPDATED", state.activeConfigID)
+    check("e o do config ativo fecha", ns.Data.IsApplying(), false)
+
+    -- ITENS: o payload e `result, setID`. Trocar de spec faz o jogo equipar sozinho o conjunto
+    -- amarrado aquela spec, e o evento DESSA troca fechava o nosso passo antes do nosso entrar.
+    state.equippedSet, state.activeLoadout[251] = 1, 10
+    ns.Data.Apply({ name = "So itens", gear = 3 }, function() end)
+    check("o passo de itens esperou", ns.Data.IsApplying(), true)
+
+    fire("EQUIPMENT_SWAP_FINISHED", true, 7)   -- conjunto alheio
+    check("evento de OUTRO conjunto nao fecha o passo", ns.Data.IsApplying(), true)
+
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+    check("e o do nosso conjunto fecha", ns.Data.IsApplying(), false)
+
+    -- E UM `false` ALHEIO NAO MATA A CORRENTE. Antes ele chamava `Finish` e levava junto os
+    -- passos seguintes e as falhas ja anotadas.
+    state.equippedSet, state.activeLoadout[251] = 1, 10
+    local texto, houveErro
+    ns.Data.Apply({ name = "Itens e mais", gear = 3 },
+        function(t, isError) texto, houveErro = t, isError end)
+    fire("EQUIPMENT_SWAP_FINISHED", false, 3)
+    check("falha nos itens vira anotacao, nao fim abrupto", houveErro, true)
+    check("e a corrente chegou ao fim", ns.Data.IsApplying(), false)
+
+    -- CAST DE SPEC QUE FALHA FORA DO NOSSO PASSO nao pode matar a corrente. Era o unico ramo sem
+    -- guarda de passo: o clique do proprio jogador na janela de talentos derrubava a troca.
+    state.equippedSet, state.activeLoadout[251] = 1, 10
+    ns.Data.Apply({ name = "So itens", gear = 3 }, function() end)
+    check("corrente em curso no passo de itens", ns.Data.IsApplying(), true)
+    fire("SPECIALIZATION_CHANGE_CAST_FAILED")
+    check("cast de spec alheio NAO mata a corrente", ns.Data.IsApplying(), true)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+end
+
+print("== erro num passo nao deixa o addon mudo ==")
+-- O PIOR DEFEITO QUE ESTA CORRENTE TEVE, e ele explica o relato inteiro: um erro de Lua dentro
+-- de um passo subia pelo `RunNext` e NADA zerava `running` -- so o `Finish`. A partir dai todo
+-- clique em Carregar voltava mudo, porque `Data.Apply` recusa quando ha corrente em curso.
+do
+    state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
+
+    -- Estoura numa chamada que o passo faz SEM `pcall` -- `UseEquipmentSet` ja tem o dele, entao
+    -- sabotar ela testaria a protecao errada. `EquipmentSetContainsLockedItems` e uma das duas
+    -- chamadas nuas que a auditoria apontou (`Data.lua:514`).
+    local realLocked = C_EquipmentSet.EquipmentSetContainsLockedItems
+    C_EquipmentSet.EquipmentSetContainsLockedItems = function() error("estouro de proposito") end
+
+    local texto, houveErro
+    ns.Data.Apply({ name = "Vai estourar", gear = 3 },
+        function(t, isError) texto, houveErro = t, isError end)
+
+    check("o erro nao derruba o addon", houveErro, true)
+    check("e a corrente NAO fica presa", ns.Data.IsApplying(), false)
+
+    C_EquipmentSet.EquipmentSetContainsLockedItems = realLocked
+
+    -- E O CLIQUE SEGUINTE FUNCIONA. Era isto que o jogador via como "o botao parou".
+    state.equippedSet = 1
+    local voltou = ns.Data.Apply({ name = "Agora vai", gear = 3 }, function() end)
+    check("o clique seguinte volta a funcionar", voltou, true)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+
+    -- E RECUSAR POR JA HAVER TROCA EM CURSO agora AVISA, em vez de voltar em silencio.
+    state.equippedSet, state.activeLoadout[251] = 1, 10
+    ns.Data.Apply({ name = "Primeira", gear = 3 }, function() end)
+    local aviso
+    ns.Data.Apply({ name = "Segunda", gear = 4 }, function(t, isError)
+        if isError then aviso = t end
+    end)
+    check("o segundo clique e avisado, nao ignorado", aviso ~= nil, true)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+end
 
 print("== o diario responde POR QUE nao trocou ==")
 -- Pergunta literal do usuario, depois de a troca falhar pela quarta vez: "tu ta salvando logs

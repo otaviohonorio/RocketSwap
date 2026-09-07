@@ -110,6 +110,11 @@ function handlers:ADDON_LOADED(addon)
         end
     end
     ns.db = RocketSwapDB
+
+    -- O CABECALHO DO DIARIO: versao, idioma e quando comecou. Sem isto o arquivo chegava sem
+    -- dizer de que build ele e -- e a primeira coisa que se pergunta ao ler um log e "de quando
+    -- e isso?". `Log.Init` existia e nao tinha chamador.
+    if ns.Log then ns.Log.Init() end
 end
 
 function handlers:PLAYER_LOGIN()

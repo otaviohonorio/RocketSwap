@@ -25,17 +25,46 @@
 -- O passo 3 vem por último porque, ao trocar de spec, **o jogo equipa sozinho** o conjunto
 -- amarrado àquela spec. Equipar antes seria sobrescrito pelo próprio jogo.
 --
--- E TUDO ISSO FALHA EM SILÊNCIO. `UseEquipmentSet` não devolve erro. Por isso cada passo
--- espera o evento de confirmação e tem prazo — sem isso o addon diria "pronto" sem ter
--- feito nada, que é pior do que não ter addon.
+-- CORREÇÃO DE UMA CRENÇA MINHA QUE VIROU DEFEITO. Este cabeçalho dizia, por escrito, que
+-- "`UseEquipmentSet` não devolve erro" — e mais abaixo o ouvinte repetia que "a função em si não
+-- devolve nada". **As duas frases eram falsas no 12.1.0**, e enquanto elas estivessem aqui a
+-- próxima rodada refaria o mesmo raciocínio:
+--
+--   `C_EquipmentSet.UseEquipmentSet`         -> `setWasEquipped` (bool)
+--                                              `EquipmentManagerDocumentation.lua:287-299`
+--   `C_SpecializationInfo.SetSpecialization` -> `success` (bool)
+--                                              `SpecializationInfoDocumentation.lua:368-380`
+--
+-- A Blizzard ramifica nos dois (`Blizzard_ClassSpecializationsFrame.lua:457-465`). Nós
+-- guardávamos só o `ok` do `pcall`, que responde "estourou?" e não "o jogo aceitou?" — então uma
+-- recusa imediata virava doze segundos de espera e depois "o jogo não confirmou a tempo", com a
+-- corrente seguindo para o passo seguinte no estado errado.
+--
+-- Cada passo espera o evento de confirmação E olha o retorno. Sem os dois o addon diz "pronto"
+-- sem ter feito nada, que é pior do que não ter addon.
 local ADDON, ns = ...
 local L = ns.L
 
 local Data = {}
 ns.Data = Data
 
--- Prazo de cada passo. Trocar de spec é o mais lento: tem cast e o servidor responde.
-local STEP_TIMEOUT = 12
+-- PRAZO POR PASSO, e generoso. O usuário foi explícito: *"não tem problema demorar um pouco"*.
+--
+-- Doze segundos para tudo era um número meu, e a Blizzard não impõe prazo nenhum: o frame dela
+-- segura o estado "ativando" até o evento chegar ou o cast falhar
+-- (`Blizzard_ClassSpecializationsFrame.lua:174-190,209-214`). Trocar de spec tem cast e ida e
+-- volta de servidor, e ainda dispara a troca automática de itens amarrada àquela spec — é o
+-- passo que mais tem como engasgar, e era o que mais estourava.
+--
+-- A aparência é o oposto: ela já foi pedida no clique, antes da corrente começar. Se não chegou
+-- em dois segundos, não vai chegar — esperar doze só atrasa a mensagem.
+local STEP_TIMEOUT = {
+    spec     = 45,
+    talent   = 30,
+    gear     = 20,
+    transmog = 2,
+}
+local STEP_TIMEOUT_DEFAULT = 20
 
 -- A MAGIA QUE A TROCA MANUAL DE APARENCIA GASTA, e a razao de ela ter uma.
 --
@@ -71,29 +100,34 @@ end
 function Data.TransmogBlockedBy(outfitID)
     if not C_TransmogOutfitInfo then return nil end
 
-    -- RECARGA. `GetSpellCooldown` devolve `{ startTime, duration, isEnabled, modRate }`, e a
-    -- condicao de "esta em recarga" NAO e so `duration > 0`: e a mesma que a Blizzard usa no
-    -- proprio `CooldownFrame_Set` (`Blizzard_FrameXMLUtil/Cooldown.lua:3`), que exige os TRES --
+    -- RECARGA — e aqui morava o pior defeito desta corrente, escrito por mim.
     --
-    --     enable and enable ~= 0 and start > 0 and duration > 0
+    -- A versao anterior lia `cd.startTime` e `cd.duration`, comparava os dois com zero e ainda
+    -- somava um ao outro. Os dois sao **SECRET dentro de mitica+**:
     --
-    -- Ela guarda contra `duration > 0` com `start == 0`, entao esse caso acontece; espelhar o
-    -- predicado dela e mais barato que descobrir quando.
+    --   * `C_Spell.GetSpellCooldown` e `SecretWhenCooldownsRestricted`
+    --     (`SpellDocumentation.lua:271`), e esse predicado vale para combate, encontro, **modo
+    --     desafio** e partida de PvP -- ou seja, a chave inteira, nao so a luta;
+    --   * em `SpellCooldownInfo`, `isEnabled`, `isActive` e `isOnGCD` sao `NeverSecret`;
+    --     **`startTime` e `duration` NAO SAO** (`SpellSharedDocumentation.lua:23-30`).
     --
-    -- `C_Spell and C_Spell.GetSpellCooldown` ANTES do `pcall`: o `pcall` protege a CHAMADA, nao
-    -- a busca do argumento. `pcall(C_Spell.GetSpellCooldown, ...)` com `C_Spell` nulo estoura na
-    -- indexacao, fora da protecao. Pego pelo harness.
+    -- E a guarda de `type` nao protegia nada: `type()` num secret devolve o TIPO REAL, entao as
+    -- duas passavam e a comparacao estourava. O `pcall` acima cobre a CHAMADA, nao as contas
+    -- feitas com o que ela devolveu.
+    --
+    -- O ESTRAGO ERA O RELATO INTEIRO. Erro de Lua aqui, com `running` ja definido e nenhum prazo
+    -- armado ainda, deixava a corrente presa para sempre -- e todo clique seguinte voltava MUDO
+    -- em `Data.Apply`. "As vezes nao troca, gera erro", numa linha so.
+    --
+    -- `isActive` responde a mesma pergunta sem ler campo secreto nenhum: *"False if cooldown is
+    -- not active (ex: not enabled, or startTime or duration are 0)"* -- as tres condicoes do
+    -- `CooldownFrame_Set` de uma vez. O preco e nao dizer quantos segundos faltam, e ele vale:
+    -- contar segundos exige os dois campos proibidos.
     local getCD = C_Spell and C_Spell.GetSpellCooldown
     local ok, cd = false, nil
     if getCD then ok, cd = pcall(getCD, TransmogSpellID()) end
-    if ok and type(cd) == "table"
-        and cd.isEnabled and cd.isEnabled ~= 0
-        and type(cd.duration) == "number" and cd.duration > 0
-        and type(cd.startTime) == "number" and cd.startTime > 0 then
-        local resta = (cd.startTime + cd.duration) - GetTime()
-        if resta > 0 then
-            return format(L["changing appearance is on cooldown (%d s left)."], resta + 0.5)
-        end
+    if ok and type(cd) == "table" and cd.isActive == true then
+        return L["changing appearance is on cooldown."]
     end
 
     -- EVENTO DE ESTILO: durante ele a UI desabilita todo conjunto que nao seja do evento.
@@ -366,9 +400,11 @@ local function Arm()
     -- deixaria o jogador sem nada em vez de sem uma parte.
     -- O NOME DO PASSO É CAPTURADO AGORA, e não lido dentro do prazo: quando ele vencer, `running.at`
     -- já pode ter andado. Ler lá dentro nomearia o passo errado — que é pior que não nomear.
-    local qual = StepName(running.steps[running.at])
+    local passo = running.steps[running.at]
+    local qual = StepName(passo)
+    local prazo = STEP_TIMEOUT[passo] or STEP_TIMEOUT_DEFAULT
 
-    running.timer = C_Timer.NewTimer(STEP_TIMEOUT, function()
+    running.timer = C_Timer.NewTimer(prazo, function()
         if not running then return end
         running.failures = running.failures or {}
         running.failures[#running.failures + 1] =
@@ -388,17 +424,27 @@ function Steps.spec(preset)
 
     -- `C_SpecializationInfo.SetSpecialization` é o caminho atual; a global antiga fica como
     -- reserva. Os dois recebem o ÍNDICE da spec, não o id.
-    local ok
+    -- O RETORNO IMPORTA. `SetSpecialization` devolve `success`
+    -- (`SpecializationInfoDocumentation.lua:368-380`), e a propria Blizzard ramifica nele
+    -- (`Blizzard_ClassSpecializationsFrame.lua:457-465`). Guardar so o `ok` do `pcall` capturava
+    -- apenas "estourou?", entao uma recusa imediata do jogo virava doze segundos de
+    -- "Carregando..." seguidos de "o jogo nao confirmou a tempo" -- e a corrente seguia para os
+    -- talentos com a spec ERRADA.
+    local ok, aceito
     if C_SpecializationInfo and C_SpecializationInfo.SetSpecialization then
-        ok = pcall(C_SpecializationInfo.SetSpecialization, wanted)
-        if ns.Log then ns.Log.Call("spec", "SetSpecialization(" .. tostring(wanted) .. ")", ok) end
+        ok, aceito = pcall(C_SpecializationInfo.SetSpecialization, wanted)
+        if ns.Log then
+            ns.Log.Call("spec", "SetSpecialization(" .. tostring(wanted) .. ")", ok, aceito)
+        end
     elseif SetSpecialization then
-        ok = pcall(SetSpecialization, wanted)
-        if ns.Log then ns.Log.Call("spec", "SetSpecialization global", ok) end
+        ok, aceito = pcall(SetSpecialization, wanted)
+        if ns.Log then ns.Log.Call("spec", "SetSpecialization global", ok, aceito) end
     elseif ns.Log then
         ns.Log.Call("spec", "nenhuma funcao de troca de spec existe")
     end
-    if not ok then return "fail", L["the specialization change failed."] end
+    if not ok or aceito == false then
+        return "fail", L["the specialization change failed."]
+    end
 
     Arm()
     return "wait"
@@ -455,9 +501,15 @@ function Steps.talent(preset)
         pcall(C_ClassTalents.UpdateLastSelectedSavedConfigID, spec.id, preset.talent)
     end
 
+    -- `Ready` NAO E "ja aplicado", e tratar como tal era mentira confortavel. `NoChangesNecessary`
+    -- diz que nao ha o que fazer; `Ready` diz que a configuracao foi PREPARADA e espera commit.
+    -- Somar os dois num `skip` fazia o addon anunciar "pronto" com os talentos antigos.
     local E = Enum.LoadConfigResult
-    if result == (E and E.NoChangesNecessary) or result == (E and E.Ready) then
-        return "skip"       -- já aplicado; segue direto para o próximo passo
+    if result == (E and E.NoChangesNecessary) then
+        return "skip"       -- nada a fazer; segue direto para o proximo passo
+    end
+    if result == (E and E.Ready) then
+        return "fail", L["the talents were staged but not applied; open the talent window and apply."]
     end
     if result == (E and E.Error) then
         return "fail", TalentError(changeError)
@@ -576,8 +628,21 @@ RunNext = function()
         return
     end
 
-    local outcome, message = Steps[name](running.preset)
-    if ns.Log then ns.Log.Step(name, outcome or "wait", message) end
+    -- `pcall` NO PASSO, e a razão é o pior defeito que esta corrente já teve: um erro de Lua
+    -- dentro de um passo sobe pelo `RunNext`, e **nada zera `running`** — só o `Finish`. A partir
+    -- daí todo clique em Carregar voltava MUDO, porque `Data.Apply` recusa quando há corrente em
+    -- curso. Erro vermelho uma vez, e o botão morto até `/reload`.
+    --
+    -- Com o `pcall`, o erro vira uma falha anotada como qualquer outra: a corrente segue, o
+    -- diário registra a mensagem de Lua, e o addon continua vivo.
+    local okStep, outcome, message = pcall(Steps[name], running.preset)
+    if not okStep then
+        if ns.Log then ns.Log.Step(name, "erro de lua", tostring(outcome)) end
+        message = L["an internal error interrupted this step."]
+        outcome = "fail"
+    elseif ns.Log then
+        ns.Log.Step(name, outcome or "wait", message)
+    end
 
     if outcome == "skip" then
         RunNext()
@@ -612,7 +677,14 @@ function Data.Apply(preset, report, byClick)
         return false
     end
 
-    if running then return false end
+    -- RECUSAR EM SILÊNCIO É O QUE FAZIA O BOTÃO PARECER QUEBRADO. Se ainda há corrente em curso,
+    -- dizer isso — e registrar, porque o caso interessante é justamente a corrente que ficou
+    -- presa e nunca terminou.
+    if running then
+        if ns.Log then ns.Log.Add("recusado", { motivo = "ja ha uma troca em curso" }) end
+        if report then report(L["another swap is still running."], true) end
+        return false
+    end
 
     if Data.IsLoaded(preset) then
         if report then
@@ -656,7 +728,7 @@ function Data.EnsureListener()
     listener:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
     listener:RegisterEvent("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
 
-    listener:SetScript("OnEvent", function(_, event, arg1)
+    listener:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- REGISTRA ANTES DE DECIDIR, inclusive o evento que chega sem corrente em curso. É o que
         -- responde a hipótese que eu não tinha como testar: estes eventos são GLOBAIS e disparam
         -- quando o JOGADOR mexe à mão ou quando outro addon mexe. Se o log mostrar um evento
@@ -667,14 +739,47 @@ function Data.EnsureListener()
         if not running then return end
         local step = running.steps[running.at]
 
-        if event == "SPECIALIZATION_CHANGE_CAST_FAILED" then
-            Finish(false, L["the specialization change failed."])
+        -- TODOS OS RAMOS CONFEREM O PASSO EM CURSO, e este não conferia. Qualquer cast de troca
+        -- de spec que falhasse — o clique do próprio jogador na janela de talentos, outro addon —
+        -- matava a corrente de onde ela estivesse. E `Finish` virou anotação: falhar a spec não
+        -- deve impedir os itens de entrar.
+        if event == "SPECIALIZATION_CHANGE_CAST_FAILED" and step == "spec" then
+            running.failures = running.failures or {}
+            running.failures[#running.failures + 1] = L["the specialization change failed."]
+            RunNext()
 
         elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" and step == "spec" then
             RunNext()
 
         elseif event == "TRAIT_CONFIG_UPDATED" and step == "talent" then
-            RunNext()
+            -- CONFERE DE QUEM É O EVENTO. Ele carrega `configID`
+            -- (`SharedTraitsDocumentation.lua:810-815`) e a Blizzard avisa por escrito que ele
+            -- chega mais de uma vez por gravação — *"Saving a change to a loadout may lead to
+            -- Updated event both for the base spec config id and then the selected loadout config
+            -- id"* (`Blizzard_ClassTalentsFrame.lua:407-411`) — e filtra.
+            --
+            -- Fechávamos no PRIMEIRO, que é o do config base da spec, antes de o loadout entrar.
+            -- Resultado: "X está pronto" com os talentos antigos. E a troca de spec, que roda
+            -- logo antes, enfileira esses mesmos eventos — por isso acontecia em todo conjunto
+            -- que mexe em spec e talentos, que é o caso comum.
+            -- ACEITA OS DOIS IDS QUE PODEM SER NOSSOS, e recusa o resto.
+            --
+            -- A Blizzard diz que a gravacao gera evento "both for the base spec config id **and
+            -- then** the selected loadout config id" -- ou seja, dois ids, e a fonte nao diz qual
+            -- deles marca o fim. Apostar em um seria trocar um palpite por outro; aceitar os dois
+            -- ja resolve o defeito real, que era fechar com o evento de um config QUALQUER.
+            --
+            -- Qual deles o jogo manda de fato, o diario responde: `Log.Event` grava o `arg1` de
+            -- cada evento. Com uma troca real na mao da para fechar a questao.
+            local temAtivo, ativo = false, nil
+            if C_ClassTalents and C_ClassTalents.GetActiveConfigID then
+                temAtivo, ativo = pcall(C_ClassTalents.GetActiveConfigID)
+            end
+
+            local nosso = arg1 == nil                       -- sem payload: nao da para recusar
+                or (temAtivo and ativo ~= nil and arg1 == ativo)
+                or arg1 == running.preset.talent
+            if nosso then RunNext() end
 
         elseif event == "TRANSMOG_DISPLAYED_OUTFIT_CHANGED" and step == "transmog" then
             -- O EVENTO NÃO DIZ QUAL conjunto entrou — não tem carga útil
@@ -693,13 +798,21 @@ function Data.EnsureListener()
             RunNext()
 
         elseif event == "EQUIPMENT_SWAP_FINISHED" and step == "gear" then
-            -- 1º argumento é `result` (bool). Falso aqui é a única pista de que a troca de
-            -- itens não deu certo — a função em si não devolve nada.
-            if arg1 == false then
-                Finish(false, L["the gear set could not be equipped."])
-            else
-                RunNext()
+            -- O PAYLOAD É `result, setID` (`EquipmentManagerDocumentation.lua:310-316`), e nós
+            -- líamos só o primeiro. Trocar de spec faz o jogo equipar sozinho o conjunto amarrado
+            -- àquela spec, e o evento DESSA troca fechava o nosso passo antes do nosso conjunto
+            -- entrar.
+            if arg2 ~= nil and running.preset.gear ~= nil and arg2 ~= running.preset.gear then
+                return      -- é de outro conjunto; o nosso ainda vem
             end
+
+            -- E `false` VIROU ANOTAÇÃO, não fim de corrente: um `false` de uma troca alheia
+            -- matava a nossa e jogava fora as falhas já anotadas.
+            if arg1 == false then
+                running.failures = running.failures or {}
+                running.failures[#running.failures + 1] = L["the gear set could not be equipped."]
+            end
+            RunNext()
         end
     end)
 
