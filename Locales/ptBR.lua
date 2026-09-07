@@ -161,3 +161,12 @@ L["the game kept refusing to change specialization."] =
     "o jogo continuou recusando a troca de especialização."
 L["click Load to switch to %s completely."] =
     "clique em Carregar para trocar para %s por completo."
+
+-- O progresso da troca: a janela mostrando que sao ETAPAS (0.18.0)
+L["Switching to %s"] = "Trocando para %s"
+-- "pulado" nao e falha, e o rotulo diz por que -- senao o passo pulado fica igual ao que ainda
+-- nao comecou, e a pessoa termina sem saber se a aparencia foi aplicada ou esquecida.
+L["%s — nothing to change"] = "%s — nada a mudar"
+-- O jogo recusa a troca de spec por alguns segundos e o addon insiste sozinho. O numero da
+-- tentativa e o que separa "esperando de proposito" de "travado".
+L["attempt %d of %d"] = "tentativa %d de %d"
