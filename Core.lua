@@ -140,6 +140,28 @@ end
 function handlers:TRAIT_CONFIG_UPDATED() ns.UI.Refresh() end
 function handlers:ACTIVE_PLAYER_SPECIALIZATION_CHANGED() ns.UI.Refresh() end
 
+-- OS EVENTOS QUE MUDAM "DA PARA TROCAR DE SPEC AGORA?".
+--
+-- O botao Carregar fica apagado enquanto o jogo nao deixa, e apagado sem reavaliar seria pior que
+-- nao apagar: o jogador ficaria com um botao morto sem saber quando volta. Estes tres sao os que
+-- a propria janela de talentos escuta para reabilitar o botao dela
+-- (`Blizzard_ClassSpecializationsFrame.lua:69-73`), mais o fim de combate, que ja esta acima.
+--
+-- `PLAYER_SPECIALIZATION_CHANGED` alem do `ACTIVE_...`: o primeiro cobre o processo INTEIRO da
+-- troca (a Blizzard registra os dois, e o comentario dela diz que este "needs to always be
+-- registered so that the entire spec change process is always captured").
+function handlers:PLAYER_SPECIALIZATION_CHANGED() ns.UI.Refresh() end
+
+-- Andar cancela o cast de troca de spec, e `SPECIALIZATION_CHANGE_CAST_FAILED` nao cobre isso --
+-- e por isso que a janela nativa escuta estes dois.
+function handlers:UNIT_SPELLCAST_FAILED() ns.UI.Refresh() end
+function handlers:UNIT_SPELLCAST_INTERRUPTED() ns.UI.Refresh() end
+
+-- E o fim do prazo/recarga nao dispara evento proprio: `SPELL_UPDATE_COOLDOWN` e o que avisa que
+-- alguma recarga andou, e e o gancho que o medidor nativo usa para redesenhar o cooldown do botao
+-- de conjunto de aparencia (`Blizzard_TransmogTemplates.lua:57-61`).
+function handlers:SPELL_UPDATE_COOLDOWN() ns.UI.Refresh() end
+
 local frame = CreateFrame("Frame", ADDON .. "EventFrame")
 for event in pairs(handlers) do
     frame:RegisterEvent(event)

@@ -161,6 +161,17 @@ local function BuildRow(row)
         UI.Load(self:GetParent().preset)
     end)
 
+    -- BOTÃO APAGADO TEM QUE DIZER POR QUÊ, senão ele é só um botão quebrado. O motivo vem do
+    -- jogo, já traduzido (`CanPlayerUseTalentSpecUI` devolve `canUse, failureReason`).
+    row.load:SetScript("OnEnter", function(self)
+        if not self.blockedReason then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Load"], 1, 1, 1)
+        GameTooltip:AddLine(self.blockedReason, 1, 0.5, 0.4, true)
+        GameTooltip:Show()
+    end)
+    row.load:SetScript("OnLeave", GameTooltip_Hide)
+
     row.check = row:CreateTexture(nil, "OVERLAY")
     row.check:SetSize(16, 16)
     row.check:SetPoint("RIGHT", -8, 0)
@@ -232,6 +243,25 @@ local function FillRow(row, preset)
     local loaded = ns.Data.IsLoaded(preset)
     row.check:SetShown(loaded)
     row.load:SetShown(not loaded)
+
+    -- BOTÃO DESABILITADO QUANDO O JOGO NÃO DEIXA, e a ideia é do usuário: *"se houver isso, tem
+    -- que desabilitar os botões de carregar preset até que possa ser feito"*. Ele está certo —
+    -- botão que aceita clique e depois responde "não deu" é pior que botão apagado.
+    --
+    -- SÓ VALE PARA CONJUNTO QUE TROCA DE SPEC. Um conjunto que só mexe em itens não tem por que
+    -- ficar bloqueado por uma restrição de especialização, e desabilitar todos seria punir o
+    -- inocente — a regra é a MESMA que o passo aplica, e por isso as duas não podem divergir.
+    local precisaTrocarSpec = preset.spec ~= nil
+        and preset.spec ~= ns.Data.GetCurrentSpecIndex()
+
+    if precisaTrocarSpec then
+        local pode, motivo = ns.Data.CanChangeSpec()
+        row.load:SetEnabled(pode)
+        row.load.blockedReason = (not pode) and motivo or nil
+    else
+        row.load:SetEnabled(true)
+        row.load.blockedReason = nil
+    end
 
     row.selected:SetShown(selection ~= nil and selection:IsElementDataSelected(preset))
 end

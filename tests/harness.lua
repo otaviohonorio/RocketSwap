@@ -57,6 +57,15 @@ local function widget(kind)
     -- `ChangeDisplayedOutfit`, `Enum.TransmogSituationTrigger` e o disparo do evento de troca).
     -- Stub que nao sabe representar uma parte da API testa a si mesmo naquela parte.
     self.__attrs = {}
+    -- HABILITADO/DESABILITADO de verdade. Sem isto o `__index` generico respondia `SetEnabled`
+    -- com um no-op, e o botao apagado -- que E a resposta ao pedido do usuario -- ficava
+    -- invisivel ao teste.
+    self.__enabled = true
+    function self.SetEnabled(_, v) self.__enabled = v and true or false end
+    function self.IsEnabled() return self.__enabled end
+    function self.Enable() self.__enabled = true end
+    function self.Disable() self.__enabled = false end
+
     function self.SetAttribute(_, key, value) self.__attrs[key] = value end
     function self.GetAttribute(_, key) return self.__attrs[key] end
     function self.RegisterForClicks(_, ...) self.__clicks = { ... } end
@@ -330,7 +339,17 @@ local SPECS = {
     { index = 3, id = 252, name = "Profano", icon = 3 },
 }
 
+-- Pode trocar de spec agora? E o que a janela de talentos do jogo pergunta para decidir se o
+-- botao "Ativar" fica clicavel (`Blizzard_ClassSpecializationsFrame.lua:139,149`), e devolve
+-- `canUse, failureReason` -- com o motivo ja traduzido pelo cliente.
+state.canChangeSpec = true
+state.cannotChangeReason = "Voce nao pode trocar de especializacao agora."
+
 C_SpecializationInfo = {
+    CanPlayerUseTalentSpecUI = function()
+        if state.canChangeSpec then return true, "" end
+        return false, state.cannotChangeReason
+    end,
     GetNumSpecializations = function() return #SPECS end,
     GetSpecialization = function() return state.specIndex end,
     GetSpecializationInfo = function(i)
@@ -1315,6 +1334,67 @@ do
     end)
     check("o segundo clique e avisado, nao ignorado", aviso ~= nil, true)
     fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+end
+
+print("== botao apagado quando o jogo nao deixa trocar de spec ==")
+-- Ideia do usuario, depois de receber a mensagem de recusa: "se houver isso, tem que desabilitar
+-- os botoes de carregar preset ate que possa ser feito". Ele esta certo -- botao que aceita
+-- clique e depois responde "nao deu" e pior que botao apagado.
+--
+-- A condicao e a MESMA que a janela de talentos do jogo usa
+-- (`C_SpecializationInfo.CanPlayerUseTalentSpecUI`), e ela devolve o motivo em texto, ja
+-- traduzido pelo cliente. Antes o addon descobria a recusa CHAMANDO e levando nao.
+do
+    if not ns.UI.IsShown() then ns.UI.Toggle() end
+    ns.db.presets = {}
+    ns.UI.Refresh()
+
+    ns.UI.New()
+    local trocaSpec = ns.UI.Selected()
+    trocaSpec.name, trocaSpec.spec, trocaSpec.gear = "Tank", 1, 3
+
+    ns.UI.New()
+    local soItens = ns.UI.Selected()
+    soItens.name, soItens.spec, soItens.gear = "So itens", nil, 4
+
+    state.specIndex = 2                  -- o conjunto Tank precisa TROCAR de spec
+    state.canChangeSpec = false
+    ns.UI.Refresh()
+
+    local function BotaoDe(i)
+        local list = ns.UI.DebugList and ns.UI.DebugList()
+        return list and list.__rows and list.__rows[i] and list.__rows[i].load
+    end
+
+    check("o botao do conjunto que troca spec fica apagado",
+        BotaoDe(1).__enabled, false)
+    check("e diz por que, com o texto do jogo",
+        BotaoDe(1).blockedReason, state.cannotChangeReason)
+
+    -- SO O QUE DEPENDE DA SPEC. Apagar todos seria punir o inocente: um conjunto que so mexe em
+    -- itens nao tem por que ficar bloqueado por uma restricao de especializacao.
+    check("mas o que nao troca spec segue clicavel", BotaoDe(2).__enabled, true)
+    check("e sem motivo pendurado", BotaoDe(2).blockedReason, nil)
+
+    -- E VOLTA quando o jogo deixa -- apagado sem reavaliar seria pior que nao apagar.
+    state.canChangeSpec = true
+    ns.UI.Refresh()
+    check("liberou, o botao volta", BotaoDe(1).__enabled, true)
+    check("e o motivo some", BotaoDe(1).blockedReason, nil)
+
+    -- E O PASSO USA A MESMA REGRA. Se a interface e o passo divergirem, o botao fica clicavel e a
+    -- troca falha assim mesmo -- que e exatamente o que o usuario viveu.
+    state.canChangeSpec = false
+    state.pendingSpec = nil          -- limpa a sonda: interessa se ESTA corrente mexeu
+    local texto, houveErro
+    ns.Data.Apply({ name = "Tank", spec = 1, gear = 3 },
+        function(t, isError) texto, houveErro = t, isError end)
+    check("o passo tambem recusa antes de chamar", houveErro, true)
+    check("com o motivo do jogo, nao com a nossa frase", texto, state.cannotChangeReason)
+    check("e sem ter mexido em nada", state.pendingSpec, nil)
+
+    state.canChangeSpec = true
+    if ns.UI.IsShown() then ns.UI.Toggle() end
 end
 
 print("== a troca de itens confirma pelo EVENTO, nao pelo estado ==")
