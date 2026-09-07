@@ -1147,11 +1147,11 @@ function Data.GetProgress()
         preset = src.preset,
         live = running ~= nil,
         startedAt = src.startedAt or 0,
-        -- Quantas vezes o passo de especialização já insistiu, e quantas ele ainda pode. O teto
-        -- vai junto porque é ele que separa "esperando de propósito" de "travado": "tentativa 2"
-        -- sozinho não diz se ainda há esperança.
+        -- Quantas vezes o passo de especialização já insistiu. **A janela não desenha isto** —
+        -- o usuário pediu para tirar o contador da tela, e ele está certo: é mecânica interna,
+        -- e o jogador não decide nada com ela. Fica aqui porque é o diário e o `/rs log` que a
+        -- leem, e porque tirá-la do `info` obrigaria a corrente a expor `running` para isso.
         tries = src.specTries or src.tries or 0,
-        maxTries = SPEC_RETRY_MAX,
     }
 end
 

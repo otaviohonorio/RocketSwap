@@ -50,10 +50,10 @@ SABOTAGENS = [
      u'if true then',
      "tres passos, nao quatro"),
 
-    ("o teto de tentativas nao chega na janela", "Data.lua",
-     u'maxTries = SPEC_RETRY_MAX,',
-     u'',
-     "o teto chega na janela"),
+    ("o contador de tentativa volta para a tela", "UI.lua",
+     u'        panel.clock:SetText(secs .. "s")',
+     u'        panel.clock:SetText("tentativa " .. ((info.tries or 0) + 1) .. ", " .. secs .. "s")',
+     "e ainda assim o relogio so conta segundos"),
 
     ("linhas grudadas (ritmo de 18)", "UI.lua",
      u'local PROGRESS_ROW = 22 ',
@@ -91,8 +91,8 @@ SABOTAGENS = [
      "pulsa exatamente um passo"),
 
     ("o relogio congela", "UI.lua",
-     u'            panel.clock:SetText(secs .. "s")',
-     u'            panel.clock:SetText("")',
+     u'        panel.clock:SetText(secs .. "s")',
+     u'        panel.clock:SetText("")',
      "o relogio anda"),
 
     ("a janela nao tem quadro", "UI.lua",

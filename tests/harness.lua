@@ -2415,15 +2415,16 @@ do
     ns.Data.Apply({ name = "Recusado", spec = 1 }, function(t) ultimo = t end)
     check("a spec esta insistindo", ns.Data.GetProgress()[1].state, "doing")
 
-    -- O TETO VAI JUNTO DO CONTADOR. "tentativa 2" sozinho nao diz se ainda ha esperanca -- e a
-    -- espera de proposito passa a parecer travamento, que e exatamente o que este painel existe
-    -- para desfazer.
+    -- INSISTIR NAO MUDA O QUE A TELA DIZ. Uma versao anterior trocava o relogio por
+    -- "tentativa 2 de 8" aqui, e o usuario pediu para tirar: e mecanica interna, o jogador nao
+    -- decide nada com ela, e um contador subindo sugere problema onde ha so espera normal.
+    -- O relogio continua contando segundos, que e a unica coisa que ele precisa dizer.
     RunTimers(5)                       -- uma reinsistencia, e o jogo recusa de novo
     ns.UI.RefreshProgress()
     local _, info = ns.Data.GetProgress()
-    check("o teto chega na janela", info.maxTries, 8)
-    check("e o relogio conta 'de quantas'",
-        painel.clock:GetText(), format(ns.L["attempt %d of %d"], info.tries + 1, info.maxTries))
+    check("o addon esta mesmo insistindo", info.tries > 0, true)
+    check("e ainda assim o relogio so conta segundos",
+        painel.clock:GetText():match("^%d+s$") ~= nil, true)
 
     -- SO AS REINSISTENCIAS (4 s), nunca o prazo do passo (45 s). E a diferenca entre medir a
     -- DESISTENCIA -- insistiu ate o teto e parou -- e medir o prazo vencido, que e outro caminho

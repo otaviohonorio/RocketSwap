@@ -601,18 +601,21 @@ function UI.RefreshProgress()
     panel.title:SetText(format(L["Switching to %s"],
         info.preset and info.preset.name or "?"))
 
-    -- O relógio PARA quando a troca para. Deixá-lo correndo durante a pausa faria o número
-    -- contar o tempo de leitura como se fosse tempo de troca.
+    -- SÓ OS SEGUNDOS, e nada sobre tentativas.
+    --
+    -- Uma versão anterior trocava o relógio por "tentativa 2 de 8" enquanto o jogo recusava a
+    -- troca de spec. O usuário pediu para tirar, e ele tem razão: o número de tentativas é
+    -- mecânica interna do addon — o jogador não decide nada com ele, não pode acelerar nem
+    -- interromper, e ver um contador subindo sugere um problema onde há só espera normal. O que
+    -- ele precisa saber é que **algo está acontecendo**, e disso o relógio já dá conta sozinho.
+    --
+    -- A insistência continua registrada onde ela serve: no diário (`/rs log`).
+    --
+    -- E ele PARA quando a troca para — deixá-lo correndo durante a pausa faria o número contar o
+    -- tempo de leitura como se fosse tempo de troca.
     if info.live then
         local secs = math.max(0, math.floor(GetTime() - (info.startedAt or 0)))
-        -- COM O TETO JUNTO. "tentativa 2" sozinho nao diz se ainda ha esperanca; "tentativa 2
-        -- de 8" e o que separa "esperando de proposito" de "travado".
-        if (info.tries or 0) > 0 then
-            panel.clock:SetText(format(L["attempt %d of %d"],
-                info.tries + 1, info.maxTries or info.tries + 1))
-        else
-            panel.clock:SetText(secs .. "s")
-        end
+        panel.clock:SetText(secs .. "s")
     end
 
     for i, row in ipairs(panel.rows) do
