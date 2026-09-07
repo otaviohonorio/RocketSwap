@@ -345,6 +345,16 @@ local SPECS = {
 state.canChangeSpec = true
 state.cannotChangeReason = "Voce nao pode trocar de especializacao agora."
 
+-- A MAGIA DE ATIVAR ESPECIALIZACAO. Nao ha constante para ela no cliente: ha o predicado
+-- `IsSpecializationActivateSpell`, e e assim que o addon aprende o id -- perguntando ao jogo
+-- quando um cast do jogador termina.
+state.specSpellID = 200749
+state.specSpellOnCooldown = false
+
+function IsSpecializationActivateSpell(spellID)
+    return spellID == state.specSpellID
+end
+
 C_SpecializationInfo = {
     CanPlayerUseTalentSpecUI = function()
         if state.canChangeSpec then return true, "" end
@@ -580,7 +590,14 @@ function type(v)
 end
 
 C_Spell = {
-    GetSpellCooldown = function()
+    GetSpellCooldown = function(spellID)
+        -- A MAGIA DE SPEC tem recarga propria, e e ela que explica o relato: o jogo recusa a troca
+        -- por alguns segundos depois de uma que deu certo, e `CanPlayerUseTalentSpecUI` responde
+        -- SIM o tempo todo -- o diario de 02:28:18 (sucesso) e 02:28:26 (recusa) provou.
+        if spellID == state.specSpellID then
+            return { startTime = 0, duration = 0, isEnabled = true,
+                     isActive = state.specSpellOnCooldown }
+        end
         local ativo = state.transmogCooldown > 0 and state.cooldownShape == "normal"
 
         -- DENTRO DE MITICA+ os dois campos de tempo vem opacos, e so eles. `isActive` continua
@@ -1334,6 +1351,64 @@ do
     end)
     check("o segundo clique e avisado, nao ignorado", aviso ~= nil, true)
     fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+end
+
+print("== a recarga da magia de trocar de spec ==")
+-- O DIARIO DO USUARIO MATOU A MINHA HIPOTESE ANTERIOR. Eu tinha usado
+-- `C_SpecializationInfo.CanPlayerUseTalentSpecUI()`, que e o que a janela de talentos do jogo usa
+-- para habilitar o botao "Ativar". Mas os numeros mostram que ela nao cobre este caso:
+--
+--   02:20:12  SetSpecialization(2) -> true    (sucesso)
+--   02:20:22  SetSpecialization(1) -> false   (10s depois: recusado)
+--   02:28:18  SetSpecialization(2) -> true    (sucesso)
+--   02:28:26  SetSpecialization(1) -> false   ( 8s depois: recusado)
+--
+-- E o diario de 02:28:26 nao tem linha de bloqueio antes da chamada -- ou seja,
+-- `CanPlayerUseTalentSpecUI` respondeu SIM e o jogo recusou assim mesmo. Aquela pergunta e sobre a
+-- INTERFACE estar utilizavel, nao sobre a troca estar disponivel.
+--
+-- Quem responde e a RECARGA DA MAGIA de ativar especializacao. Nao ha constante para o id dela no
+-- cliente, entao o addon o aprende com o jogo: `IsSpecializationActivateSpell` e o predicado que a
+-- propria janela de talentos usa para reconhecer o cast dela.
+do
+    RocketSwapLogDB = RocketSwapLogDB or {}
+    RocketSwapLogDB.specSpellID = nil
+    state.canChangeSpec = true
+    state.specSpellOnCooldown = true
+
+    -- ANTES DE APRENDER o id nao da para consultar a recarga, e o addon nao inventa: segue
+    -- deixando tentar, como fazia.
+    check("sem conhecer a magia, nao bloqueia", ns.Data.CanChangeSpec(), true)
+
+    -- APRENDE COM O JOGO: um cast do jogador termina, o predicado confirma que era o de spec.
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-1", state.specSpellID)
+    check("aprendeu o id da magia", RocketSwapLogDB.specSpellID, state.specSpellID)
+
+    -- E AGORA A RECARGA RESPONDE, que e o caso do relato.
+    check("com a magia em recarga, nao deixa trocar", ns.Data.CanChangeSpec(), false)
+    state.specSpellOnCooldown = false
+    check("e passada a recarga, deixa", ns.Data.CanChangeSpec(), true)
+
+    -- CAST DE OUTRA MAGIA nao vira o id: aprender errado seria pior que nao aprender.
+    RocketSwapLogDB.specSpellID = nil
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-2", 12345)
+    check("cast de outra magia nao e confundido", RocketSwapLogDB.specSpellID, nil)
+
+    -- E CAST DE OUTRA UNIDADE tambem nao.
+    fire("UNIT_SPELLCAST_SUCCEEDED", "target", "cast-3", state.specSpellID)
+    check("cast de outra unidade nao conta", RocketSwapLogDB.specSpellID, nil)
+
+    -- SECRET NAO VIRA ID. `UNIT_SPELLCAST_SUCCEEDED` e `SecretWhenUnitSpellCastRestricted`
+    -- (`UnitDocumentation.lua:4702`): sob restricao o `spellID` vem opaco, e guardar isso em
+    -- SavedVariables e caminho certo para erro.
+    local guardado = issecretvalue
+    issecretvalue = function(v) return v == "opaco" end
+    ns.Data.NoteSpellCast("opaco")
+    issecretvalue = guardado
+    check("spellID opaco nao e guardado", RocketSwapLogDB.specSpellID, nil)
+
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-4", state.specSpellID)
+    state.specSpellOnCooldown = false
 end
 
 print("== botao apagado quando o jogo nao deixa trocar de spec ==")
