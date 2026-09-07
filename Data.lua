@@ -285,6 +285,33 @@ function Data.OutfitIndex(outfitID)
     return nil
 end
 
+---Dá para trocar de especialização agora?
+---
+---É a MESMA pergunta que a janela de talentos do jogo faz para decidir se o botão "Ativar" fica
+---clicável: `specContentFrame.ActivateButton:SetEnabled(canSpecsBeActivated)`, com
+---`canSpecsBeActivated = C_SpecializationInfo.CanPlayerUseTalentSpecUI()`
+---(`Blizzard_ClassSpecializationsFrame.lua:139,149`).
+---
+---Usar a condição da Blizzard tem duas vantagens sobre inventar a nossa: ela cobre todos os
+---motivos de uma vez (combate, veículo, troca em andamento, o que mais existir), e ela **devolve
+---o motivo em texto**, já traduzido pelo cliente — `canUse, failureReason`
+---(`SpecializationInfoDocumentation.lua:21-28`).
+---
+---Antes o addon descobria a recusa **chamando e levando não**, que é o que produzia a mensagem
+---genérica depois do clique. Perguntar antes deixa a interface responder sem tentar.
+---@return boolean pode, string|nil motivo
+function Data.CanChangeSpec()
+    if not C_SpecializationInfo or not C_SpecializationInfo.CanPlayerUseTalentSpecUI then
+        return true      -- cliente sem a função: não há como perguntar, então não se impede
+    end
+
+    local ok, pode, motivo = pcall(C_SpecializationInfo.CanPlayerUseTalentSpecUI)
+    if not ok then return true end
+
+    if pode then return true end
+    return false, (type(motivo) == "string" and motivo ~= "") and motivo or nil
+end
+
 function Data.GetActiveOutfitID()
     if not C_TransmogOutfitInfo or not C_TransmogOutfitInfo.GetActiveOutfitID then return nil end
     local ok, id = pcall(C_TransmogOutfitInfo.GetActiveOutfitID)
@@ -442,6 +469,14 @@ local Steps = {}
 function Steps.spec(preset)
     local wanted = preset.spec
     if not wanted or wanted == Data.GetCurrentSpecIndex() then return "skip" end
+
+    -- PERGUNTA ANTES DE CHAMAR, com a condição da própria janela de talentos do jogo. O motivo
+    -- vem dele e já vem traduzido; a nossa frase só entra quando ele não manda nenhum.
+    local pode, motivo = Data.CanChangeSpec()
+    if not pode then
+        return "abort", motivo
+            or L["the game refused to change specialization now; wait a few seconds."]
+    end
 
     Report(L["Switching specialization..."], false)
 
