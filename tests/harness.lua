@@ -667,7 +667,15 @@ C_Timer = {
         timers[#timers + 1] = t
         return t
     end,
-    After = function(_, fn) fn() end,
+    -- `After` ENFILEIRA, como no jogo -- ele NAO roda na hora. Rodando na hora, uma repeticao
+    -- espacada (o passo de spec insiste de 4 em 4 segundos) virava recursao imediata ate o teto,
+    -- e o teste via "desistiu" onde o jogo veria "esperando".
+    After = function(seconds, fn)
+        local t = { at = seconds, fn = fn, cancelled = false }
+        function t.Cancel() t.cancelled = true end
+        timers[#timers + 1] = t
+        return t
+    end,
 }
 
 --------------------------------------------------------------------------------
@@ -1215,15 +1223,16 @@ do
     state.pendingLoadout, state.pendingSpec = nil, nil
 
     -- A TROCA DE SPEC FALHA (o jogo recusa na hora).
-    local realSet = C_SpecializationInfo.SetSpecialization
-    C_SpecializationInfo.SetSpecialization = function() return false end
+    -- A SPEC E RECUSADA DE FORMA DEFINITIVA aqui (o jogo diz que nao da), e nao com o `false` do
+    -- `SetSpecialization` -- esse agora faz o addon INSISTIR, e insistir e o comportamento certo.
+    -- O que este bloco mede e outra coisa: sem a spec certa, o talento nao pode entrar.
+    state.canChangeSpec = false
 
     local texto, houveErro
     ns.Data.Apply({ name = "Tank", spec = 1, talent = 11, gear = 3 },
         function(t, isError) texto, houveErro = t, isError end)
-    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
 
-    C_SpecializationInfo.SetSpecialization = realSet
+    state.canChangeSpec = true
 
     check("com a spec errada, o talento NAO e pedido", state.pendingLoadout, nil)
     check("e a memoria do jogo nao e corrompida", state.activeLoadout[251], 10)
@@ -1351,6 +1360,38 @@ do
     end)
     check("o segundo clique e avisado, nao ignorado", aviso ~= nil, true)
     fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+end
+
+print("== o atalho do minimapa nao faz troca PARCIAL ==")
+-- Relato: "quando abro pela primeira vez ele, do nada ele seta o item que ja deveria estar
+-- setado". O atalho do minimapa (botao direito) aplicava o ultimo conjunto -- mas ele NAO e um
+-- clique seguro, entao a aparencia nunca entrava. Consequencia em cadeia:
+--
+--   1. sem a aparencia, `IsLoaded` nunca dava verdadeiro;
+--   2. com `IsLoaded` falso, o atalho REAPLICAVA tudo a cada uso;
+--   3. e a troca era parcial, que e o pior dos dois mundos.
+do
+    ns.db.presets = {
+        { name = "Com roupa", spec = 2, gear = 3, transmog = 71 },
+        { name = "Sem roupa", spec = 2, gear = 4 },
+    }
+    state.specIndex, state.equippedSet = 2, 1
+    state.pendingSet = nil
+    if ns.UI.IsShown() then ns.UI.Toggle() end
+
+    -- CONJUNTO COM APARENCIA: abre a janela em vez de aplicar pela metade.
+    ns.db.last = "Com roupa"
+    ns.LoadLast()
+    check("nao aplica pela metade", state.pendingSet, nil)
+    check("abre a janela", ns.UI.IsShown(), true)
+    check("com o conjunto selecionado", ns.UI.Selected() and ns.UI.Selected().name, "Com roupa")
+
+    -- CONJUNTO SEM APARENCIA: o atalho continua valendo, porque ali ele faz a troca INTEIRA.
+    if ns.UI.IsShown() then ns.UI.Toggle() end
+    ns.db.last = "Sem roupa"
+    ns.LoadLast()
+    check("sem aparencia, o atalho aplica mesmo", state.pendingSet, 4)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
 end
 
 print("== a recarga da magia de trocar de spec ==")
@@ -1540,21 +1581,56 @@ do
     local realSet = C_SpecializationInfo.SetSpecialization
     C_SpecializationInfo.SetSpecialization = function() return false end
 
+    state.pendingSet = nil
     local texto, houveErro
     ns.Data.Apply({ name = "Tank", spec = 1, talent = 12, gear = 3, transmog = 71 },
         function(t, isError) texto, houveErro = t, isError end)
 
-    check("recusa do jogo e reportada", houveErro, true)
-    check("dizendo para esperar",
-        texto and texto:lower():find("espere", 1, true) ~= nil, true)
+    --    A RECUSA NAO VIRA ERRO: vira espera. Tentar de novo SEMPRE funcionou no diario --
+    --    02:42:28 recusado, 02:42:37 aceito; 02:42:48 recusado, 02:42:52 aceito -- e as tres
+    --    coisas que tentei usar para PREVER a recusa foram desmentidas pelo mesmo arquivo.
+    check("a recusa nao vira erro na cara do jogador", houveErro, false)
+    check("a corrente fica esperando para insistir", ns.Data.IsApplying(), true)
+    check("e avisa que esta esperando",
+        texto and texto:lower():find("esperando", 1, true) ~= nil, true)
+    check("sem ter mexido nos itens ainda", state.pendingSet, nil)
 
-    -- 3. UMA CAUSA, UMA MENSAGEM. No diario real a recusa da spec derramou QUATRO falhas em fila
-    --    -- spec, talentos, itens e aparencia -- porque tudo depois dela depende dela. O usuario
-    --    leu isso como "fica bugado e dando erro".
-    check("e a corrente PARA, sem derramar as outras", ns.Data.IsApplying(), false)
-    check("com UMA mensagem, nao uma fila",
-        texto and texto:find("|", 1, true), nil)
-    check("e sem ter mexido nos itens", state.pendingSet, nil)
+    -- 3. E SE O JOGO ACEITAR NA PROXIMA, a corrente segue sozinha -- o jogador clicou UMA vez.
+    -- MAS INSISTIR TEM TETO. Insistir para sempre e pior que desistir: a corrente ficaria presa e
+    -- todo clique seguinte seria recusado -- exatamente o travamento que ja aconteceu duas vezes
+    -- nesta sequencia, so que agora por escolha minha.
+    local antes = ns.Data.IsApplying()
+    check("comeca insistindo", antes, true)
+    for _ = 1, 12 do RunTimers() end
+    check("mas desiste em algum momento", ns.Data.IsApplying(), false)
+    -- A frase final pode vir do teto de tentativas OU do prazo do passo -- os dois sao finais
+    -- honestos, e os dois falam da especializacao. O que nao pode e a corrente ficar presa.
+    check("dizendo que foi a especializacao",
+        texto and texto:lower():find("especializa", 1, true) ~= nil, true)
+
+    -- E DEPOIS DE DESISTIR, o clique seguinte funciona -- a corrente nao fica presa.
+    state.specIndex = 2
+    C_SpecializationInfo.SetSpecialization = realSet
+    state.pendingSet = nil
+    local voltou = ns.Data.Apply({ name = "Tank", spec = 1, gear = 3 }, function() end)
+    check("e o clique seguinte nao e recusado", voltou, true)
+    state.specIndex = 1
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+
+    C_SpecializationInfo.SetSpecialization = function() return false end
+    state.specIndex = 2
+    ns.Data.Apply({ name = "Tank", spec = 1, talent = 12, gear = 3, transmog = 71 },
+        function(t, isError) texto, houveErro = t, isError end)
+
+    C_SpecializationInfo.SetSpecialization = realSet
+    RunTimers()                       -- a tentativa marcada acontece, e agora o jogo aceita
+    state.specIndex = 1
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+    fire("TRAIT_CONFIG_UPDATED", 999)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+    check("e quando o jogo aceita, ela continua sozinha", ns.Data.IsApplying(), false)
+    C_SpecializationInfo.SetSpecialization = function() return false end
 
     C_SpecializationInfo.SetSpecialization = realSet
     state.activeLoadout[251] = 10

@@ -84,6 +84,24 @@ function ns.LoadLast()
     end
     for _, preset in ipairs(ns.db.presets) do
         if preset.name == wanted then
+            -- CONJUNTO COM APARENCIA NAO SE APLICA POR AQUI, e a razao e concreta: a troca de
+            -- aparencia so acontece no clique do BOTAO SEGURO, e este atalho nao e um. O que
+            -- acontecia era pior que nao funcionar:
+            --
+            --   1. a aparencia nunca entrava, entao `IsLoaded` nunca dava verdadeiro;
+            --   2. com `IsLoaded` falso, o atalho REAPLICAVA tudo a cada uso -- e o jogador via
+            --      "do nada ele seta o item que ja deveria estar setado", que foi o relato;
+            --   3. e ainda era uma troca parcial, que e o pior dos dois mundos.
+            --
+            -- Entao o atalho abre a janela com esse conjunto selecionado. Um clique a mais, e o
+            -- clique certo -- o que faz a troca INTEIRA.
+            if preset.transmog then
+                ns.UI.Toggle()
+                ns.UI.Select(preset)
+                ns.Print(format(L["click Load to switch to %s completely."], preset.name or "?"))
+                return
+            end
+
             ns.Data.Apply(preset, function(text, isError)
                 ns.UI.SetStatus(text, isError)
                 if isError then ns.Print(text) end

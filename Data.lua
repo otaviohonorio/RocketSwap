@@ -522,7 +522,66 @@ end
 -- usa resolve como global nil lá dentro. É a armadilha que este projeto já pagou três vezes.
 local ConfirmTalent
 
+-- De quanto em quanto tempo insistir na troca de especialização, e por quantas vezes.
+--
+-- Quatro segundos porque foi o menor intervalo que o diário mostrou funcionando (02:42:48
+-- recusado, 02:42:52 aceito). O teto vem do prazo do passo: `Arm()` já corta em 45 s, então as
+-- tentativas param bem antes de o prazo estourar.
+local SPEC_RETRY_DELAY = 4
+
+-- O TETO E O BACKSTOP DE VERDADE, e nao o prazo do passo: `RetrySpec` chama `Arm()` a cada
+-- tentativa, o que RE-ARMA os 45 segundos -- então o prazo sozinho nunca venceria enquanto
+-- houvesse insistência. Sem este número a corrente insistiria para sempre, e ficar presa é o
+-- travamento que esta sequência já produziu duas vezes.
+--
+-- (O harness não distingue os dois finais: o `RunTimers` dele dispara tudo o que está na fila de
+-- uma vez, então sabotar o teto não reprova. Fica pelo raciocínio acima, que é do jogo.)
+local SPEC_RETRY_MAX = 8
+
 local Steps = {}
+
+---Insiste na troca de especialização até o jogo aceitar.
+---
+---A recusa não é um erro do jogador nem do addon: é o jogo dizendo "agora não". Devolver isso
+---como falha obrigava o jogador a clicar de novo — que é exatamente o que esta função faz por
+---ele, e sem transformar em erro o que é só espera.
+local function RetrySpec(preset, wanted)
+    running.specTries = (running.specTries or 0) + 1
+
+    if running.specTries > SPEC_RETRY_MAX then
+        return "abort", L["the game kept refusing to change specialization."]
+    end
+
+    Report(L["Waiting for the game to allow the specialization change..."], false)
+    if ns.Log then
+        ns.Log.Add("insistindo", { passo = "spec", tentativa = running.specTries })
+    end
+
+    -- `Arm()` continua sendo o teto: se o jogo nunca aceitar, o prazo do passo encerra.
+    Arm()
+
+    local token = running
+    C_Timer.After(SPEC_RETRY_DELAY, function()
+        -- Outra aplicação pode ter começado nesse meio tempo; esta já não manda mais.
+        if not running or running ~= token then return end
+        if running.steps[running.at] ~= "spec" then return end
+
+        local outcome, message = Steps.spec(preset)
+        if ns.Log then ns.Log.Step("spec", outcome or "wait", message) end
+
+        if outcome == "skip" then
+            RunNext()
+        elseif outcome == "abort" then
+            Finish(false, message)
+        elseif outcome == "fail" then
+            running.failures = running.failures or {}
+            running.failures[#running.failures + 1] = message
+            RunNext()
+        end
+    end)
+
+    return "wait"
+end
 
 function Steps.spec(preset)
     local wanted = preset.spec
@@ -564,8 +623,25 @@ function Steps.spec(preset)
     -- `aceito == false` é RECUSA DO JOGO, e o diário mostrou que ela é comum: em quatro das nove
     -- trocas gravadas o jogo devolveu `false`, sempre quando a troca vinha poucos segundos depois
     -- de outra. Trocar de especialização tem custo no jogo, e insistir não adianta — esperar sim.
+    -- RECUSA E TRANSITÓRIA: ESPERA E TENTA DE NOVO, em vez de devolver erro ao jogador.
+    --
+    -- Foi o diário dele que fechou isto, depois de eu errar a previsão TRÊS vezes:
+    --
+    --   02:42:14  SetSpecialization(1) -> true    (sucesso)
+    --   02:42:28  SetSpecialization(2) -> false   (recusado)
+    --   02:42:37  SetSpecialization(2) -> true    (nove segundos depois, sucesso)
+    --   02:42:48  SetSpecialization(1) -> false   (recusado)
+    --   02:42:52  SetSpecialization(1) -> true    (quatro segundos depois, sucesso)
+    --
+    -- **Tentar de novo sempre funciona.** E as três coisas que eu tentei usar para PREVER a
+    -- recusa foram desmentidas pelo mesmo arquivo: `CanPlayerUseTalentSpecUI` respondeu `true` em
+    -- todas elas; a recarga da magia 200749 (aprendida do próprio jogo) estava inativa; e não há
+    -- janela de tempo fixa — o intervalo refutado varia de 4 a 14 segundos.
+    --
+    -- Então o addon para de adivinhar e faz o que o jogador faria: espera e clica de novo. Ele
+    -- disse que *"não tem problema demorar um pouco"*, e o prazo do passo (45 s) é o teto.
     if not ok or aceito == false then
-        return "abort", L["the game refused to change specialization now; wait a few seconds."]
+        return RetrySpec(preset, wanted)
     end
 
     Arm()

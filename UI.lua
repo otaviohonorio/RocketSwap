@@ -660,6 +660,20 @@ function UI.Selected()
     return current
 end
 
+---Seleciona um conjunto pela janela, como se o jogador tivesse clicado na linha dele.
+---
+---Existe para o atalho do minimapa: conjunto com aparência não pode ser aplicado por lá (a troca
+---de aparência exige o clique no botão seguro), então o atalho abre a janela **com ele já
+---selecionado** — um clique a mais, e o clique certo.
+---
+---`Refresh` reancora a seleção a partir de `current`, então basta apontá-lo e redesenhar.
+function UI.Select(preset)
+    if not preset then return end
+    current = preset
+    UI.Refresh()
+    UI.RefreshEditor()
+end
+
 ---A janela está aberta?
 ---
 ---Existe porque `Toggle` alterna, e alternar obriga quem chama a saber o estado anterior. No
