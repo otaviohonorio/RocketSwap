@@ -131,3 +131,12 @@ L["version"] = "versão"
 -- Falha parcial e motivo vindo do jogo (0.6.0)
 L["talents: %s"] = "talentos: %s"
 L["%s loaded, except: %s"] = "%s carregado, menos: %s"
+
+-- O diário da troca (0.12.0)
+L["log cleared."] = "diário limpo."
+L["the log is empty: load a preset and look again."] =
+    "o diário está vazio: carregue um conjunto e olhe de novo."
+L["log: %d entries. The last ones:"] = "diário: %d linhas. As últimas:"
+L["type /reload so the file is written, then send:"] =
+    "digite /reload para o arquivo ser escrito, e mande:"
+L["shows the log of the last swaps"] = "mostra o diário das últimas trocas"
