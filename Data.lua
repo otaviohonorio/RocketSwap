@@ -433,6 +433,10 @@ local function Arm()
 end
 
 --------------------------------------------------------------------------------
+-- Declarada aqui e definida abaixo: `Steps.talent` a chama, e `local` declarada DEPOIS de quem a
+-- usa resolve como global nil lá dentro. É a armadilha que este projeto já pagou três vezes.
+local ConfirmTalent
+
 local Steps = {}
 
 function Steps.spec(preset)
@@ -461,8 +465,11 @@ function Steps.spec(preset)
     elseif ns.Log then
         ns.Log.Call("spec", "nenhuma funcao de troca de spec existe")
     end
+    -- `aceito == false` é RECUSA DO JOGO, e o diário mostrou que ela é comum: em quatro das nove
+    -- trocas gravadas o jogo devolveu `false`, sempre quando a troca vinha poucos segundos depois
+    -- de outra. Trocar de especialização tem custo no jogo, e insistir não adianta — esperar sim.
     if not ok or aceito == false then
-        return "fail", L["the specialization change failed."]
+        return "abort", L["the game refused to change specialization now; wait a few seconds."]
     end
 
     Arm()
@@ -549,7 +556,17 @@ function Steps.talent(preset)
     -- Somar os dois num `skip` fazia o addon anunciar "pronto" com os talentos antigos.
     local E = Enum.LoadConfigResult
     if result == (E and E.NoChangesNecessary) then
-        return "skip"       -- nada a fazer; segue direto para o proximo passo
+        -- REGISTRA MESMO SEM MUDANÇA, e o diário real é que mostrou isto: `LoadConfig` devolveu
+        -- `NoChangesNecessary` em **seis das nove** trocas gravadas. Faz sentido — os nós da
+        -- árvore já estavam iguais.
+        --
+        -- Mas a 0.13.2 só registrava o loadout na confirmação por evento, e este caminho não
+        -- espera evento nenhum. Resultado: o jogo nunca ficava sabendo qual loadout passou a
+        -- valer, a janela de talentos continuava marcando o anterior, e `IsLoaded` nunca dava
+        -- verdadeiro — então o ✓ não aparecia e o jogador clicava de novo. É o "não chega a
+        -- trocar tudo certo", e a causa era minha, de ontem.
+        ConfirmTalent()
+        return "skip"
     end
     if result == (E and E.Ready) then
         return "fail", L["the talents were staged but not applied; open the talent window and apply."]
@@ -664,7 +681,7 @@ end
 ---Só depois de o jogo confirmar. Sem esta chamada a janela de talentos continua marcando o
 ---anterior como selecionado; feita cedo demais, ela grava a associação errada e o estrago fica
 ---salvo no jogo, sobrevivendo ao `/reload`.
-local function ConfirmTalent()
+ConfirmTalent = function()
     if not running or not running.preset.talent then return end
     if not C_ClassTalents or not C_ClassTalents.UpdateLastSelectedSavedConfigID then return end
 
@@ -711,6 +728,17 @@ RunNext = function()
 
     if outcome == "skip" then
         RunNext()
+
+    -- "abort" É DIFERENTE DE "fail", e a diferença veio do diário: quando a troca de spec é
+    -- recusada, **tudo depois dela cai junto** — os talentos são de outra spec, o conjunto de
+    -- itens some junto com a spec, e a aparência já está em recarga da troca anterior. O relatório
+    -- saía com QUATRO falhas em fila, o que o usuário leu como "fica bugado e dando erro".
+    --
+    -- Uma causa, uma mensagem. Só o passo de spec usa isto, e só quando o conjunto pede uma spec:
+    -- sem ela, nada do resto faz sentido.
+    elseif outcome == "abort" then
+        Finish(false, message)
+
     elseif outcome == "fail" then
         -- `running` pode ter sumido DENTRO do passo: os eventos de confirmação são despachados
         -- pelo jogo e um deles pode ter fechado a corrente inteira antes de voltarmos aqui.

@@ -150,3 +150,7 @@ L["an internal error interrupted this step."] = "um erro interno interrompeu est
 L["another swap is still running."] = "ainda há uma troca em andamento."
 L["the specialization did not change, so the talents were left alone."] =
     "a especialização não trocou, então os talentos não foram mexidos."
+-- O jogo recusa trocar de spec quando a anterior foi ha pouco. O diario real mostrou isso em
+-- quatro das nove trocas: sempre a segunda, poucos segundos depois da primeira.
+L["the game refused to change specialization now; wait a few seconds."] =
+    "o jogo não deixou trocar de especialização agora; espere alguns segundos."
