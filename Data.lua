@@ -331,6 +331,8 @@ local function Finish(ok, message)
     local text = ok and format(L["%s is ready."], preset and preset.name or "?")
         or (message or L["timed out waiting for the game to confirm."])
 
+    if ns.Log then ns.Log.Finish(ok, text, failures) end
+
     if report then report(text, not ok) end
     if not ok then ns.Print(text) end
 
@@ -389,8 +391,12 @@ function Steps.spec(preset)
     local ok
     if C_SpecializationInfo and C_SpecializationInfo.SetSpecialization then
         ok = pcall(C_SpecializationInfo.SetSpecialization, wanted)
+        if ns.Log then ns.Log.Call("spec", "SetSpecialization(" .. tostring(wanted) .. ")", ok) end
     elseif SetSpecialization then
         ok = pcall(SetSpecialization, wanted)
+        if ns.Log then ns.Log.Call("spec", "SetSpecialization global", ok) end
+    elseif ns.Log then
+        ns.Log.Call("spec", "nenhuma funcao de troca de spec existe")
     end
     if not ok then return "fail", L["the specialization change failed."] end
 
@@ -437,6 +443,10 @@ function Steps.talent(preset)
     -- jogava fora justamente a string que diz POR QUE não deu — e o addon respondia com um
     -- "não deu para carregar os talentos" que não ensina nada.
     local ok, result, changeError = pcall(C_ClassTalents.LoadConfig, preset.talent, true)
+    if ns.Log then
+        ns.Log.Call("talent", "LoadConfig(" .. tostring(preset.talent) .. ")",
+            ok, result, changeError)
+    end
     if not ok then return "fail", L["the talent loadout could not be loaded."] end
 
     -- Faz o jogo lembrar qual loadout está valendo — sem isto a própria janela de talentos
@@ -567,6 +577,8 @@ RunNext = function()
     end
 
     local outcome, message = Steps[name](running.preset)
+    if ns.Log then ns.Log.Step(name, outcome or "wait", message) end
+
     if outcome == "skip" then
         RunNext()
     elseif outcome == "fail" then
@@ -613,6 +625,10 @@ function Data.Apply(preset, report, byClick)
         preset = preset, steps = { "spec", "talent", "gear", "transmog" }, at = 0,
         report = report, byClick = byClick and true or false,
     }
+
+    -- O RETRATO DE ANTES. É a linha que responde "a troca nem precisava acontecer" e "ela pedia
+    -- algo que não existe mais" — dois casos que já apareceram e que o chat não mostrava.
+    if ns.Log then ns.Log.Apply(preset, byClick) end
     if report then report(format(L["Loading %s..."], preset.name or "?"), false) end
 
     Data.EnsureListener()
@@ -641,6 +657,13 @@ function Data.EnsureListener()
     listener:RegisterEvent("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
 
     listener:SetScript("OnEvent", function(_, event, arg1)
+        -- REGISTRA ANTES DE DECIDIR, inclusive o evento que chega sem corrente em curso. É o que
+        -- responde a hipótese que eu não tinha como testar: estes eventos são GLOBAIS e disparam
+        -- quando o JOGADOR mexe à mão ou quando outro addon mexe. Se o log mostrar um evento
+        -- fechando um passo que não era nosso, é isso.
+        local emCurso = running and running.steps[running.at] or nil
+        if ns.Log then ns.Log.Event(event, emCurso, running ~= nil, arg1) end
+
         if not running then return end
         local step = running.steps[running.at]
 

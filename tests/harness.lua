@@ -125,6 +125,10 @@ C_AddOns = {
 }
 
 function GetCursorPosition() return 400, 300 end
+-- `date` e `time` sao do jogo (o Lua do WoW expoe os de `os`), e o log grava a hora de cada
+-- linha. Sem eles aqui o addon carregava e o log estourava na primeira gravacao.
+date = date or os.date
+time = time or os.time
 function CopyTable(t)
     local out = {}
     for k, v in pairs(t) do out[k] = type(v) == "table" and CopyTable(v) or v end
@@ -132,6 +136,9 @@ function CopyTable(t)
 end
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 function tinsert(t, v) t[#t + 1] = v end
+-- `tremove` e do jogo (alias de `table.remove`) e o anel do diario depende dele. Faltava, e o
+-- unico sinal era o log estourar na entrada 401 -- ou seja, so depois de trinta trocas.
+tremove = tremove or table.remove
 function UnitCastingInfo() return nil end
 -- No jogo, valor secret e opaco em combate. Aqui nada e secret; o que importa e o addon
 -- CHAMAR a funcao antes de tocar no valor, e isso o simulador exercita.
@@ -1042,8 +1049,97 @@ do
 end
 
 
+print("== o diario responde POR QUE nao trocou ==")
+-- Pergunta literal do usuario, depois de a troca falhar pela quarta vez: "tu ta salvando logs
+-- para poder entender os problemas?". A resposta era NAO, e por isso as rodadas anteriores foram
+-- eu adivinhando qual passo tinha falhado e ele me contando por escrito.
+--
+-- O QUE O DIARIO PRECISA RESPONDER, lendo o arquivo e nada mais: por que nao trocou. Isso exige,
+-- em cada passo, TRES coisas -- o que o addon PEDIU, o que o jogo RESPONDEU, e como o passo
+-- FECHOU. Sem as tres nao da para distinguir "o jogo recusou" de "o addon nem pediu" de "o jogo
+-- aceitou e nao fez", que sao exatamente as tres hipoteses que ja custaram uma rodada cada.
+do
+    ns.Log.Clear()
+    state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
+
+    -- Uma troca que FALHA no passo de talentos, com o jogo dando o motivo.
+    local realLoad = C_ClassTalents.LoadConfig
+    C_ClassTalents.LoadConfig = function()
+        return 0, "Nao e possivel trocar talentos aqui."
+    end
+
+    ns.Data.Apply({ name = "Tank", spec = 2, talent = 11, gear = 3 }, function() end)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+
+    C_ClassTalents.LoadConfig = realLoad
+
+    local texto = table.concat(ns.Log.Tail(50), " ~ ")
+
+    -- 1. O QUE O ADDON PEDIU, e o estado de antes. Sem esta linha nao da para ver que a troca nem
+    --    precisava acontecer, nem que ela pedia algo que nao existe mais.
+    check("o diario registra o conjunto pedido", texto:find("preset=Tank", 1, true) ~= nil, true)
+    check("e o que cada campo queria contra o que havia",
+        texto:find("querTalento=11", 1, true) ~= nil
+        and texto:find("temTalento=10", 1, true) ~= nil, true)
+
+    -- 2. O QUE O JOGO RESPONDEU. E o que separa "o jogo recusou" de "o addon nem pediu".
+    check("registra a chamada ao jogo", texto:find("LoadConfig(11)", 1, true) ~= nil, true)
+    check("e o retorno dela", texto:find("Nao e possivel trocar talentos aqui.", 1, true) ~= nil, true)
+
+    -- 3. COMO O PASSO FECHOU, passo a passo.
+    check("registra o resultado do passo", texto:find("passo=talent", 1, true) ~= nil, true)
+    check("dizendo que falhou", texto:find("resultado=fail", 1, true) ~= nil, true)
+
+    -- E O VEREDITO FINAL, com as falhas juntas.
+    check("registra o fim da corrente", texto:find("event", 1, true) ~= nil, true)
+    check("com o que falhou", texto:lower():find("falhas=", 1, true) ~= nil, true)
+end
+
+print("== o diario ve o evento que chega de fora ==")
+-- Hipotese que eu nao tinha como testar antes: `TRAIT_CONFIG_UPDATED`,
+-- `ACTIVE_PLAYER_SPECIALIZATION_CHANGED` e `EQUIPMENT_SWAP_FINISHED` sao GLOBAIS -- disparam
+-- quando o JOGADOR mexe a mao ou quando outro addon mexe. Se um deles fechar um passo que nao era
+-- nosso, o diario tem que mostrar.
+do
+    ns.Log.Clear()
+    fire("TRAIT_CONFIG_UPDATED")            -- sem corrente em curso
+
+    local texto = table.concat(ns.Log.Tail(10), " ~ ")
+    check("registra evento mesmo sem troca em curso",
+        texto:find("evento=TRAIT_CONFIG_UPDATED", 1, true) ~= nil, true)
+    check("dizendo que nao era para nos", texto:find("paraNos=false", 1, true) ~= nil, true)
+end
+
+print("== o diario nao guarda valor opaco nem cresce sem limite ==")
+do
+    ns.Log.Clear()
+
+    -- SECRET NUNCA ENTRA. Guardar valor opaco em SavedVariables e caminho certo para erro, e a
+    -- regra vale para todo campo -- por isso `Describe` pergunta `issecretvalue` ANTES do `type`:
+    -- para um valor opaco `type()` responde o tipo real, e testar so o tipo deixaria o `tostring`
+    -- receber um secret.
+    local realIsSecret = issecretvalue
+    issecretvalue = function(v) return v == "opaco" end
+    ns.Log.Call("spec", "teste", "opaco")
+    issecretvalue = realIsSecret
+
+    local texto = table.concat(ns.Log.Tail(3), " ~ ")
+    check("valor opaco vira SECRET, nao o valor", texto:find("SECRET", 1, true) ~= nil, true)
+    check("e o valor cru nao entra", texto:find("opaco", 1, true), nil)
+
+    -- ANEL: o arquivo nao pode crescer sem limite. 500 linhas em 400 de teto tem que sobrar 400.
+    for i = 1, 500 do ns.Log.Add("enche", { i = i }) end
+    check("o diario para de crescer no teto", ns.Log.Count() <= 400, true)
+    check("e mantem as ULTIMAS, nao as primeiras",
+        table.concat(ns.Log.Tail(1), ""):find("i=500", 1, true) ~= nil, true)
+
+    ns.Log.Clear()
+    check("e limpar limpa mesmo", ns.Log.Count(), 0)
+end
+
 print("== comandos ==")
-for _, cmd in ipairs({ "", "list", "help", "icon", "i18n", "load Arena", "load nao-existe", "Arena" }) do
+for _, cmd in ipairs({ "", "list", "help", "icon", "i18n", "load Arena", "load nao-existe",
+                       "log", "log clear", "transmog", "Arena" }) do
     local ok, err = pcall(SlashCmdList.ROCKETSWAP, cmd)
     print(ok and ("  ok    /rs " .. cmd) or ("  ERRO  /rs " .. cmd .. ": " .. tostring(err)))
     if not ok then os.exit(1) end

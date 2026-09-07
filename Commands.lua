@@ -362,6 +362,36 @@ commands["i18n"] = function()
     end
 end
 
+-- O DIARIO DA TROCA. Pergunta literal do usuario depois de a troca falhar de novo: "tu ta
+-- salvando logs para poder entender os problemas?". A resposta era nao, e por isso as rodadas
+-- anteriores foram eu adivinhando qual passo falhou e ele me contando por escrito.
+--
+-- `/rs log` mostra as ultimas linhas no chat -- resolve o caso simples sem sair do jogo. O
+-- arquivo em SavedVariables e quem responde o caso dificil, e ele so e escrito no `/reload` ou
+-- no logout: por isso a mensagem diz isso em vez de deixar o jogador procurar um arquivo vazio.
+commands["log"] = function(rest)
+    local arg = rest and rest:lower():match("^%S*")
+
+    if arg == "clear" then
+        ns.Log.Clear()
+        ns.Print(L["log cleared."])
+        return
+    end
+
+    local linhas = ns.Log.Tail(14)
+    if #linhas == 0 then
+        ns.Print(L["the log is empty: load a preset and look again."])
+        return
+    end
+
+    ns.Print(format(L["log: %d entries. The last ones:"], ns.Log.Count()))
+    for _, linha in ipairs(linhas) do
+        print("  " .. linha)
+    end
+    ns.Print(L["type /reload so the file is written, then send:"])
+    print("  WTF\\Account\\<conta>\\SavedVariables\\RocketSwap.lua")
+end
+
 commands["help"] = function()
     ns.Print(L["version"] .. " " .. ns.version .. " — " .. L["commands:"])
     print("  /rs                 " .. L["opens the window"])
@@ -373,6 +403,7 @@ commands["help"] = function()
     print("  /rs warn            " .. L["turns the gear warning on or off"])
     print("  /rs ready           " .. L["turns the ready check summary on or off"])
     print("  /rs unmute          " .. L["re-enables warnings you silenced"])
+    print("  /rs log [clear]     " .. L["shows the log of the last swaps"])
 end
 
 -- As globais SLASH_* precisam ser criadas em escopo de arquivo, nao dentro de evento.
