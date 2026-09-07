@@ -465,7 +465,27 @@ end
 function Steps.talent(preset)
     if not preset.talent then return "skip" end
 
-    local spec = Data.GetSpecByIndex(Data.GetCurrentSpecIndex())
+    -- A SPEC TEM QUE SER A DO CONJUNTO ANTES DE MEXER EM TALENTO, e este era o defeito que fazia
+    -- a troca "fazer coisa errada".
+    --
+    -- Um loadout pertence a UMA especialização. Este passo resolvia pela spec ATUAL, então quando
+    -- o passo anterior falhava, estourava o prazo, ou simplesmente ainda não tinha virado, ele
+    -- pegava a spec VELHA e mandava `LoadConfig` com um id que é de OUTRA — o jogo reclama, e com
+    -- razão.
+    --
+    -- E o pior vinha logo depois: `UpdateLastSelectedSavedConfigID(spec.id, preset.talent)`
+    -- gravava o loadout da spec alvo como "o último selecionado" da spec velha. Isso **fica
+    -- gravado no jogo**, então o estrago sobrevive ao `/reload` e reaparece na próxima vez que o
+    -- jogador voltar àquela spec pela janela de talentos.
+    --
+    -- Recusar aqui é o que "sequencial" quer dizer: sem a spec certa, o passo de talentos não tem
+    -- o que fazer, e fingir que tem é como se corrompe estado alheio.
+    local atual = Data.GetCurrentSpecIndex()
+    if preset.spec and atual ~= preset.spec then
+        return "fail", L["the specialization did not change, so the talents were left alone."]
+    end
+
+    local spec = Data.GetSpecByIndex(atual)
     if spec and Data.GetActiveLoadoutID(spec.id) == preset.talent then return "skip" end
 
     Report(L["Loading talents..."], false)
@@ -647,6 +667,9 @@ RunNext = function()
     if outcome == "skip" then
         RunNext()
     elseif outcome == "fail" then
+        -- `running` pode ter sumido DENTRO do passo: os eventos de confirmação são despachados
+        -- pelo jogo e um deles pode ter fechado a corrente inteira antes de voltarmos aqui.
+        if not running then return end
         -- UM PASSO QUE FALHA NÃO DERRUBA OS SEGUINTES.
         --
         -- Antes, `fail` chamava `Finish` na hora, e a corrente parava ali. Como a ordem é
