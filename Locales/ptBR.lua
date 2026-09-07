@@ -154,3 +154,10 @@ L["the specialization did not change, so the talents were left alone."] =
 L["the game refused to change specialization now; wait a few seconds."] =
     "o jogo não deixou trocar de especialização agora; espere alguns segundos."
 L["still applying %s: waiting for %s."] = "ainda aplicando %s: esperando %s."
+-- A recusa da troca de spec e TRANSITORIA: o addon espera e insiste, em vez de devolver erro.
+L["Waiting for the game to allow the specialization change..."] =
+    "Esperando o jogo liberar a troca de especialização..."
+L["the game kept refusing to change specialization."] =
+    "o jogo continuou recusando a troca de especialização."
+L["click Load to switch to %s completely."] =
+    "clique em Carregar para trocar para %s por completo."
