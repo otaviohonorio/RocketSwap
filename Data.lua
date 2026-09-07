@@ -285,6 +285,46 @@ function Data.OutfitIndex(outfitID)
     return nil
 end
 
+---A magia que o jogo lança para ativar uma especialização.
+---
+---NÃO EXISTE CONSTANTE PARA ELA. Procurei: o transmog tem
+---`EQUIP_TRANSMOG_OUTFIT_MANUAL_SPELL_ID` na documentação gerada, a troca de spec não tem
+---equivalente. O que existe é o predicado `IsSpecializationActivateSpell(spellID)`, que a própria
+---janela de talentos usa para reconhecer o cast dela
+---(`Blizzard_ClassSpecializationsFrame.lua:187`).
+---
+---Então o addon **aprende o id com o jogo**: quando um cast do jogador termina, ele pergunta ao
+---predicado se aquele era o de ativar spec, e guarda. Dali em diante dá para ler a recarga.
+---
+---Guardado em SavedVariables porque o id não muda e reaprendê-lo a cada sessão significaria a
+---primeira troca de cada sessão continuar às cegas.
+local function SpecSpellID()
+    return RocketSwapLogDB and RocketSwapLogDB.specSpellID
+end
+
+---Chamado quando um cast do jogador termina. Guarda o id se for o de ativar especialização.
+function Data.NoteSpellCast(spellID)
+    -- `type` ANTES DE TUDO. `UNIT_SPELLCAST_SUCCEEDED` é `SecretWhenUnitSpellCastRestricted`
+    -- (`UnitDocumentation.lua:4702`), então sob restrição o `spellID` vem opaco — e guardar valor
+    -- opaco em SavedVariables é caminho certo para erro.
+    --
+    -- A guarda é **defensiva**: sabotá-la não reprova teste nenhum, porque o predicado do jogo
+    -- devolve falso para um valor que não é o id. Fica porque o custo de errar é um arquivo de
+    -- configuração corrompido, e o de acertar é uma linha.
+    if type(spellID) ~= "number" then return end
+    if not IsSpecializationActivateSpell then return end
+    if SpecSpellID() then return end                       -- já sabemos
+
+    local ok, ehDeSpec = pcall(IsSpecializationActivateSpell, spellID)
+    if ok and ehDeSpec then
+        RocketSwapLogDB = RocketSwapLogDB or {}
+        RocketSwapLogDB.specSpellID = spellID
+        if ns.Log then
+            ns.Log.Add("aprendeu", { magiaDeSpec = spellID })
+        end
+    end
+end
+
 ---Dá para trocar de especialização agora?
 ---
 ---É a MESMA pergunta que a janela de talentos do jogo faz para decidir se o botão "Ativar" fica
@@ -306,10 +346,28 @@ function Data.CanChangeSpec()
     end
 
     local ok, pode, motivo = pcall(C_SpecializationInfo.CanPlayerUseTalentSpecUI)
-    if not ok then return true end
+    if ok and pode == false then
+        return false, (type(motivo) == "string" and motivo ~= "") and motivo or nil
+    end
 
-    if pode then return true end
-    return false, (type(motivo) == "string" and motivo ~= "") and motivo or nil
+    -- E A RECARGA DA MAGIA, que é o caso que o usuário viveu e que a pergunta acima NÃO cobre.
+    --
+    -- O diário provou: às 02:28:18 a troca deu certo e às 02:28:26 — oito segundos depois — o
+    -- jogo devolveu `false`, com `CanPlayerUseTalentSpecUI` respondendo **sim** o tempo todo.
+    -- Aquela pergunta é sobre a interface estar utilizável, não sobre a troca estar disponível.
+    --
+    -- `isActive` e não `startTime`/`duration`: os dois últimos viram SECRET sob restrição, e
+    -- comparar secret já travou este addon uma vez.
+    local spellID = SpecSpellID()
+    local getCD = spellID and C_Spell and C_Spell.GetSpellCooldown
+    if getCD then
+        local okCD, cd = pcall(getCD, spellID)
+        if okCD and type(cd) == "table" and cd.isActive == true then
+            return false, nil       -- sem motivo do jogo: a nossa frase explica a espera
+        end
+    end
+
+    return true
 end
 
 function Data.GetActiveOutfitID()
@@ -473,6 +531,9 @@ function Steps.spec(preset)
     -- PERGUNTA ANTES DE CHAMAR, com a condição da própria janela de talentos do jogo. O motivo
     -- vem dele e já vem traduzido; a nossa frase só entra quando ele não manda nenhum.
     local pode, motivo = Data.CanChangeSpec()
+    if ns.Log then
+        ns.Log.Call("spec", "CanChangeSpec", pode, motivo, SpecSpellID() or "magia desconhecida")
+    end
     if not pode then
         return "abort", motivo
             or L["the game refused to change specialization now; wait a few seconds."]

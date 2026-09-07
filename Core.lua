@@ -154,6 +154,18 @@ function handlers:PLAYER_SPECIALIZATION_CHANGED() ns.UI.Refresh() end
 
 -- Andar cancela o cast de troca de spec, e `SPECIALIZATION_CHANGE_CAST_FAILED` nao cobre isso --
 -- e por isso que a janela nativa escuta estes dois.
+-- APRENDE A MAGIA DE TROCAR DE SPEC. Nao ha constante para ela na documentacao do cliente -- o
+-- que ha e o predicado `IsSpecializationActivateSpell`, que a janela de talentos usa para
+-- reconhecer o cast dela. Entao o addon pergunta ao jogo, uma vez, e guarda.
+--
+-- Sem isso nao da para saber quando a troca volta a ser possivel, e o botao ou fica apagado de
+-- menos (o caso relatado) ou apagado demais.
+function handlers:UNIT_SPELLCAST_SUCCEEDED(unit, _castGUID, spellID)
+    if unit ~= "player" then return end
+    ns.Data.NoteSpellCast(spellID)
+    ns.UI.Refresh()
+end
+
 function handlers:UNIT_SPELLCAST_FAILED() ns.UI.Refresh() end
 function handlers:UNIT_SPELLCAST_INTERRUPTED() ns.UI.Refresh() end
 
