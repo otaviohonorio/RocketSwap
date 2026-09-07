@@ -291,11 +291,30 @@ function Data.GetActiveOutfitID()
     return ok and id or nil
 end
 
+---O primeiro conjunto marcado como vestido. Serve para o ✓ da lista, e **só** para isso.
+---
+---`isEquipped` é por conjunto e independente: a janela do jogo desenha um ✓ em CADA conjunto cujo
+---`isEquipped` é verdadeiro (`PaperDollFrame.lua:2396,2414-2418`). Dois conjuntos que compartilham
+---as peças ficam os dois marcados, e "o primeiro" é uma resposta arbitrária.
 function Data.GetEquippedSetID()
     for _, set in ipairs(Data.GetGearSets()) do
         if set.isEquipped then return set.setID end
     end
     return nil
+end
+
+---**Este** conjunto está vestido?
+---
+---É a pergunta certa para confirmar o passo de itens, e ela é diferente da de cima: perguntar
+---"qual está vestido" e comparar dá a resposta errada quando dois conjuntos compartilham peças —
+---o alvo estaria vestido e o addon acharia que não, porque o outro apareceu primeiro na lista.
+function Data.IsGearSetEquipped(setID)
+    if setID == nil then return false end
+    if not C_EquipmentSet or not C_EquipmentSet.GetEquipmentSetInfo then return false end
+
+    -- `isEquipped` é o 4º retorno (`EquipmentManagerDocumentation.lua:128-149`).
+    local ok, _, _, _, isEquipped = pcall(C_EquipmentSet.GetEquipmentSetInfo, setID)
+    return ok and isEquipped == true
 end
 
 ---Nome de um loadout/conjunto por id, para a lista mostrar texto em vez de número.
@@ -515,11 +534,15 @@ function Steps.talent(preset)
     end
     if not ok then return "fail", L["the talent loadout could not be loaded."] end
 
-    -- Faz o jogo lembrar qual loadout está valendo — sem isto a própria janela de talentos
-    -- continua marcando o anterior como selecionado.
-    if spec and C_ClassTalents.UpdateLastSelectedSavedConfigID then
-        pcall(C_ClassTalents.UpdateLastSelectedSavedConfigID, spec.id, preset.talent)
-    end
+    -- A ESCRITA DE "QUAL LOADOUT ESTÁ VALENDO" SAIU DAQUI, e foram duas razões:
+    --
+    --   1. escrever ANTES de o jogo confirmar é como o estado alheio foi corrompido (o loadout
+    --      da spec alvo gravado como o da spec velha) — é o defeito da 0.13.1 pela raiz;
+    --   2. e ela envenenava a própria confirmação: eu passei a confirmar o passo lendo
+    --      `GetLastSelectedSavedConfigID`, que é exatamente o que esta linha escreve. O addon
+    --      escrevia a resposta e depois a lia como prova. Circular.
+    --
+    -- Agora ela roda em `ConfirmTalent`, quando o jogo confirma.
 
     -- `Ready` NAO E "ja aplicado", e tratar como tal era mentira confortavel. `NoChangesNecessary`
     -- diz que nao ha o que fazer; `Ready` diz que a configuracao foi PREPARADA e espera commit.
@@ -634,6 +657,28 @@ function Steps.transmog(preset)
     -- `/rs load <nome>` e do minimapa, e a frase precisa dizer isso em vez de deixar o jogador
     -- esperando doze segundos por uma confirmação que não vem.
     return "fail", L["the appearance only changes by clicking Load (Blizzard protects the API)."]
+end
+
+---Registra no jogo qual loadout passou a valer.
+---
+---Só depois de o jogo confirmar. Sem esta chamada a janela de talentos continua marcando o
+---anterior como selecionado; feita cedo demais, ela grava a associação errada e o estrago fica
+---salvo no jogo, sobrevivendo ao `/reload`.
+local function ConfirmTalent()
+    if not running or not running.preset.talent then return end
+    if not C_ClassTalents or not C_ClassTalents.UpdateLastSelectedSavedConfigID then return end
+
+    local spec = Data.GetSpecByIndex(Data.GetCurrentSpecIndex())
+    if not spec then return end
+
+    -- SÓ SE A SPEC FOR A DO CONJUNTO — e esta guarda é **defensiva**, não load-bearing: o passo de
+    -- talentos já recusa antes de chegar aqui, e sabotá-la não reprova nenhum teste. Fica porque
+    -- esta função roda a partir de um EVENTO, e evento chega quando quer: entre o passo e a
+    -- confirmação a spec pode ter mudado por fora. E o que ela protege é estado que sobrevive ao
+    -- `/reload`, então o custo de errar é maior que o de uma linha a mais.
+    if running.preset.spec and Data.GetCurrentSpecIndex() ~= running.preset.spec then return end
+
+    pcall(C_ClassTalents.UpdateLastSelectedSavedConfigID, spec.id, running.preset.talent)
 end
 
 --------------------------------------------------------------------------------
@@ -785,24 +830,23 @@ function Data.EnsureListener()
             -- Resultado: "X está pronto" com os talentos antigos. E a troca de spec, que roda
             -- logo antes, enfileira esses mesmos eventos — por isso acontecia em todo conjunto
             -- que mexe em spec e talentos, que é o caso comum.
-            -- ACEITA OS DOIS IDS QUE PODEM SER NOSSOS, e recusa o resto.
+            -- ACEITA O EVENTO. E esta linha é uma RETIRADA deliberada, com o motivo escrito:
             --
-            -- A Blizzard diz que a gravacao gera evento "both for the base spec config id **and
-            -- then** the selected loadout config id" -- ou seja, dois ids, e a fonte nao diz qual
-            -- deles marca o fim. Apostar em um seria trocar um palpite por outro; aceitar os dois
-            -- ja resolve o defeito real, que era fechar com o evento de um config QUALQUER.
+            -- Na 0.13.0 eu pus um filtro pelo `configID`, porque a Blizzard avisa que a gravação
+            -- gera evento "both for the base spec config id **and then** the selected loadout
+            -- config id" (`Blizzard_ClassTalentsFrame.lua:407-411`) e eu quis fechar só no certo.
+            -- Mas a fonte **não diz qual dos dois fecha**, e o filtro recusou o evento que
+            -- funcionava: o passo ficava esperando até o prazo — que eu tinha acabado de subir
+            -- para trinta segundos. O usuário sentiu isso como *"apertei duas, três vezes pra
+            -- funcionar"* e *"mensagem de ainda tá pendente, mas não ficou carregando nada"*.
             --
-            -- Qual deles o jogo manda de fato, o diario responde: `Log.Event` grava o `arg1` de
-            -- cada evento. Com uma troca real na mao da para fechar a questao.
-            local temAtivo, ativo = false, nil
-            if C_ClassTalents and C_ClassTalents.GetActiveConfigID then
-                temAtivo, ativo = pcall(C_ClassTalents.GetActiveConfigID)
-            end
-
-            local nosso = arg1 == nil                       -- sem payload: nao da para recusar
-                or (temAtivo and ativo ~= nil and arg1 == ativo)
-                or arg1 == running.preset.talent
-            if nosso then RunNext() end
+            -- Trocar um caminho que funciona por um palpite mais preciso é o pior negócio
+            -- possível. O risco de fechar cedo é o passo seguinte começar um instante antes; o
+            -- risco do filtro errado é o addon travar. Volto ao que funcionava, e o diário grava
+            -- o `arg1` de cada evento — com uma troca real na mão dá para fechar a questão com
+            -- dado em vez de com dedução.
+            ConfirmTalent()
+            RunNext()
 
         elseif event == "TRANSMOG_DISPLAYED_OUTFIT_CHANGED" and step == "transmog" then
             -- O EVENTO NÃO DIZ QUAL conjunto entrou — não tem carga útil
@@ -821,21 +865,22 @@ function Data.EnsureListener()
             RunNext()
 
         elseif event == "EQUIPMENT_SWAP_FINISHED" and step == "gear" then
-            -- O PAYLOAD É `result, setID` (`EquipmentManagerDocumentation.lua:310-316`), e nós
-            -- líamos só o primeiro. Trocar de spec faz o jogo equipar sozinho o conjunto amarrado
-            -- àquela spec, e o evento DESSA troca fechava o nosso passo antes do nosso conjunto
-            -- entrar.
-            if arg2 ~= nil and running.preset.gear ~= nil and arg2 ~= running.preset.gear then
-                return      -- é de outro conjunto; o nosso ainda vem
-            end
-
-            -- E `false` VIROU ANOTAÇÃO, não fim de corrente: um `false` de uma troca alheia
-            -- matava a nossa e jogava fora as falhas já anotadas.
-            if arg1 == false then
+            -- MESMO PADRÃO: o evento acorda, a leitura decide.
+            --
+            -- Trocar de spec faz o jogo equipar sozinho o conjunto amarrado àquela spec, e o
+            -- evento DESSA troca fechava o nosso passo antes do nosso conjunto entrar. Comparar o
+            -- `setID` do payload resolvia isso, mas pelo mesmo caminho frágil do ramo de talentos
+            -- — e um payload diferente do esperado deixaria o passo pendurado até o prazo.
+            --
+            -- `false` continua virando ANOTAÇÃO e não fim de corrente: um `false` de uma troca
+            -- alheia matava a nossa e jogava fora as falhas já anotadas.
+            if arg1 == false and (arg2 == nil or arg2 == running.preset.gear) then
                 running.failures = running.failures or {}
                 running.failures[#running.failures + 1] = L["the gear set could not be equipped."]
+                RunNext()
+            elseif Data.IsGearSetEquipped(running.preset.gear) then
+                RunNext()
             end
-            RunNext()
         end
     end)
 
