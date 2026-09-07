@@ -75,8 +75,10 @@ L["the transmog outfit could not be applied."] = "não deu para aplicar a aparê
 
 -- As tres portas que recusam a troca SEM devolver erro (0.7.0). A UI nativa do conjunto
 -- consulta as tres antes de deixar clicar; sem elas o addon so sabia dizer "nao deu".
-L["changing appearance is on cooldown (%d s left)."] =
-    "trocar de aparência está em recarga (faltam %d s)."
+-- SEM OS SEGUNDOS (0.13.0). Contar quanto falta exige `startTime` e `duration`, que são SECRET
+-- dentro de mítica+ — e foi essa conta que travava a corrente inteira. `isActive` responde a
+-- mesma pergunta sem ler campo secreto nenhum.
+L["changing appearance is on cooldown."] = "trocar de aparência está em recarga."
 L["a style event is running; appearances are locked."] =
     "há um evento de estilo em andamento; as aparências estão travadas."
 L["that appearance set is locked."] = "esse conjunto de aparência está travado."
@@ -140,3 +142,9 @@ L["log: %d entries. The last ones:"] = "diário: %d linhas. As últimas:"
 L["type /reload so the file is written, then send:"] =
     "digite /reload para o arquivo ser escrito, e mande:"
 L["shows the log of the last swaps"] = "mostra o diário das últimas trocas"
+
+-- A corrente honesta (0.13.0)
+L["the talents were staged but not applied; open the talent window and apply."] =
+    "os talentos foram preparados mas não aplicados; abra a janela de talentos e aplique."
+L["an internal error interrupted this step."] = "um erro interno interrompeu este passo."
+L["another swap is still running."] = "ainda há uma troca em andamento."
