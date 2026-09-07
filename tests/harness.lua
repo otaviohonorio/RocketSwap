@@ -1140,6 +1140,34 @@ check("traz a spec", resumo:find("Gelido", 1, true) ~= nil, true)
 check("traz o loadout de talentos", resumo:find("SBA ST", 1, true) ~= nil, true)
 check("traz o conjunto de itens", resumo:find("Frost", 1, true) ~= nil, true)
 
+-- E DIZ O QUE E O QUE. Pedido do usuario: "ta os nomes salvos soltos e nao sei o que e o que".
+-- Tres nomes proprios em sequencia -- "Gelido · SBA ST · Frost" -- nao dizem qual e qual, e o
+-- caso ruim e o comum: nada impede o conjunto de itens e o loadout de talentos de terem o
+-- MESMO nome.
+check("rotula a especializacao",
+    resumo:find(ns.L["Specialization"] .. ": Gelido", 1, true) ~= nil, true)
+check("rotula os talentos", resumo:find(ns.L["Talents"] .. ": ", 1, true) ~= nil, true)
+check("rotula os itens", resumo:find(ns.L["Gear"] .. ": ", 1, true) ~= nil, true)
+
+-- OS ROTULOS SAO OS DA PROPRIA JANELA DO ADDON. Nao e detalhe: quem abre `/rs` le essas tres
+-- palavras ao lado dos tres combos, e o resumo usando outras obrigaria a aprender dois
+-- vocabularios para a mesma coisa. Este check quebra se a janela e o resumo divergirem.
+check("os rotulos sao os do editor",
+    ns.L["Specialization"] ~= nil and ns.L["Talents"] ~= nil and ns.L["Gear"] ~= nil, true)
+
+-- ITENS NAO VEM DO JOGO, e a razao esta registrada em `Locales/enUS.lua`: em pt-BR o cliente
+-- chama LOADOUT DE TALENTOS de "equipamento" e CONJUNTO DE ITENS de "conjunto". O addon foge das
+-- duas de proposito -- ele existe para quem ja confunde as duas coisas, e o pedido que trouxe
+-- estes rotulos e essa confusao em pessoa.
+check("itens nao usa palavra do jogo", ns.FROM_GAME["Gear"], nil)
+
+-- UMA LINHA POR CAMPO NA CAIXA, tudo numa so no chat. A caixa tem altura livre e o chat nao.
+local NL = string.char(10)
+local emLinhas = ns.Alert.Summary(NL)
+local quantas = select(2, emLinhas:gsub(NL, "")) + 1
+check("a caixa quebra em tres linhas", quantas, 3)
+check("e o chat continua em uma so", select(2, resumo:gsub(NL, "")), 0)
+
 -- Sem conjunto de itens vestido, o resumo diz isso em vez de mentir ou ficar vazio.
 state.equippedSet = 99
 check("sem conjunto, avisa que nao ha",
@@ -1158,6 +1186,19 @@ do
     check("e e a nossa", shownPopups[1].which, "ROCKETSWAP_READY_CHECK")
     check("com o resumo dentro",
         shownPopups[1].text and shownPopups[1].text:find("Gelido", 1, true) ~= nil, true)
+
+    -- E COM OS ROTULOS, uma linha por campo. Conferir so o `Summary` deixaria passar a caixa
+    -- sendo montada com a versao de UMA LINHA -- que era o estado anterior e e o defeito
+    -- relatado: "ta os nomes salvos soltos e nao sei o que e o que".
+    local naCaixa = shownPopups[1].text
+    check("a caixa rotula a especializacao",
+        naCaixa:find(ns.L["Specialization"] .. ": ", 1, true) ~= nil, true)
+    check("a caixa rotula os itens",
+        naCaixa:find(ns.L["Gear"] .. ": ", 1, true) ~= nil, true)
+
+    -- Tres campos em tres linhas, mais o titulo e a linha em branco antes dele.
+    check("e poe um campo por linha",
+        select(2, naCaixa:gsub(string.char(10), "")) >= 4, true)
 
     -- A CAIXA NAO PODE FECHAR SOZINHA: e o unico motivo de ela existir.
     local dialogo = StaticPopupDialogs["ROCKETSWAP_READY_CHECK"]
