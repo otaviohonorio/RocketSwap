@@ -28,12 +28,21 @@ SABOTAGENS = [
      u'-- sabotado',
      "prazo vencido e FALHA, nao conclusao"),
 
-    ("desistencia deixa passo pendurado", "Data.lua",
-     u'''            if running.progress and running.progress[key] == "doing" then
-                running.progress[key] = "failed"
-            end''',
-     u'            -- sabotado',
-     "o passo abandonado e falha, nao andamento"),
+    # DUAS DEFESAS PARA A MESMA COISA, e isso e de proposito: o passo abandonado e marcado pelo
+    # `NoteOutcome` do caminho de insistencia E pelo laco do `Finish`. Sabotar so uma nao reprova
+    # nada -- a outra cobre --, e foi assim que descobri que elas se sobrepoem.
+    #
+    # A sabotagem tira AS DUAS. E o unico jeito de o teste provar que ele mede a propriedade
+    # ("passo abandonado aparece como falha") em vez de medir uma implementacao dela.
+    ("as duas redes do passo abandonado", "Data.lua",
+     u'        NoteOutcome("spec", outcome)',
+     u'        -- sabotado',
+     "o passo abandonado e falha, nao andamento",
+     # segunda substituicao, no mesmo arquivo
+     (u'            if running.progress and running.progress[key] == "doing" then\n'
+      u'                running.progress[key] = "failed"\n'
+      u'            end',
+      u'            -- sabotado')),
 
     ("'pulado' volta a fundir as tres razoes", "Data.lua",
      u'running.progress[name] = (running.already or {})[name] and "skipped" or "done"',
@@ -48,12 +57,30 @@ SABOTAGENS = [
     ("linha para passo que o conjunto nao pede", "Data.lua",
      u'if src.preset and src.preset[key] then',
      u'if true then',
-     "tres passos, nao quatro"),
+     "com motivo, falha na hora"),
 
     ("o contador de tentativa volta para a tela", "UI.lua",
      u'        panel.clock:SetText(secs .. "s")',
      u'        panel.clock:SetText("tentativa " .. ((info.tries or 0) + 1) .. ", " .. secs .. "s")',
      "e ainda assim o relogio so conta segundos"),
+
+    ("desiste na primeira recusa do LoadConfig", "Data.lua",
+     u"local TALENT_RETRY_MAX = 5",
+     u"local TALENT_RETRY_MAX = 0",
+     "recusado sem motivo, o talento continua em andamento"),
+
+    ("insiste mesmo com motivo declarado", "Data.lua",
+     u'        if type(changeError) == "string" and changeError ~= "" then\n'
+     u'            return "fail", TalentError(changeError)\n'
+     u'        end\n'
+     u'        return RetryTalent(preset)',
+     u'        return RetryTalent(preset)',
+     "o motivo do jogo chega ao jogador"),
+
+    ("passo que desiste vira visto verde", "Data.lua",
+     u'        NoteOutcome("talent", outcome)',
+     u"        -- sabotado",
+     "e o passo ficou como falha"),
 
     ("linhas grudadas (ritmo de 18)", "UI.lua",
      u'local PROGRESS_ROW = 22 ',
@@ -131,7 +158,12 @@ def rodar(tmp):
 
 
 falhas = []
-for nome, arquivo, de, para, label in SABOTAGENS:
+for entrada in SABOTAGENS:
+    # A sexta posicao (opcional) e uma SEGUNDA substituicao no mesmo arquivo, para quando a
+    # propriedade tem mais de uma defesa e sabotar so uma nao reprova nada.
+    nome, arquivo, de, para, label = entrada[:5]
+    extra = entrada[5] if len(entrada) > 5 else None
+
     tmp = tempfile.mkdtemp(prefix="sab_")
     shutil.copytree(SRC, os.path.join(tmp, "a"), dirs_exist_ok=True)
     tmp = os.path.join(tmp, "a")
@@ -142,7 +174,16 @@ for nome, arquivo, de, para, label in SABOTAGENS:
         print("  ?     %-42s ANCORA NAO BATE (%d)" % (nome, txt.count(de)))
         falhas.append(nome)
         continue
-    io.open(alvo, "w", encoding="utf-8", newline="\n").write(txt.replace(de, para, 1))
+    txt = txt.replace(de, para, 1)
+
+    if extra:
+        if txt.count(extra[0]) != 1:
+            print("  ?     %-42s SEGUNDA ANCORA NAO BATE (%d)" % (nome, txt.count(extra[0])))
+            falhas.append(nome)
+            continue
+        txt = txt.replace(extra[0], extra[1], 1)
+
+    io.open(alvo, "w", encoding="utf-8", newline="\n").write(txt)
 
     saida = rodar(tmp)
     fim = "Tudo carregou e rodou sem erro de Lua." in saida

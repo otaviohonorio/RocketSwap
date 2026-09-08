@@ -572,7 +572,92 @@ local SPEC_RETRY_DELAY = 4
 -- uma vez, então sabotar o teto não reprova. Fica pelo raciocínio acima, que é do jogo.)
 local SPEC_RETRY_MAX = 8
 
+-- INSISTIR NO CARREGAMENTO DE TALENTOS, pela mesma razao que se insiste na troca de spec.
+--
+-- Diario real de 07/09 21:1x, a troca para "Frost PvP":
+--
+--     SetSpecialization(2)            -> true
+--     ACTIVE_PLAYER_SPECIALIZATION_CHANGED
+--     LoadConfig(66832448)            -> result = 0 (Error), changeError = **nil**
+--
+-- `Enum.LoadConfigResult.Error` e 0 (`ClassTalentsDocumentation.lua:501`), entao o passo estava
+-- certo em chamar de falha. O que estava errado era DESISTIR: `changeError` veio `nil`, ou seja o
+-- jogo recusou **sem dizer por que**, no instante seguinte a troca de spec -- que e justamente
+-- quando ele acabou de reescrever a arvore de talentos inteira do lado do servidor.
+--
+-- E `CanEditTalents` tinha respondido que podia. De novo o padrao que este projeto ja pagou tres
+-- vezes: o preditor diz "pode" e a chamada recusa mesmo assim.
+--
+-- ⚠️ O intervalo NAO E MEDIDO -- e o unico numero deste arquivo que nao e. So ha uma ocorrencia
+-- registrada com o retorno completo, entao nao da para tirar padrao dela. Os 4 segundos vem da
+-- recusa de spec, que e a mesma familia (recusa do servidor sem motivo declarado) e a unica que
+-- este projeto mediu. Se o diario mostrar outra coisa, e este numero que muda.
+local TALENT_RETRY_DELAY = 4
+local TALENT_RETRY_MAX = 5      -- 20 s, abaixo do prazo de 30 s do passo
+
+---Traduz o resultado de um passo para o estado que a janela desenha.
+---
+---UM LUGAR SO, e a razao e um defeito real: isto morava dentro do `RunNext`, e os caminhos de
+---INSISTENCIA (`RetrySpec`, `RetryTalent`) chamam `Steps.*` direto, sem passar por ele. O passo
+---que desistia depois do teto continuava marcado como "doing", e a chamada seguinte de `RunNext`
+---o promovia a **"done"** -- um visto verde ao lado da mensagem de falha, que e a mesma mentira
+---que o prazo vencido ja tinha produzido uma vez.
+---
+---"wait" nao aparece aqui de proposito: ele mantem "doing", que e o que ele significa.
+local function NoteOutcome(name, outcome)
+    if not running or not running.progress then return end
+
+    -- `"skip"` só vira "pulado" quando o retrato de antes diz que já estava certo. Sem essa
+    -- consulta, tudo o que virou no meio da corrente era anunciado como "nada a mudar".
+    if outcome == "skip" then
+        running.progress[name] = (running.already or {})[name] and "skipped" or "done"
+    elseif outcome == "fail" or outcome == "abort" then
+        running.progress[name] = "failed"
+    end
+end
+
 local Steps = {}
+
+---Insiste no carregamento do loadout quando o jogo recusa sem dizer por que.
+---
+---Espelha `RetrySpec` de proposito, inclusive na guarda do token: outra aplicação pode ter
+---começado nesse meio tempo, e a tentativa marcada por esta já não manda mais.
+local function RetryTalent(preset)
+    running.talentTries = (running.talentTries or 0) + 1
+
+    if running.talentTries > TALENT_RETRY_MAX then
+        return "fail", L["the game kept refusing to load the talents."]
+    end
+
+    Report(L["Waiting for the game to accept the talents..."], false)
+    if ns.Log then
+        ns.Log.Add("insistindo", { passo = "talent", tentativa = running.talentTries })
+    end
+
+    Arm()
+
+    local token = running
+    C_Timer.After(TALENT_RETRY_DELAY, function()
+        if not running or running ~= token then return end
+        if running.steps[running.at] ~= "talent" then return end
+
+        local outcome, message = Steps.talent(preset)
+        if ns.Log then ns.Log.Step("talent", outcome or "wait", message) end
+        NoteOutcome("talent", outcome)
+
+        if outcome == "skip" then
+            RunNext()
+        elseif outcome == "abort" then
+            Finish(false, message)
+        elseif outcome == "fail" then
+            running.failures = running.failures or {}
+            running.failures[#running.failures + 1] = message
+            RunNext()
+        end
+    end)
+
+    return "wait"
+end
 
 ---Insiste na troca de especialização até o jogo aceitar.
 ---
@@ -602,6 +687,7 @@ local function RetrySpec(preset, wanted)
 
         local outcome, message = Steps.spec(preset)
         if ns.Log then ns.Log.Step("spec", outcome or "wait", message) end
+        NoteOutcome("spec", outcome)
 
         if outcome == "skip" then
             RunNext()
@@ -707,6 +793,16 @@ end
 ---O texto vem localizado e diz a causa concreta ("você não pode fazer isso em combate", "não é
 ---possível numa área de dificuldade Mítica"…). A nossa frase genérica só entra quando o jogo
 ---não explicou — e aí ela é honesta, porque de fato não se sabe.
+---O nome do valor de `Enum.LoadConfigResult`, para o diario dizer `Error` em vez de `0`.
+local function LoadConfigResultName(result)
+    local E = Enum and Enum.LoadConfigResult
+    if not E or result == nil then return result end
+    for name, value in pairs(E) do
+        if value == result then return name .. "(" .. tostring(result) .. ")" end
+    end
+    return result
+end
+
 local function TalentError(changeError)
     if type(changeError) == "string" and changeError ~= "" then
         return format(L["talents: %s"], changeError)
@@ -762,8 +858,11 @@ function Steps.talent(preset)
     -- "não deu para carregar os talentos" que não ensina nada.
     local ok, result, changeError = pcall(C_ClassTalents.LoadConfig, preset.talent, true)
     if ns.Log then
+        -- O NOME DO ENUM, NAO SO O NUMERO. Ler `result = 0` no diario custou uma ida a
+        -- documentacao para descobrir que 0 e `Error` -- e o diario existe para responder na
+        -- hora, nao para mandar procurar.
         ns.Log.Call("talent", "LoadConfig(" .. tostring(preset.talent) .. ")",
-            ok, result, changeError)
+            ok, LoadConfigResultName(result), changeError)
     end
     if not ok then return "fail", L["the talent loadout could not be loaded."] end
 
@@ -798,7 +897,21 @@ function Steps.talent(preset)
         return "fail", L["the talents were staged but not applied; open the talent window and apply."]
     end
     if result == (E and E.Error) then
-        return "fail", TalentError(changeError)
+        -- COM MOTIVO, REPORTA; SEM MOTIVO, INSISTE.
+        --
+        -- A distincao e o coracao da correcao. Quando `changeError` traz uma string, o jogo
+        -- disse o que houve -- combate, area errada, restricao de instancia -- e insistir seria
+        -- repetir uma pergunta ja respondida: reporta com as palavras dele.
+        --
+        -- Quando vem `nil`, o jogo recusou e nao explicou. Foi o caso do diario, logo depois da
+        -- troca de spec. Recusa sem motivo declarado, neste addon, ja se provou transitoria uma
+        -- vez (a da spec) -- e insistir e correto nas duas leituras possiveis: se for passageira,
+        -- resolve; se for permanente, o teto devolve a mesma falha de antes, so que alguns
+        -- segundos depois.
+        if type(changeError) == "string" and changeError ~= "" then
+            return "fail", TalentError(changeError)
+        end
+        return RetryTalent(preset)
     end
 
     Arm()
@@ -928,6 +1041,7 @@ ConfirmTalent = function()
 end
 
 --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 RunNext = function()
     if not running then return end
 
@@ -966,15 +1080,7 @@ RunNext = function()
         ns.Log.Step(name, outcome or "wait", message)
     end
 
-    -- E COMO ELE FECHOU. "wait" continua "doing": o passo esta em andamento, esperando o jogo.
-    --
-    -- `"skip"` só vira "pulado" quando o retrato de antes diz que já estava certo. Sem essa
-    -- consulta, tudo o que virou no meio da corrente era anunciado como "nada a mudar".
-    if outcome == "skip" then
-        running.progress[name] = (running.already or {})[name] and "skipped" or "done"
-    elseif outcome == "fail" or outcome == "abort" then
-        running.progress[name] = "failed"
-    end
+    NoteOutcome(name, outcome)
 
     if outcome == "skip" then
         RunNext()
