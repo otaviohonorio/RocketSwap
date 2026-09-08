@@ -1935,14 +1935,26 @@ local mistas = ns.Gear.Wrong(true)
 check("dois berloques de PvE numa arena", #mistas, 2)
 check("e o aviso sabe QUAL slot", ns.Gear.SlotName(mistas[1].slot), "Berloque 1")
 
-print("== a comporta que impede o addon de gritar quando a leitura falha ==")
--- Se TODO slot lido deu errado, e muito mais provavel que a deteccao tenha falhado (idioma
--- cujo padrao nao casa, tooltip nao carregada) do que o jogador estar com 16 pecas erradas.
--- Sem esta comporta, um cliente em coreano veria o addon gritar em toda arena.
+print("== a comporta so cala quando a DETECCAO nao se prova ==")
+-- ⚑ AQUI ESTAVA O DEFEITO QUE O USUARIO RELATOU em 08/09/2026: *"o de pve no pvp, ainda nao vi
+-- funcionar, quando dou fila em BG, arena, ele nao avisa nada sobre meus itens"*.
+--
+-- A regra era `#wrong < read`: TODOS errados = presume falha de deteccao. Medindo de 0 a 16
+-- pecas de PvP, ela calava exatamente UMA das 17 configuracoes de cada lado -- e no lado do PvP
+-- essa uma e `n = 0`, equipamento de PvE inteiro, que e justamente quem entra numa arena vindo
+-- do PvE. Nao era filtro de ruido; era um recorte em cima do caso comum.
+--
+-- E a ambiguidade so existe de UM lado, por construcao: um `true` so nasce de um casamento do
+-- padrao, e nenhuma falha de leitura sabe fabricar `true` -- so `false`. Entao "todas erradas"
+-- em PvE sao 16 casamentos genuinos (nunca ambiguo), e em PvP sao zero casamentos (que e
+-- exatamente o que a falha produz).
+--
+-- Quem desfaz isso e o padrao testando A SI MESMO, contra uma linha montada da propria global.
 VestirTudo(false)
 ns.Gear.ClearCache()
 local todas, lidos = ns.Gear.Wrong(true)
-check("todos errados = leitura suspeita", ns.Gear.LooksReliable(todas, lidos), false)
+check("de PvE inteiro numa arena, a leitura vale", ns.Gear.LooksReliable(todas, lidos), true)
+check("  porque o padrao acha a linha que ele procura", ns.Gear.PatternWorks(), true)
 
 VestirTudo(true)
 equipped[13].pvp = false
@@ -1950,14 +1962,181 @@ ns.Gear.ClearCache()
 local uma, lidos2 = ns.Gear.Wrong(true)
 check("uma errada entre dezesseis = confiavel", ns.Gear.LooksReliable(uma, lidos2), true)
 
-print("== o aviso so aparece quando ainda da para consertar ==")
+-- E COM O PADRAO QUEBRADO O SILENCIO CONTINUA. Esta e a metade da comporta que tinha razao: num
+-- cliente cujo padrao nao casa, TODA peca le `false`, e gritar seria acusar dezesseis vezes.
+do
+    local realGlobal = PVP_ITEM_LEVEL_TOOLTIP
+    local realWorks = ns.Gear.PatternWorks
+
+    -- Um padrao que nunca casa com a linha que ele diz procurar.
+    ns.Gear.PatternWorks = function() return false end
+
+    VestirTudo(false)
+    ns.Gear.ClearCache()
+    local cegas, lidasCegas = ns.Gear.Wrong(true)
+    check("padrao que nao se prova volta a calar", ns.Gear.LooksReliable(cegas, lidasCegas), false)
+    check("  mesmo com os dezesseis slots lidos", lidasCegas, 16)
+
+    ns.Gear.PatternWorks = realWorks
+    PVP_ITEM_LEVEL_TOOLTIP = realGlobal
+end
+
+print("== fila e fila desde o primeiro segundo ==")
+-- ⚑ RELATO LITERAL DO USUARIO: *"quando dou fila em BG, arena, ele nao avisa nada sobre meus
+-- itens"*. E era literal mesmo.
+--
+-- `Alert.Context` so abria para os status "confirm" e "active" -- e "confirm" NAO e a espera na
+-- fila: e o ESTOURO dela, o convite com contagem para aceitar. (O DBM prova em disco: ele so
+-- monta a barra de "tempo restante para aceitar uma fila" quando o status vira "confirm", e mede
+-- a com `GetBattlefieldPortExpiration`.) Enquanto o jogador esperava, o contexto era nil e o
+-- aviso morria antes de ler uma unica peca.
+--
+-- A lista virou a do que NAO vale, de proposito: o nome literal do status de espera nao deu para
+-- provar de disco -- nenhum addon instalado o compara -- e um teste positivo dependeria de
+-- acertar esse nome.
+do
+    local realStatus = GetBattlefieldStatus
+    local realInstance = state.instance
+    state.instance = nil
+
+    for _, situacao in ipairs({ "queued", "confirm", "active", "waiting" }) do
+        GetBattlefieldStatus = function() return situacao end
+        check("na fila (" .. situacao .. ") o contexto e de PvP", ns.Alert.Context(), "pvp")
+    end
+
+    for _, vazio in ipairs({ "none", "error" }) do
+        GetBattlefieldStatus = function() return vazio end
+        check("sem fila (" .. vazio .. ") o addon nao opina", ns.Alert.Context(), nil)
+    end
+
+    GetBattlefieldStatus = realStatus
+    state.instance = realInstance
+end
+
+print("== modo guerra tem contexto e redacao proprios ==")
+-- PEDIDO DO USUARIO: *"inclusive quando seto para pvp, habilitando o war mode on, sem avisos"*.
+--
+-- O mundo aberto era excluido de proposito ("o addon nao opina") e War Mode nao era consultado em
+-- lugar nenhum do addon -- a unica mencao a `C_PvP` era um comentario dizendo que nenhuma API
+-- responde se um item e de PvP. Nao era defeito: era buraco.
+--
+-- E ele NAO devolve "pvp". Com War Mode ligado a maior parte do tempo e PvE -- missao, world
+-- quest, farm -- e dizer "numa partida de PvP" ali seria falso. Mesmo texto para duas situacoes
+-- diferentes e o que transforma aviso em ruido.
+do
+    local realInstance = state.instance
+    state.instance = nil
+
+    local ligado = false
+    C_PvP = { IsWarModeDesired = function() return ligado end }
+
+    check("com modo guerra desligado, o addon nao opina", ns.Alert.Context(), nil)
+
+    ligado = true
+    check("com modo guerra ligado, o contexto existe", ns.Alert.Context(), "warmode")
+    check("  e nao se confunde com uma partida", ns.Alert.Context() ~= "pvp", true)
+
+    -- E O EQUIPAMENTO E COBRADO COMO PvP: e o que "seto para pvp" quer dizer.
+    VestirTudo(false)
+    ns.Gear.ClearCache()
+    ns.Alert.Hide()
+    ns.Alert.Check("teste")
+    check("de PvE com modo guerra ligado, o aviso aparece", ns.Alert.__Shown(), true)
+    check("  com a redacao do modo guerra",
+        ns.Alert.__Headline(), ns.L["PvE gear with War Mode on."])
+
+    ligado = false
+    C_PvP = nil
+    state.instance = realInstance
+end
+
+print("== a diretiva gramatical vira coringa, e nao some ==")
+-- O COMENTARIO E O CODIGO SE CONTRADIZIAM: o comentario dizia "vira coringa", `BuildPattern`
+-- REMOVIA. Medido, o alcance e menor do que parece -- e o numero vale mais que a impressao:
+--
+--     diretiva no FIM   -> remover CASA (o casamento nao e ancorado, o prefixo basta)
+--     diretiva no MEIO  -> remover NAO CASA, coringa casa
+--
+-- A forma coreana conhecida tem a diretiva no FIM, entao o defeito nao estava quebrando aquele
+-- cliente. O que estava errado era a REGRA: diretiva nao e texto literal, e apaga-la so
+-- funcionava por acidente de posicao. O teste usa a forma que separa as duas -- sintetica de
+-- proposito, porque e a posicao, e nao o idioma, que decide.
+do
+    local realGlobal = PVP_ITEM_LEVEL_TOOLTIP
+
+    PVP_ITEM_LEVEL_TOOLTIP = "PvP %d|1\236\156\188\235\161\156;\235\161\156; \235\160\136\235\178\168"
+    ns.Gear.ClearCache()
+    ns.Gear.__ResetPattern()
+    check("diretiva no meio: o padrao ainda se prova", ns.Gear.PatternWorks(), true)
+
+    -- E SEM A GLOBAL NAO HA DETECCAO NENHUMA. E o piso do autoteste: sem isto, um autoteste que
+    -- respondesse "sim" para tudo passaria despercebido.
+    PVP_ITEM_LEVEL_TOOLTIP = nil
+    ns.Gear.ClearCache()
+    ns.Gear.__ResetPattern()
+    check("sem a global do jogo, a deteccao nao se prova", ns.Gear.PatternWorks(), false)
+    check("  e o padrao nem existe", ns.Gear.PatternReady(), false)
+
+    PVP_ITEM_LEVEL_TOOLTIP = realGlobal
+    ns.Gear.ClearCache()
+    ns.Gear.__ResetPattern()
+end
+
+print("== em combate o aviso nao NASCE, e o botao so aparece se der para trocar ==")
+-- ⚑ ESTE TESTE NAO TESTAVA NADA ate 08/09/2026. Ele afirmava `ns.Alert.__shown ~= true`, e
+-- `__shown` nunca era escrito em `Alert` -- so nos frames do simulador. `nil ~= true` e sempre
+-- verdadeiro: o check passava com o aviso na tela ou fora dela.
+--
+-- Com a porta de verdade ele reprovou na primeira execucao, e por um motivo legitimo: um aviso
+-- que ja estava aberto CONTINUA aberto quando o combate comeca. Isso e certo -- o dado nao
+-- deixou de ser verdade porque a luta comecou -- entao o teste fecha o aviso antes de perguntar
+-- se ele NASCE em combate, que e a afirmacao de verdade.
 VestirTudo(false)
 ns.Gear.ClearCache()
 state.instance = "arena"
+ns.Alert.Hide()
 state.inCombat = true
 ns.Alert.Check("teste")
-check("em combate o aviso cala", ns.Alert.__shown ~= true, true)
+check("em combate o aviso nao aparece", ns.Alert.__Shown(), false)
 state.inCombat = false
+
+-- E FORA DE COMBATE ELE APARECE, mesmo com a restricao de addon ativa -- que dentro de uma
+-- partida de PvP fica ligada do comeco ao fim.
+--
+-- ⚑ A COMPORTA ERA `CanFix()`, e ela fecha com a restricao. A documentacao de API deste cliente
+-- define `AddOnRestrictionType.PvPMatch` como "the player is in an active and incomplete PvP
+-- match": uma janela fechada a partida inteira. Isso desligava o aviso durante TODA arena e TODO
+-- campo de batalha -- e e parte da assimetria relatada, porque em PvE as restricoes equivalentes
+-- (`Encounter`, `ChallengeMode`) deixam janelas livres entre encontros.
+--
+-- Saber nao depende de poder consertar: quem descobre no meio da partida ao menos sai e volta
+-- certo. O que depende de poder consertar e o BOTAO.
+do
+    Enum.AddOnRestrictionType = Enum.AddOnRestrictionType
+        or { PvPMatch = 1, Encounter = 2, ChallengeMode = 3 }
+    Enum.AddOnRestrictionState = Enum.AddOnRestrictionState or { Inactive = 0, Active = 2 }
+
+    local realRestricted = C_RestrictedActions
+    C_RestrictedActions = {
+        GetAddOnRestrictionState = function(kind)
+            if kind == Enum.AddOnRestrictionType.PvPMatch then
+                return Enum.AddOnRestrictionState.Active
+            end
+            return Enum.AddOnRestrictionState.Inactive
+        end,
+    }
+
+    ns.Alert.Hide()
+    ns.Alert.Check("teste")
+    check("durante a restricao de PvP o aviso ainda aparece", ns.Alert.__Shown(), true)
+    check("  mas o botao de consertar nao", ns.Alert.__FixShown(), false)
+
+    C_RestrictedActions = realRestricted
+    ns.Alert.Hide()
+    ns.Alert.Check("teste")
+    check("sem restricao o aviso continua aparecendo", ns.Alert.__Shown(), true)
+end
+
 state.instance = nil
 
 print("== resumo do ready check ==")
@@ -2142,7 +2321,7 @@ state.instance = "arena"
 VestirTudo(false)
 ns.Gear.ClearCache()
 ns.Alert.Check("teste")
-check("e com ele desligado o addon nao avisa", ns.Alert.__shown ~= true, true)
+check("e com ele desligado o addon nao avisa", ns.Alert.__Shown(), false)
 
 caixa.__checked = true
 caixa.__scripts.OnClick(caixa)

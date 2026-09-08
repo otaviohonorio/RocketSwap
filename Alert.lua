@@ -39,14 +39,42 @@ function Alert.Context()
         return nil
     end
 
-    -- Fila de PvP aceita, ainda fora da instância: é o melhor momento do aviso, porque dá
-    -- tempo de trocar antes de entrar.
-    if GetMaxBattlefieldID then
+    -- FILA DE PvP: qualquer uma conta, inclusive a espera.
+    --
+    -- ⚑ ANTES SÓ VALIAM `"confirm"` E `"active"`, e `"confirm"` **não é a espera** — é o estouro
+    -- da fila, o convite com contagem para aceitar. (O DBM prova: ele só cria a barra de "tempo
+    -- restante para aceitar uma fila" quando o status vira `"confirm"`, medindo-a com
+    -- `GetBattlefieldPortExpiration`.) Então, no momento literal do pedido do usuário — *"quando
+    -- dou fila em BG, arena"* — o contexto era `nil` e o aviso morria antes de ler uma peça.
+    --
+    -- A lista agora é a do que NÃO vale, e isso é de propósito: o nome literal do status de
+    -- espera não deu para provar de disco (nenhum addon instalado o compara), e um teste
+    -- positivo dependeria de acertar esse nome. O negativo não depende.
+    if GetMaxBattlefieldID and GetBattlefieldStatus then
         for i = 1, (GetMaxBattlefieldID() or 0) do
             local status = GetBattlefieldStatus(i)
-            if status == "confirm" or status == "active" then return "pvp" end
+            if status ~= nil and status ~= "none" and status ~= "error" then
+                return "pvp"
+            end
         end
     end
+
+    -- MODO GUERRA: pedido do usuário — *"inclusive quando seto para pvp, habilitando o war mode
+    -- on, sem avisos"*.
+    --
+    -- O mundo aberto era excluído de propósito ("o addon não opina"), e War Mode não era
+    -- consultado em lugar nenhum. Mas com ele ligado o jogador está aberto a PvP, e é isso que
+    -- ele quis dizer com "seto para pvp".
+    --
+    -- Devolve um contexto PRÓPRIO, e não `"pvp"`, porque a situação é outra: com War Mode ligado
+    -- a maior parte do tempo é PvE (missões, world quests). Tratá-lo como arena faria o aviso
+    -- gritar "equipamento de PvE numa partida de PvP" para quem está farmando — e o mesmo texto
+    -- para duas situações diferentes é o que transforma aviso em ruído.
+    if C_PvP and C_PvP.IsWarModeDesired then
+        local ok, ligado = pcall(C_PvP.IsWarModeDesired)
+        if ok and ligado then return "warmode" end
+    end
+
     return nil
 end
 
@@ -64,6 +92,82 @@ local function CanFix()
         end
     end
     return true
+end
+
+---TODA COMPORTA DO CAMINHO DO AVISO, num retrato so.
+---
+---⚑ POR QUE ISTO EXISTE. O usuario relatou, em 08/09/2026: *"o aviso de item pvp para conteudo
+---pve ta funcionando. porem o de pve no pvp, ainda nao vi funcionar, quando dou fila em BG,
+---arena, ele nao avisa nada sobre meus itens"* -- e depois *"inclusive quando seto para pvp,
+---habilitando o war mode on, sem avisos"*.
+---
+---O caminho ate o aviso tem SEIS portas, e cada uma fecha em silencio:
+---
+---  1. `ns.db.warn == false`            -- desligado pelo jogador
+---  2. `Alert.Context()` devolve nil    -- o addon nao opina aqui
+---  3. `CanFix()` devolve false         -- combate, ou restricao de addon ativa
+---  4. `Gear.PatternReady()` false      -- a deteccao nao funciona neste idioma
+---  5. `#wrong == 0`                    -- nao ha o que avisar
+---  6. `Gear.LooksReliable()` false     -- todos errados = leitura suspeita
+---
+---Nenhuma delas escreve nada em lugar nenhum. Com seis portas mudas, adivinhar qual fechou custa
+---uma ida ao jogo por palpite; este retrato custa uma.
+---
+---@return table estado
+function Alert.Diagnose()
+    local contexto = Alert.Context()
+    local inInstance, instanceType = IsInInstance()
+
+    local filas = {}
+    if GetMaxBattlefieldID then
+        for i = 1, (GetMaxBattlefieldID() or 0) do
+            local status, mapa = GetBattlefieldStatus(i)
+            if status and status ~= "none" then
+                filas[#filas + 1] = { id = i, status = status, mapa = mapa }
+            end
+        end
+    end
+
+    -- WAR MODE. O addon nao consulta isto em lugar nenhum hoje -- e justamente por isso o
+    -- diagnostico consulta: para o retrato mostrar o que o addon esta ignorando.
+    local guerra
+    if C_PvP and C_PvP.IsWarModeDesired then
+        local ok, ativo = pcall(C_PvP.IsWarModeDesired)
+        if ok then guerra = ativo end
+    end
+
+    local restricoes = {}
+    if C_RestrictedActions and C_RestrictedActions.GetAddOnRestrictionState and Enum
+        and Enum.AddOnRestrictionType and Enum.AddOnRestrictionState then
+        for nome, kind in pairs({ PvPMatch = Enum.AddOnRestrictionType.PvPMatch,
+                                  Encounter = Enum.AddOnRestrictionType.Encounter,
+                                  ChallengeMode = Enum.AddOnRestrictionType.ChallengeMode }) do
+            local ok, state = pcall(C_RestrictedActions.GetAddOnRestrictionState, kind)
+            restricoes[nome] = ok and (state == Enum.AddOnRestrictionState.Active) or false
+        end
+    end
+
+    -- AS DUAS DIRECOES, sempre. Perguntar so a do contexto atual esconde o caso em que o
+    -- contexto e que esta errado -- que e exatamente uma das suspeitas.
+    local erradoPvP, lidoPvP, vestido = ns.Gear.Wrong(true, ns.db and ns.db.mutedSlots)
+    local erradoPvE, lidoPvE = ns.Gear.Wrong(false, ns.db and ns.db.mutedSlots)
+
+    return {
+        contexto = contexto,
+        instancia = inInstance and instanceType or nil,
+        filas = filas,
+        warMode = guerra,
+        emCombate = InCombatLockdown() and true or false,
+        restricoes = restricoes,
+        podeConsertar = CanFix(),
+        avisoLigado = not (ns.db and ns.db.warn == false),
+        deteccaoViva = ns.Gear.PatternReady(),
+        vestido = vestido,
+        comoPvP = { errado = #erradoPvP, lido = lidoPvP,
+            confiavel = ns.Gear.LooksReliable(erradoPvP, lidoPvP) },
+        comoPvE = { errado = #erradoPvE, lido = lidoPvE,
+            confiavel = ns.Gear.LooksReliable(erradoPvE, lidoPvE) },
+    }
 end
 
 --------------------------------------------------------------------------------
@@ -119,6 +223,26 @@ local function Build()
     return ui
 end
 
+---O aviso esta na tela? E o que ele esta dizendo?
+---
+---⚑ EXISTEM PORQUE O TESTE ANTERIOR NAO TESTAVA NADA. Ele afirmava
+---`ns.Alert.__shown ~= true` -- e `__shown` nunca era escrito em `Alert`, so nos frames do
+---simulador. A comparacao era `nil ~= true`, verdadeira sempre: o check passava com o aviso
+---aparecendo ou nao. Um teste que nao pode reprovar e um comentario com sintaxe de teste.
+function Alert.__Shown()
+    return ui ~= nil and ui:IsShown() and true or false
+end
+
+---O botao de consertar esta oferecido? E o que separa "o addon avisou" de "o addon avisou E
+---consegue resolver" -- as duas coisas deixaram de andar juntas.
+function Alert.__FixShown()
+    return ui ~= nil and ui.fix ~= nil and ui.fix:IsShown() and true or false
+end
+
+function Alert.__Headline()
+    return ui and ui.headline and ui.headline:GetText() or nil
+end
+
 function Alert.Hide()
     if ui then ui:Hide() end
 end
@@ -128,10 +252,19 @@ end
 --------------------------------------------------------------------------------
 ---Um conjunto que sirva para o contexto, se o jogador tiver criado algum. É o que transforma
 ---o aviso de "você errou" em "quer que eu conserte?". Sem conjuntos, o aviso só aponta.
+---Este contexto pede equipamento de PvP?
+---
+---São TRÊS contextos agora ("pvp", "warmode", "pve") e dois deles pedem PvP. Perguntar
+---`context == "pvp"` em cada lugar deixaria o modo guerra silenciosamente do lado do PvE — que é
+---o oposto do que ele significa.
+local function WantsPvP(context)
+    return context == "pvp" or context == "warmode"
+end
+
 local function PresetFor(context)
     for _, preset in ipairs(ns.db.presets or {}) do
         if preset.gear then
-            local wrong, read = ns.Gear.Wrong(context == "pvp")
+            local wrong, read = ns.Gear.Wrong(WantsPvP(context))
             -- Um conjunto serve se, aplicado, ele resolveria: usamos o próprio nome como
             -- pista quando não dá para simular (não dá — as peças do conjunto não estão
             -- vestidas). Nome é heurística, e por isso é só sugestão de botão, nunca ação
@@ -139,7 +272,7 @@ local function PresetFor(context)
             local name = (preset.name or ""):lower()
             local looksPvP = name:find("pvp") or name:find("arena") or name:find("bg")
                 or name:find("campo")
-            if (context == "pvp") == (looksPvP ~= nil) then
+            if WantsPvP(context) == (looksPvP ~= nil) then
                 return preset, wrong, read
             end
         end
@@ -152,9 +285,23 @@ function Alert.Check(reason)
 
     local context = Alert.Context()
     if not context then return end
-    if not CanFix() then return end
 
-    local wrong, read = ns.Gear.Wrong(context == "pvp", ns.db.mutedSlots)
+    -- ⚑ EM COMBATE O AVISO CALA, e só em combate. Antes a comporta era `CanFix()`, que também
+    -- fecha quando a **restrição de addon** está ativa — e a documentação de API deste cliente
+    -- (12.1.0.69587) define `Enum.AddOnRestrictionType.PvPMatch` como *"the player is in an
+    -- active and incomplete PvP match"*: uma janela fechada do começo ao fim da partida.
+    --
+    -- Isso desligava o aviso durante TODA arena e TODO campo de batalha, e é parte da assimetria
+    -- que o usuário relatou: em PvE as restrições equivalentes (`Encounter`, `ChallengeMode`)
+    -- deixam janelas livres — masmorra fora de encontro, raide entre bosses — enquanto uma
+    -- partida de PvP não deixa nenhuma.
+    --
+    -- E a dependência era errada de origem: **saber não depende de poder consertar**. Quem
+    -- descobre no meio da partida que está de PvE ao menos sai e volta certo. O que depende de
+    -- poder consertar é o BOTÃO, e ele já sabe se esconder.
+    if InCombatLockdown() then return end
+
+    local wrong, read = ns.Gear.Wrong(WantsPvP(context), ns.db.mutedSlots)
     if #wrong == 0 then
         Alert.Hide()
         return
@@ -168,15 +315,25 @@ function Alert.Check(reason)
 
     -- O texto do jogo, no lugar do jogo: aviso amarelo abaixo do centro. É onde a Blizzard
     -- põe recado desta natureza, e o helper já cuida de cor e de repetição.
+    -- A REDAÇÃO É DO CONTEXTO, e o modo guerra tem a dele.
+    --
+    -- Com War Mode ligado a maior parte do tempo é PvE — missão, world quest, farm. Dizer
+    -- "equipamento de PvE numa partida de PvP" ali seria falso (não há partida) e viraria ruído
+    -- em quem só quer o bônus de experiência. O texto avisa que ele está EXPOSTO, que é o fato.
+    local titulo = L["PvP gear in PvE content."]
+    if context == "pvp" then
+        titulo = L["PvE gear in a PvP match."]
+    elseif context == "warmode" then
+        titulo = L["PvE gear with War Mode on."]
+    end
+
     if UIErrorsFrame and UIErrorsFrame.AddExternalWarningMessage then
-        pcall(UIErrorsFrame.AddExternalWarningMessage, UIErrorsFrame,
-            context == "pvp" and L["PvE gear in a PvP match."] or L["PvP gear in PvE content."])
+        pcall(UIErrorsFrame.AddExternalWarningMessage, UIErrorsFrame, titulo)
     end
 
     Build()
 
-    ui.headline:SetText(context == "pvp" and L["PvE gear in a PvP match."]
-        or L["PvP gear in PvE content."])
+    ui.headline:SetText(titulo)
 
     local lines = {}
     for i = 1, math.min(#wrong, 6) do
@@ -187,7 +344,9 @@ function Alert.Check(reason)
     end
     ui.body:SetText(table.concat(lines, "\n"))
 
-    local preset = PresetFor(context)
+    -- O BOTÃO, sim, depende de poder consertar: oferecer "Carregar <conjunto>" no meio de uma
+    -- partida, onde a troca é recusada, seria um botão que não faz nada.
+    local preset = CanFix() and PresetFor(context) or nil
     if preset then
         ui.fix:SetText(format(L["Load %s"], preset.name))
         ui.fix:SetScript("OnClick", function()

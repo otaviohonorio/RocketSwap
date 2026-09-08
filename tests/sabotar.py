@@ -23,6 +23,64 @@ if not os.path.exists(LUA):
 
 # (nome, arquivo, de, para, label do check que TEM que reprovar)
 SABOTAGENS = [
+    # ------------------------------------------------------------------ o aviso de PvE em PvP
+    # Quatro comportas caiavam esse aviso, e o usuario relatou o sintoma em 08/09/2026:
+    # "o de pve no pvp, ainda nao vi funcionar, quando dou fila em BG, arena, ele nao avisa nada".
+
+    ("a comporta volta a presumir falha quando tudo esta errado", "Gear.lua",
+     u"    if #wrong < read then return true end",
+     u"    if #wrong < read then return true end\n"
+     u"    do return false end",
+     "de PvE inteiro numa arena, a leitura vale"),
+
+    # A outra metade da comporta tinha razao: com o padrao quebrado, TODA peca le `false`.
+    ("a comporta para de exigir que a deteccao se prove", "Gear.lua",
+     u"    return Gear.PatternWorks()",
+     u"    return true",
+     "padrao que nao se prova volta a calar"),
+
+    # ⚑ SABOTA A FUNCAO INTEIRA, e nao a linha final. O teste que cobre o caso negativo e o da
+    # global ausente, que sai pelos `return` adiantados -- trocar so a ultima linha nao mudaria a
+    # resposta dele, e a sabotagem passaria batido dizendo que o teste existe.
+    ("o autoteste do padrao responde sim para tudo", "Gear.lua",
+     u"    if patternWorks ~= nil then return patternWorks end",
+     u"    do return true end",
+     "sem a global do jogo, a deteccao nao se prova"),
+
+    # O comentario dizia "coringa" e o codigo REMOVIA: cola os dois lados e nunca casa.
+    ("a diretiva gramatical volta a ser removida", "Gear.lua",
+     u'    local clean = text:gsub("|%d+[^;]*;[^;]*;", "\\1")',
+     u'    local clean = text:gsub("|%d+[^;]*;[^;]*;", "")',
+     "diretiva no meio: o padrao ainda se prova"),
+
+    ("a fila volta a valer so no estouro", "Alert.lua",
+     u'            if status ~= nil and status ~= "none" and status ~= "error" then',
+     u'            if status == "confirm" or status == "active" then',
+     "na fila (queued) o contexto e de PvP"),
+
+    ("o modo guerra volta a nao contar", "Alert.lua",
+     u"        if ok and ligado then return \"warmode\" end",
+     u"        if false then return \"warmode\" end",
+     "com modo guerra ligado, o contexto existe"),
+
+    # Com War Mode o contexto nao e "pvp", entao quem perguntar `context == \"pvp\"` joga o modo
+    # guerra silenciosamente para o lado do PvE -- e passa a cobrar equipamento de PvE de quem
+    # esta exposto.
+    ("o modo guerra cai do lado do PvE", "Alert.lua",
+     u"    return context == \"pvp\" or context == \"warmode\"",
+     u"    return context == \"pvp\"",
+     "de PvE com modo guerra ligado, o aviso aparece"),
+
+    # Saber nao depende de poder consertar: a restricao de PvP fica ativa a partida inteira.
+    ("o aviso volta a depender de poder consertar", "Alert.lua",
+     u"    if InCombatLockdown() then return end\n"
+     u"\n"
+     u"    local wrong, read = ns.Gear.Wrong(WantsPvP(context), ns.db.mutedSlots)",
+     u"    if not CanFix() then return end\n"
+     u"\n"
+     u"    local wrong, read = ns.Gear.Wrong(WantsPvP(context), ns.db.mutedSlots)",
+     "durante a restricao de PvP o aviso ainda aparece"),
+
     ("prazo vencido vira visto verde", "Data.lua",
      u'if running.progress then running.progress[passo] = "failed" end',
      u'-- sabotado',

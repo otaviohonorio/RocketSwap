@@ -85,6 +85,9 @@ L["that appearance set is locked."] = "esse conjunto de aparência está travado
 
 -- Aviso de equipamento e resumo no ready check (0.4.0)
 L["PvE gear in a PvP match."] = "Equipamento de PvE numa partida de PvP."
+-- Modo guerra nao e partida: o jogador esta no mundo aberto, exposto a PvP enquanto faz
+-- PvE. Dizer "partida" ali seria falso, e o mesmo texto para as duas situacoes vira ruido.
+L["PvE gear with War Mode on."] = "Modo Guerra ligado, e voce esta de equipamento de PvE."
 L["PvP gear in PvE content."] = "Equipamento de PvP em conteúdo de PvE."
 L["...and %d more."] = "...e mais %d."
 L["Load %s"] = "Carregar %s"

@@ -103,6 +103,48 @@ end
 -- Este comando distingue as tres em uma execucao. `/rs transmog` mostra o estado; `/rs transmog
 -- <indice>` chama a API e le o ID ativo ANTES, LOGO DEPOIS e meio segundo depois -- porque nao
 -- esta verificado que a troca vale no mesmo quadro, e essa era a duvida que sobrava.
+-- Instrumentacao do AVISO DE EQUIPAMENTO. Seis portas fecham esse caminho e nenhuma escreve
+-- nada; `/rs alert` mostra as seis de uma vez. Ver `Alert.Diagnose`.
+commands["alert"] = function()
+    local d = ns.Alert.Diagnose()
+
+    local function marca(v)
+        if v == nil then return "|cffff5555nil|r" end
+        if v == true then return "|cff40d878sim|r" end
+        if v == false then return "|cffff5555nao|r" end
+        return tostring(v)
+    end
+
+    ns.Print("diagnostico do aviso de equipamento")
+    print("  contexto ............ " .. (d.contexto or "|cffff5555nil (mundo aberto)|r"))
+    print("  instancia ........... " .. (d.instancia or "-"))
+    print("  war mode ............ " .. marca(d.warMode) .. "  |cff808080(o aviso ignora)|r")
+    print("  aviso ligado ........ " .. marca(d.avisoLigado))
+    print("  em combate .......... " .. marca(d.emCombate))
+    print("  pode consertar ...... " .. marca(d.podeConsertar))
+    print("  deteccao viva ....... " .. marca(d.deteccaoViva))
+
+    local r = {}
+    for nome, ativa in pairs(d.restricoes) do
+        if ativa then r[#r + 1] = nome end
+    end
+    print("  restricoes ativas ... " .. (#r > 0 and table.concat(r, ", ") or "nenhuma"))
+
+    if #d.filas == 0 then
+        print("  filas de PvP ........ nenhuma")
+    else
+        for _, f in ipairs(d.filas) do
+            print(("  fila %d .............. %s  %s"):format(f.id, f.status, f.mapa or ""))
+        end
+    end
+
+    print(("  pecas vestidas ...... %d"):format(d.vestido or 0))
+    print(("  como PvP ............ %d errada(s) de %d lida(s), leitura %s"):format(
+        d.comoPvP.errado, d.comoPvP.lido, d.comoPvP.confiavel and "confiavel" or "SUSPEITA"))
+    print(("  como PvE ............ %d errada(s) de %d lida(s), leitura %s"):format(
+        d.comoPvE.errado, d.comoPvE.lido, d.comoPvE.confiavel and "confiavel" or "SUSPEITA"))
+end
+
 commands["transmog"] = function(rest)
     local arg = rest and rest:match("^%s*(%S+)")
 
