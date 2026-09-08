@@ -470,8 +470,14 @@ function Alert.OnReadyCheck()
         -- dois-pontos está certo; como título de caixa, seguido de linha em branco, ele fica
         -- pendurado. A linha de chat chegava a ter três: "RocketSwap: conferência: Especialização:
         -- Gelido".
+        --
+        -- E O TÍTULO NOMEIA O CONTEÚDO, não o ritual. O prefixo do chat continua dizendo
+        -- "conferência" de propósito: lá ele responde *por que o addon falou sozinho* — alguém
+        -- mandou o ready check — e essa é a dúvida de quem lê uma linha que apareceu no meio da
+        -- conversa. Na caixa, o jogador já sabe por que ela abriu; o que ele precisa em meio
+        -- segundo é saber **o que está olhando**.
         local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",
-            L["Ready check"] .. "\n\n" .. Alert.Summary("\n"))
+            L["What you are using"] .. "\n\n" .. Alert.Summary("\n"))
         if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
             -- Só então o aviso do meio da tela, como rede: melhor um aviso que some do que nada.
             pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
