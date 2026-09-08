@@ -97,7 +97,23 @@ L["ready check:"] = "conferência:"
 -- etiqueta, e arrastavam "loadout" (que o cliente traduz como "equipamento") e "conjunto" (que
 -- aqui é o nome dos presets). O resumo usa `L["(none)"]`, que já existe e já é o que os combos
 -- do editor mostram no mesmo caso.
-L["Ready check"] = "Conferência"
+-- O TÍTULO NOMEIA O CONTEÚDO, e não o ritual que abriu a caixa.
+--
+-- "Conferência" (0.11.2) dizia o que estava ACONTECENDO — o líder pediu conferência — e não
+-- o que o jogador estava olhando. Pedido do usuário em 08/09/2026: *"tem um título
+-- 'conferência', poderia trocar por algo melhor"*.
+--
+-- ⚑ E NÃO É "CONJUNTO ATUAL", que foi a primeira ideia. Duas razões, e as duas são do
+-- próprio addon: (a) `conjunto` já é o nome dos PRESETS aqui (`L["Presets"]`), então o
+-- título prometeria o contêiner e entregaria os campos; (b) a caixa **não** mostra um
+-- preset — ela lê a especialização, os talentos e os itens que estão valendo AGORA, que
+-- podem não bater com preset nenhum. Aliás, é exatamente esse descasamento que o addon
+-- existe para revelar: um título dizendo "conjunto atual" mentiria justo na hora em que
+-- a informação importa.
+--
+-- A frase escolhida já existia no addon, em `/rs gear`, para este mesmo conteúdo. Mesmo
+-- vocabulário nos dois lugares, que é a regra que já governa os rótulos aqui dentro.
+L["What you are using"] = "O que você está usando"
 L["gear warning on."] = "aviso de equipamento ligado."
 L["gear warning off."] = "aviso de equipamento desligado."
 L["ready check summary on."] = "resumo no ready check ligado."

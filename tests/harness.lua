@@ -2226,7 +2226,13 @@ do
     local titulo = naCaixa:match("^(.-)" .. NL) or naCaixa
     check("o titulo da caixa nao termina em dois-pontos",
         titulo and titulo:sub(-1) ~= ":", true)
-    check("e ainda diz que e a conferencia", titulo, ns.L["Ready check"])
+    check("e o titulo nomeia o CONTEUDO", titulo, ns.L["What you are using"])
+
+    -- ⚑ E NAO USA A PALAVRA DOS PRESETS. `conjunto` e o nome do container aqui
+    -- (`L["Presets"] = "Conjuntos"`), e a caixa mostra os CAMPOS que estao valendo -- que podem
+    -- nao bater com preset nenhum. Chamar isso de "conjunto atual" mentiria justo na hora em que
+    -- o descasamento e a informacao.
+    check("  sem prometer um preset", titulo:lower():find("conjunto", 1, true), nil)
 
     -- A CAIXA NAO PODE FECHAR SOZINHA: e o unico motivo de ela existir.
     local dialogo = StaticPopupDialogs["ROCKETSWAP_READY_CHECK"]
