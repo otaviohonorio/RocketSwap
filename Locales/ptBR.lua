@@ -167,3 +167,9 @@ L["Switching to %s"] = "Trocando para %s"
 -- "pulado" nao e falha, e o rotulo diz por que -- senao o passo pulado fica igual ao que ainda
 -- nao comecou, e a pessoa termina sem saber se a aparencia foi aplicada ou esquecida.
 L["%s — nothing to change"] = "%s — nada a mudar"
+
+-- LoadConfig recusado SEM motivo declarado e transitorio: o addon insiste (0.18.2)
+L["Waiting for the game to accept the talents..."] =
+    "Esperando o jogo aceitar os talentos..."
+L["the game kept refusing to load the talents."] =
+    "o jogo continuou recusando carregar os talentos."

@@ -443,7 +443,18 @@ C_ClassTalents = {
     -- TRES retornos, como a API: `result, changeError, newLearnedNodeIDs`
     -- (ClassTalentsDocumentation.lua:263-268). Devolver so o primeiro escondia que o addon
     -- estava jogando fora justamente a string que diz por que a troca nao deu.
+    -- A RECUSA DO SERVIDOR, que o diario real de 07/09 21:1x registrou: `LoadConfig` devolveu
+    -- `Error` (0) com `changeError` **nil** -- recusou sem dizer por que -- no instante seguinte
+    -- a troca de spec. Sem o stub saber produzir isso, o caminho da insistencia nao existia para
+    -- o teste, e o addon desistia na primeira recusa: o jogador virava Frost com a build de PvE.
+    --
+    -- `loadRefusals` conta quantas recusas ainda faltam; `loadError` diz se elas vem com motivo
+    -- declarado (que NAO deve insistir) ou sem (que deve).
     LoadConfig = function(configID)
+        if (state.loadRefusals or 0) > 0 then
+            state.loadRefusals = state.loadRefusals - 1
+            return 0, state.loadError, {}
+        end
         state.pendingLoadout = configID
         return 2, nil, {}        -- LoadInProgress: confirma por evento
     end,
@@ -451,6 +462,10 @@ C_ClassTalents = {
     -- addon era pulada em silencio e o teste nunca via esse caminho.
     CanEditTalents = function() return true, nil end,
 }
+
+-- Botoes da recusa de `LoadConfig` (ver o comentario dentro de `C_ClassTalents`).
+state.loadRefusals = 0
+state.loadError = nil
 
 C_Traits = {
     GetConfigInfo = function(configID)
@@ -2213,6 +2228,88 @@ local paraApagar = ns.UI.Selected()
 ns.UI.Delete()
 check("apagou um", #ns.db.presets, antes - 1)
 check("e foi o selecionado", ns.db.presets[1] ~= paraApagar, true)
+
+print("== recusa do LoadConfig sem motivo e transitoria ==")
+-- O DEFEITO RELATADO EM 07/09 21:1x, e o usuario descreveu o sintoma melhor que qualquer log:
+-- *"ele trocou tudo, exceto pelo talento, acabou ficando o talento de PVE do Frost... deve ter
+-- pego a primeira build, que era de pve"*.
+--
+-- O diario mostrou a causa exata:
+--
+--     SetSpecialization(2)   -> true
+--     ACTIVE_PLAYER_SPECIALIZATION_CHANGED
+--     LoadConfig(66832448)   -> result = 0 (Error), changeError = nil
+--
+-- `Error` e 0 mesmo (`ClassTalentsDocumentation.lua:501`), entao chamar de falha estava certo.
+-- Errado era DESISTIR: `changeError` veio nil -- o jogo recusou sem dizer por que, logo depois de
+-- reescrever a arvore inteira ao trocar a spec. Como o loadout nunca entrou, o jogo ficou com a
+-- build que ja estava ativa naquela spec: a de PvE.
+do
+    state.specIndex, state.equippedSet = 1, 9
+    state.activeLoadout[251] = 10
+
+    -- Duas recusas sem motivo, e depois o jogo aceita.
+    state.loadRefusals, state.loadError = 2, nil
+
+    local ultimo
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, talent = 11 }, function(t) ultimo = t end)
+
+    state.specIndex = 2
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+
+    -- Primeira recusa: o passo NAO pode ter desistido.
+    local passos = ns.Data.GetProgress()
+    check("recusado sem motivo, o talento continua em andamento", passos[2].state, "doing")
+    check("e o addon esta insistindo", state.loadRefusals, 1)
+
+    RunTimers(5)          -- segunda tentativa, recusada de novo
+    RunTimers(5)          -- terceira, e agora o jogo aceita
+    check("o jogo aceitou na terceira", state.pendingLoadout, 11)
+
+    fire("TRAIT_CONFIG_UPDATED", 999)
+    passos = ns.Data.GetProgress()
+    check("e o passo fecha como concluido", passos[2].state, "done")
+
+    state.loadRefusals = 0
+end
+
+do
+    -- COM MOTIVO DECLARADO, NAO INSISTE. Quando o jogo diz o que houve -- combate, area errada --
+    -- repetir a pergunta ja respondida so atrasa a resposta ao jogador.
+    state.specIndex, state.equippedSet = 2, 9
+    state.activeLoadout[251] = 10
+    state.loadRefusals, state.loadError = 3, "Voce nao pode fazer isso em combate"
+
+    local ultimo
+    ns.Data.Apply({ name = "So talento", talent = 11 }, function(t) ultimo = t end)
+
+    local passos = ns.Data.GetProgress()
+    check("com motivo, falha na hora", passos[1].state, "failed")
+    check("e a mensagem usa as palavras do jogo",
+        (ultimo or ""):find("combate") ~= nil, true)
+    check("nao gastou tentativa nenhuma a mais", state.loadRefusals, 2)
+
+    state.loadRefusals, state.loadError = 0, nil
+end
+
+do
+    -- O TETO. Se a recusa nunca passar, o passo desiste -- e desiste como FALHA, nao ficando
+    -- pendurado em andamento para sempre.
+    state.specIndex, state.equippedSet = 2, 9
+    state.activeLoadout[251] = 10
+    state.loadRefusals, state.loadError = 99, nil
+
+    local ultimo
+    ns.Data.Apply({ name = "Teimoso", talent = 11 }, function(t) ultimo = t end)
+    for _ = 1, 10 do RunTimers(5) end
+
+    check("desistiu depois do teto", ns.Data.IsApplying(), false)
+    check("e o passo ficou como falha", ns.Data.GetProgress()[1].state, "failed")
+    check("com a frase de desistencia",
+        (ultimo or ""):find("continuou recusando carregar") ~= nil, true)
+
+    state.loadRefusals = 0
+end
 
 print("== o painel de etapas: a troca vista de fora ==")
 -- Pedido do usuario: *"quando clica para carregar, ele demora para iniciar o cast, o usuario vai
