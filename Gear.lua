@@ -53,17 +53,34 @@ Gear.SLOTS = SLOTS
 --------------------------------------------------------------------------------
 ---Monta o padrão a partir da global, sem âncora.
 ---
----Escapa os mágicos, troca `%d` por `%d+` e `%s` por `.+`, e **remove diretiva gramatical**
----(`|1forma1;forma2;`), que existe em alguns idiomas e não é literal.
+---Escapa os mágicos, troca `%d` por `%d+` e `%s` por `.+`, e transforma a **diretiva
+---gramatical** (`|1forma1;forma2;`) em coringa.
+---
+---⚑ O COMENTÁRIO E O CÓDIGO SE CONTRADIZIAM AQUI, e o comentário é que estava certo: ele dizia
+---"a diretiva vira coringa" e o código a **removia**.
+---
+---O ALCANCE, MEDIDO — e é menor do que parece à primeira vista, então vale registrar o número em
+---vez da impressão. Remover só quebra quando a diretiva está no **meio** da string; quando está
+---no fim, o casamento não é ancorado e o prefixo já basta:
+---
+---     global                      remover   coringa
+---     diretiva no FIM             casa      casa
+---     diretiva no MEIO            NÃO casa  casa
+---
+---A forma coreana conhecida (`PvP 장비 레벨 %d|1으로;로;`) tem a diretiva no fim — ou seja, o
+---defeito **não** estava quebrando o cliente coreano hoje. O que estava errado era a regra: a
+---diretiva não é texto literal, e apagá-la só funcionava por acidente de posição.
 local function BuildPattern(text)
     if type(text) ~= "string" or text == "" then return nil end
 
-    -- A diretiva vira coringa: o que vem depois do número muda com o número.
-    local clean = text:gsub("|%d+[^;]*;[^;]*;", "")
+    -- A diretiva vira coringa: o que vem depois do número muda COM o número, então não dá para
+    -- fixar uma das formas nem para apagar as duas.
+    local clean = text:gsub("|%d+[^;]*;[^;]*;", "\1")
 
     local pattern = clean:gsub("([%%%^%$%(%)%.%[%]%*%+%-%?])", "%%%1")
     pattern = pattern:gsub("%%%%d", "%%d+")
     pattern = pattern:gsub("%%%%s", ".+")
+    pattern = pattern:gsub("\1", ".-")
     return pattern
 end
 
@@ -74,6 +91,16 @@ local function Pattern()
         pvpPattern = BuildPattern(PVP_ITEM_LEVEL_TOOLTIP) or false
     end
     return pvpPattern or nil
+end
+
+---Esquece o padrao e o autoteste dele.
+---
+---Existe para o teste poder trocar a global do jogo e conferir o comportamento em outro idioma:
+---o padrao e memorizado na primeira leitura, entao sem isto o segundo idioma nunca seria montado.
+---In-game nada chama isto -- a global nao muda no meio da sessao.
+function Gear.__ResetPattern()
+    pvpPattern = nil
+    Gear.__patternWorksReset()
 end
 
 --------------------------------------------------------------------------------
@@ -87,6 +114,66 @@ local cache = {}
 
 function Gear.ClearCache()
     cache = {}
+end
+
+---A deteccao esta viva neste cliente?
+---
+---`Pattern()` sai de uma global do jogo (`PVP_ITEM_LEVEL_TOOLTIP`). Se ela nao existir ou nao
+---render padrao, TODA peca volta `nil` e o addon cala pelos dois lados -- sem erro, sem log,
+---sem nada a que se agarrar. Perguntar isso e a primeira coisa que um diagnostico faz.
+function Gear.PatternReady()
+    return Pattern() ~= nil
+end
+
+---O padrão CASA com a linha que ele foi feito para achar?
+---
+---⚑ ESTE É O SINAL QUE FALTAVA, e ele é o que permite desarmar a comporta `LooksReliable` sem
+---transformar o addon num gritador.
+---
+---O problema que ela tentava resolver é real e é assimétrico. Um `true` só nasce de
+---`text:match(pattern)`; nenhum modo de falha de leitura sabe fabricar um `true` — só um
+---`false`. Logo:
+---
+---  * em PvE, "todas erradas" = 16 casamentos genuínos. Nunca é ambíguo.
+---  * em PvP, "todas erradas" = nenhum casamento — que é **exatamente** o que a falha produz.
+---
+---Por isso a comporta só mordia de um lado, e mordia justamente o caso comum: quem entra numa
+---arena vindo do PvE está com o equipamento inteiro de PvE.
+---
+---A saída é não perguntar ao equipamento, e sim **ao próprio padrão**: montar uma linha
+---sintética a partir da mesma global de onde ele saiu e ver se ele a encontra. Se encontra, a
+---detecção está provada e "todas erradas" é leitura, não falha. Se não encontra, o padrão está
+---quebrado neste cliente e o silêncio continua sendo a resposta certa.
+---
+---Não depende de o jogador possuir uma peça de PvP sequer — que é o furo de qualquer heurística
+---baseada no que ele está vestindo.
+local patternWorks
+
+function Gear.__patternWorksReset()
+    patternWorks = nil
+end
+
+function Gear.PatternWorks()
+    if patternWorks ~= nil then return patternWorks end
+
+    local pattern = Pattern()
+    if not pattern then
+        patternWorks = false
+        return false
+    end
+
+    -- A LINHA SINTÉTICA sai da mesma global, com um número no lugar do `%d`. É o mesmo texto que
+    -- o jogo escreve na tooltip, montado por `format` em vez de lido de um item.
+    local ok, linha = pcall(format, PVP_ITEM_LEVEL_TOOLTIP, 684)
+    if not ok or type(linha) ~= "string" then
+        patternWorks = false
+        return false
+    end
+
+    -- A diretiva gramatical não passa por `format`: ela é resolvida pelo cliente ao desenhar.
+    -- Aqui ela vira o texto cru, e o coringa do padrão é justamente o que a atravessa.
+    patternWorks = linha:match(pattern) ~= nil
+    return patternWorks
 end
 
 ---Esta peça é de PvP?
@@ -159,13 +246,32 @@ end
 
 ---A leitura é confiável nesta varredura?
 ---
----Se TODOS os slots lidos deram errado, é muito mais provável que a detecção tenha falhado
----(idioma cujo padrão não casa, tooltip não carregada) do que o jogador estar com dezesseis
----peças erradas. Nesse caso o addon cala a boca — é o mesmo raciocínio de "não achei a linha
----não quer dizer que não é peça de PvP", aplicado ao conjunto.
+---⚑ ESTA COMPORTA CALAVA O CASO MAIS COMUM DO PvP. Relato do usuário, 08/09/2026: *"o de pve no
+---pvp, ainda não vi funcionar, quando dou fila em BG, arena, ele não avisa nada sobre meus
+---itens"*.
+---
+---A regra antiga era `#wrong < read`: se TODOS os slots lidos deram errado, presumia falha de
+---detecção. Medido varrendo de 0 a 16 peças de PvP, ela cala **exatamente uma** das 17
+---configurações de cada lado — e no lado do PvP essa uma é `n = 0`, equipamento de PvE inteiro,
+---que é precisamente quem entra numa arena vindo do PvE. Não era um filtro de ruído: era um
+---recorte em cima do caso comum.
+---
+---A ambiguidade que ela tentava resolver é real, mas só existe de um lado (ver
+---`Gear.PatternWorks`, que explica por quê). E ela se desfaz sem perguntar ao equipamento:
+---**o padrão testa a si mesmo**. Se ele acha a linha que foi feito para achar, "todas erradas" é
+---leitura boa; se não acha, o silêncio continua certo.
+---
+---O que NÃO é coberto, e vale registrar em vez de fingir: tooltip **não carregada** também
+---produz `false` em todo slot, e uma tooltip parcial tem linhas (só não a de PvP), então passa
+---pela guarda de `#data.lines == 0` e conta como leitura. A mitigação é a que já existe —
+---resultado desconhecido não entra no cache — mais o fato de a checagem se repetir em vários
+---eventos. Uma janela no login segue possível.
 function Gear.LooksReliable(wrong, read)
     if read < 3 then return false end
-    return #wrong < read
+    if #wrong < read then return true end
+
+    -- TODAS ERRADAS: só é leitura de verdade se a detecção provar que sabe achar a linha.
+    return Gear.PatternWorks()
 end
 
 --------------------------------------------------------------------------------
