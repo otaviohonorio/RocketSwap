@@ -151,54 +151,100 @@ SABOTAGENS = [
 ]
 
 
+FIM = "Tudo carregou e rodou sem erro de Lua."
+
+
 def rodar(tmp):
     r = subprocess.run([LUA, "tests/harness.lua"], cwd=tmp,
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return r.stdout.decode("utf-8", "replace")
 
 
+# ⚑ CADA COPIA E APAGADA NO FIM, e isto ja foi defeito: sem a limpeza, cada rodada deixava uma
+# copia inteira do addon no temp do sistema. Depois de 845 copias acumuladas nesta sessao, a suite
+# passou a REPROVAR SABOTAGENS DIFERENTES A CADA RODADA -- e uma suite instavel nao vale nada:
+# ela nao distingue "o teste nao pega" de "deu azar agora".
+#
+# O sintoma enganava: parecia que os testes e que estavam fracos.
+# ⚑ UMA COPIA POR SUITE, e nao uma por sabotagem -- isto ja foi defeito duas vezes.
+#
+# A versao antiga fazia `copytree` do addon inteiro a cada sabotagem, e nunca apagava: depois de
+# 845 copias acumuladas no temp do sistema, a suite passou a REPROVAR SABOTAGENS DIFERENTES A CADA
+# RODADA. E uma suite instavel nao vale nada -- ela deixa de distinguir "o teste nao pega" de "deu
+# azar agora", e o sintoma enganava: parecia que os testes e que estavam fracos.
+#
+# Agora e uma copia so, feita uma vez; cada sabotagem escreve o arquivo, roda, e RESTAURA o
+# original a partir do texto guardado em memoria. Vinte copytree viram um.
+def preparar():
+    base = tempfile.mkdtemp(prefix="sab_")
+    destino = os.path.join(base, "a")
+    shutil.copytree(SRC, destino)
+    return base, destino
+
+
+def ler(destino, arquivo):
+    return io.open(os.path.join(destino, arquivo), encoding="utf-8").read().replace("\r\n", "\n")
+
+
+def escrever(destino, arquivo, texto):
+    io.open(os.path.join(destino, arquivo), "w", encoding="utf-8", newline="\n").write(texto)
+
+
+base, destino = preparar()
+originais = {}
+
 falhas = []
-for entrada in SABOTAGENS:
-    # A sexta posicao (opcional) e uma SEGUNDA substituicao no mesmo arquivo, para quando a
-    # propriedade tem mais de uma defesa e sabotar so uma nao reprova nada.
-    nome, arquivo, de, para, label = entrada[:5]
-    extra = entrada[5] if len(entrada) > 5 else None
+try:
+    for entrada in SABOTAGENS:
+        # A sexta posicao (opcional) e uma SEGUNDA substituicao no mesmo arquivo, para quando a
+        # propriedade tem mais de uma defesa e sabotar so uma nao reprova nada.
+        nome, arquivo, de, para, label = entrada[:5]
+        extra = entrada[5] if len(entrada) > 5 else None
 
-    tmp = tempfile.mkdtemp(prefix="sab_")
-    shutil.copytree(SRC, os.path.join(tmp, "a"), dirs_exist_ok=True)
-    tmp = os.path.join(tmp, "a")
+        if arquivo not in originais:
+            originais[arquivo] = ler(destino, arquivo)
+        txt = originais[arquivo]
 
-    alvo = os.path.join(tmp, arquivo)
-    txt = io.open(alvo, encoding="utf-8").read().replace("\r\n", "\n")
-    if txt.count(de) != 1:
-        print("  ?     %-42s ANCORA NAO BATE (%d)" % (nome, txt.count(de)))
-        falhas.append(nome)
-        continue
-    txt = txt.replace(de, para, 1)
-
-    if extra:
-        if txt.count(extra[0]) != 1:
-            print("  ?     %-42s SEGUNDA ANCORA NAO BATE (%d)" % (nome, txt.count(extra[0])))
+        if txt.count(de) != 1:
+            print("  ?     %-42s ANCORA NAO BATE (%d)" % (nome, txt.count(de)))
             falhas.append(nome)
             continue
-        txt = txt.replace(extra[0], extra[1], 1)
+        txt = txt.replace(de, para, 1)
 
-    io.open(alvo, "w", encoding="utf-8", newline="\n").write(txt)
+        if extra:
+            if txt.count(extra[0]) != 1:
+                print("  ?     %-42s SEGUNDA ANCORA NAO BATE (%d)" % (nome, txt.count(extra[0])))
+                falhas.append(nome)
+                continue
+            txt = txt.replace(extra[0], extra[1], 1)
 
-    saida = rodar(tmp)
-    fim = "Tudo carregou e rodou sem erro de Lua." in saida
+        escrever(destino, arquivo, txt)
+        try:
+            saida = rodar(destino)
+        finally:
+            # O ORIGINAL VOLTA SEMPRE, inclusive se a rodada estourar: uma sabotagem que vaza para
+            # a proxima faria a suite acusar defeitos que nao existem.
+            escrever(destino, arquivo, originais[arquivo])
 
-    if label is None:
-        print("  --    %-42s %s" % (nome, "passou inteiro" if fim else "quebrou algo"))
-        continue
+        chegou_ao_fim = FIM in saida
 
-    esperado = "  ERRO  " + label
-    if esperado in saida:
-        print("  ok    %-42s reprovou em: %s" % (nome, label))
-    else:
-        outro = [l for l in saida.splitlines() if l.startswith("  ERRO")]
-        print("  FALHA %-42s esperava reprovar em %r; veio %r" % (nome, label, outro[:1]))
-        falhas.append(nome)
+        if label is None:
+            if chegou_ao_fim:
+                print("  FALHA %-42s o harness passou inteiro com o defeito" % nome)
+                falhas.append(nome)
+            else:
+                print("  ok    %-42s parou o harness" % nome)
+            continue
+
+        esperado = "  ERRO  " + label
+        if esperado in saida:
+            print("  ok    %-42s reprovou em: %s" % (nome, label))
+        else:
+            outro = [l for l in saida.splitlines() if l.startswith("  ERRO")]
+            print("  FALHA %-42s esperava reprovar em %r; veio %r" % (nome, label, outro[:1]))
+            falhas.append(nome)
+finally:
+    shutil.rmtree(base, ignore_errors=True)
 
 print()
 print("sabotagens que NAO foram pegas: %d" % len(falhas))
