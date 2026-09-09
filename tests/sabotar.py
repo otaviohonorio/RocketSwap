@@ -206,6 +206,36 @@ SABOTAGENS = [
      u'panel:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, -60)',
      u'panel:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, -230)',
      "com as quatro etapas ele ainda para antes dos Avisos"),
+    # ------------------------------------------------- o passo de itens (diario de 09/09/2026)
+    # O RETORNO VOLTA A SER JOGADO FORA. Sem ele a recusa imediata vira 20 segundos de espera por
+    # um evento que ninguem vai mandar, e o jogador ouve "o jogo nao confirmou a tempo".
+    ("o passo de itens ignora o retorno de novo", "Data.lua",
+     u"    if equipou == false then\n"
+     u"        return \"fail\", Data.GearFailureReason(preset.gear)\n"
+     u"    end",
+     u"    -- sabotado",
+     "recusa imediata nao fica esperando evento"),
+
+    # A CHAMADA SOME DO DIARIO. Foi exatamente esta cegueira que deixou a falha de 17:22:02
+    # indistinguivel do sucesso de 00:00:26 no mesmo dia.
+    ("a chamada de equipar some do diario", "Data.lua",
+     u"        ns.Log.Call(\"gear\", \"UseEquipmentSet(\" .. tostring(preset.gear) .. \")\", ok, equipou)",
+     u"        local _ = ok",
+     "o diario registra a chamada de equipar"),
+
+    # E O ESTADO DO CONJUNTO NA HORA DA RECUSA: sem ele nao da para separar "faltou peca" de
+    # "o jogo recusou por outro motivo", que e a pergunta que o diario existe para responder.
+    ("o estado do conjunto some da recusa", "Data.lua",
+     u"                    ns.Log.Call(\"gear\", \"recusou; estado de \" .. tostring(running.preset.gear),\n"
+     u"                        Data.DescribeGearSet(running.preset.gear) or \"sem resposta\")",
+     u"                    local _ = running",
+     "  e o diario guarda o estado do conjunto na hora da recusa"),
+
+    # A MENSAGEM VOLTA A SER SEMPRE GENERICA, jogando fora a unica causa que a API prova.
+    ("a falha deixa de contar as pecas perdidas", "Data.lua",
+     u"    if c and type(c.perdidas) == \"number\" and c.perdidas > 0 then",
+     u"    if false then",
+     "a falha diz quantas pecas faltam"),
 ]
 
 

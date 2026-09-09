@@ -402,6 +402,60 @@ function Data.IsGearSetEquipped(setID)
     return ok and isEquipped == true
 end
 
+---A CONTABILIDADE DO CONJUNTO, que é o que o jogo sabe e nós não estávamos perguntando.
+---
+---`GetEquipmentSetInfo` devolve NOVE valores, e os quatro últimos são contagem:
+---`numItems, numEquipped, numInInventory, numLost, numIgnored`. **`numLost` é "peças que o
+---jogador não tem à mão agora"** — e é a única resposta direta que existe para "por que a troca
+---falhou", porque `UseEquipmentSet` não dá motivo e `EQUIPMENT_SWAP_FINISHED` só traz um booleano.
+---
+---⚑ ISTO EXISTE POR CAUSA DO DIÁRIO DE 09/09. Às 17:22:02 o jogo devolveu
+---`EQUIPMENT_SWAP_FINISHED(false, 1)` para o conjunto "Frost PvE ST" — e às 00:00:26 do MESMO dia
+---a mesma corrente, com o mesmo conjunto e a mesma ordem de eventos, tinha devolvido `true`. O
+---diário registrava a recusa e nada mais: nem o retorno da chamada, nem o estado do conjunto. Não
+---dava para separar "faltou peça" de "o jogo recusou por outro motivo", que é exatamente a
+---pergunta que o diário existe para responder.
+---@return table|nil counts `{ nome, itens, vestidas, naBolsa, perdidas, ignoradas }`
+function Data.GearSetCounts(setID)
+    if setID == nil then return nil end
+    if not C_EquipmentSet or not C_EquipmentSet.GetEquipmentSetInfo then return nil end
+
+    local ok, name, _, _, isEquipped, numItems, numEquipped, numInInventory, numLost, numIgnored =
+        pcall(C_EquipmentSet.GetEquipmentSetInfo, setID)
+    if not ok or name == nil then return nil end
+
+    return {
+        nome = name,
+        vestido = isEquipped == true,
+        itens = numItems,
+        vestidas = numEquipped,
+        naBolsa = numInInventory,
+        perdidas = numLost,
+        ignoradas = numIgnored,
+    }
+end
+
+---A contabilidade em uma linha, para o diário. `nil` quando o jogo não respondeu.
+function Data.DescribeGearSet(setID)
+    local c = Data.GearSetCounts(setID)
+    if not c then return nil end
+    return format("itens=%s vestidas=%s naBolsa=%s perdidas=%s ignoradas=%s vestido=%s",
+        tostring(c.itens), tostring(c.vestidas), tostring(c.naBolsa),
+        tostring(c.perdidas), tostring(c.ignoradas), tostring(c.vestido))
+end
+
+---A falha de equipar, dita com o que o jogo informa — e só com o que ele informa.
+---
+---Com `numLost > 0` a causa está provada: o conjunto pede peça que o jogador não tem à mão. Sem
+---isso, devolve a frase genérica: **inventar um motivo aqui seria pior que não ter nenhum**.
+function Data.GearFailureReason(setID)
+    local c = Data.GearSetCounts(setID)
+    if c and type(c.perdidas) == "number" and c.perdidas > 0 then
+        return format(L["%d item(s) of this set are not available right now."], c.perdidas)
+    end
+    return L["the gear set could not be equipped."]
+end
+
 ---Nome de um loadout/conjunto por id, para a lista mostrar texto em vez de número.
 function Data.LoadoutName(specID, configID)
     if not configID then return nil end
@@ -934,8 +988,32 @@ function Steps.gear(preset)
 
     Report(L["Equipping gear..."], false)
 
-    local ok = pcall(C_EquipmentSet.UseEquipmentSet, preset.gear)
-    if not ok then return "fail", L["the gear set could not be equipped."] end
+    -- O RETRATO ANTES DA CHAMADA. Depois dela não adianta: se a troca começar, as contagens já
+    -- mudaram. É o que separa "o conjunto pedia peça que não existe" de "o jogo recusou por
+    -- outro motivo" quando o evento voltar `false`.
+    if ns.Log then
+        ns.Log.Call("gear", "estado de " .. tostring(preset.gear),
+            Data.DescribeGearSet(preset.gear) or "sem resposta")
+    end
+
+    -- ⚑ O SEGUNDO RETORNO ERA JOGADO FORA, e o cabeçalho deste arquivo já mandava não jogar:
+    -- *"Cada passo espera o evento de confirmação E olha o retorno"*. `ok` é do `pcall` e
+    -- responde "estourou?"; quem responde "o jogo aceitou?" é `setWasEquipped`
+    -- (`EquipmentManagerDocumentation.lua:287-299`). Dos três passos da corrente, este era o
+    -- único que não olhava — e por isso era o único cuja recusa não aparecia no diário.
+    local ok, equipou = pcall(C_EquipmentSet.UseEquipmentSet, preset.gear)
+    if ns.Log then
+        ns.Log.Call("gear", "UseEquipmentSet(" .. tostring(preset.gear) .. ")", ok, equipou)
+    end
+    if not ok then return "fail", Data.GearFailureReason(preset.gear) end
+
+    -- RECUSA IMEDIATA NÃO SE ESPERA. Sem swap, `EQUIPMENT_SWAP_FINISHED` não vem — e o passo
+    -- ficaria os 20 segundos do prazo esperando um evento que ninguém vai mandar, para no fim
+    -- dizer "o jogo não confirmou a tempo". É o mesmo defeito que a spec e os talentos já
+    -- tiveram, corrigido nos dois; aqui ele continuava de pé.
+    if equipou == false then
+        return "fail", Data.GearFailureReason(preset.gear)
+    end
 
     Arm()
     return "wait"           -- confirma em EQUIPMENT_SWAP_FINISHED
@@ -1375,8 +1453,20 @@ function Data.EnsureListener()
             -- `false` é ANOTAÇÃO, não fim de corrente: um `false` alheio matava a nossa e jogava
             -- fora as falhas já anotadas.
             if arg1 == false then
+                -- ⚑ E AQUI SE PERGUNTA POR QUÊ, no único instante em que a resposta existe.
+                --
+                -- O diário de 09/09 registrou esta recusa (17:22:02, conjunto 1) e não tinha como
+                -- explicá-la: a mesma corrente, com o mesmo conjunto, tinha funcionado às
+                -- 00:00:26. Sem a contabilidade do conjunto no momento da recusa, as duas linhas
+                -- do diário são indistinguíveis — e a próxima rodada recomeçaria a adivinhação.
+                if ns.Log then
+                    ns.Log.Call("gear", "recusou; estado de " .. tostring(running.preset.gear),
+                        Data.DescribeGearSet(running.preset.gear) or "sem resposta")
+                end
+
                 running.failures = running.failures or {}
-                running.failures[#running.failures + 1] = L["the gear set could not be equipped."]
+                running.failures[#running.failures + 1] =
+                    Data.GearFailureReason(running.preset.gear)
             end
             RunNext()
         end

@@ -44,6 +44,8 @@ L["in combat: will apply when the fight ends."] = "em combate: aplico quando a l
 L["the specialization change failed."] = "a troca de especialização falhou."
 L["the talent loadout could not be loaded."] = "não deu para carregar os talentos."
 L["the gear set could not be equipped."] = "não deu para equipar o conjunto de itens."
+L["%d item(s) of this set are not available right now."] =
+    "faltam %d peça(s) deste conjunto — o jogo não as encontra agora."
 L["some items of this set are locked (in use, or in the mail)."] =
     "algumas peças deste conjunto estão travadas (em uso, ou no correio)."
 L["you are casting something — try again in a second."] =

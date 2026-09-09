@@ -491,10 +491,17 @@ C_EquipmentSet = {
         for _, s in ipairs(SETS) do out[#out + 1] = s.setID end
         return out
     end,
+    -- NOVE RETORNOS, e nao quatro. Os quatro ultimos sao contagem
+    -- (`numItems, numEquipped, numInInventory, numLost, numIgnored`), e `numLost` -- "pecas que o
+    -- jogador nao tem a mao agora" -- e a UNICA resposta direta que o jogo da para "por que a
+    -- troca falhou": `UseEquipmentSet` nao da motivo e `EQUIPMENT_SWAP_FINISHED` so traz um
+    -- booleano. O stub devolvia so quatro, entao o addon nao tinha como perguntar isso aqui.
     GetEquipmentSetInfo = function(setID)
         for _, s in ipairs(SETS) do
             if s.setID == setID then
-                return s.name, s.icon, setID, state.equippedSet == setID
+                local perdidas = state.lostItems or 0
+                return s.name, s.icon, setID, state.equippedSet == setID,
+                    14, state.equippedSet == setID and 14 or 0, 14 - perdidas, perdidas, 2
             end
         end
         return nil
@@ -509,7 +516,11 @@ C_EquipmentSet = {
     -- SO PEDE. O conjunto fica vestido quando o EVENTO chega, nao na chamada -- e a diferenca
     -- importa: o addon confirma o passo lendo o estado, e equipar cedo demais aqui fazia o
     -- primeiro evento (ate o de OUTRO conjunto) encontrar o alvo ja vestido e fechar o passo.
+    -- E ELA DEVOLVE `setWasEquipped`. O stub sempre devolvia `true`, entao o caminho da RECUSA
+    -- IMEDIATA -- o jogo dizendo "nao" na hora, sem swap e portanto sem evento nenhum depois --
+    -- nao existia no simulador, e o addon podia ignorar o retorno sem nenhum teste reclamar.
     UseEquipmentSet = function(setID)
+        if state.refuseUseSet then return false end
         state.pendingSet = setID
         return true
     end,
@@ -1825,6 +1836,86 @@ do
     -- E O VEREDITO FINAL, com as falhas juntas.
     check("registra o fim da corrente", texto:find("event", 1, true) ~= nil, true)
     check("com o que falhou", texto:lower():find("falhas=", 1, true) ~= nil, true)
+end
+
+print("== o passo de itens olha o retorno, e o diario diz por que ==")
+-- ⚑ ESTE BLOCO NASCEU DE UM DIARIO REAL, o de 09/09/2026. As 17:22:02 o jogo devolveu
+-- `EQUIPMENT_SWAP_FINISHED(false, 1)` para o conjunto "Frost PvE ST"; as 00:00:26 do MESMO dia a
+-- mesma corrente, com o mesmo conjunto e a mesma ordem de eventos, tinha devolvido `true`.
+--
+-- O diario registrava a recusa e NADA MAIS -- nem o retorno da chamada, nem o estado do conjunto.
+-- As duas linhas eram indistinguiveis, e sem isso a proxima rodada volta a adivinhar. Dos tres
+-- passos da corrente, itens era o unico que jogava fora o retorno da propria chamada, contra o
+-- que o cabecalho do `Data.lua` manda por escrito: *"cada passo espera o evento de confirmacao E
+-- olha o retorno"*.
+do
+    ns.Log.Clear()
+    state.specIndex, state.equippedSet, state.activeLoadout[251] = 2, 1, 10
+    state.lostItems = 0
+
+    -- 1. O CAMINHO NORMAL registra a chamada E o retorno dela.
+    ns.Data.Apply({ name = "Tank", spec = 2, talent = nil, gear = 3 }, function() end)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+
+    local texto = table.concat(ns.Log.Tail(50), " ~ ")
+    check("o diario registra a chamada de equipar",
+        texto:find("UseEquipmentSet(3)", 1, true) ~= nil, true)
+    check("  com o retorno do jogo", texto:find("retorno=true, true", 1, true) ~= nil, true)
+    check("  e a contabilidade do conjunto antes da troca",
+        texto:find("perdidas=0", 1, true) ~= nil, true)
+
+    -- 2. RECUSA IMEDIATA: o jogo diz "nao" na chamada, e ai NAO VEM EVENTO NENHUM depois.
+    --
+    -- Sem olhar o retorno, o passo ficava "esperando" os 20 segundos do prazo por uma confirmacao
+    -- que ninguem ia mandar, para no fim dizer "o jogo nao confirmou a tempo". E o mesmo defeito
+    -- que a spec e os talentos ja tiveram, corrigido nos dois; aqui continuava de pe.
+    ns.Log.Clear()
+    state.equippedSet = 1
+    state.refuseUseSet = true
+    local erro
+    ns.Data.Apply({ name = "Tank", spec = 2, talent = nil, gear = 3 }, function(text, isError)
+        if isError then erro = text end
+    end)
+    check("recusa imediata nao fica esperando evento", ns.Data.IsApplying(), false)
+    check("  e vira falha reportada", erro ~= nil, true)
+    check("  com o retorno no diario",
+        table.concat(ns.Log.Tail(50), " ~ "):find("retorno=true, false", 1, true) ~= nil, true)
+    state.refuseUseSet = false
+
+    -- 3. QUANDO O JOGO SABE O MOTIVO, A MENSAGEM DIZ O MOTIVO. `numLost` e "pecas que o jogador
+    --    nao tem a mao agora" -- a unica causa que a API prova. Sem ela, a frase generica fica.
+    ns.Log.Clear()
+    state.equippedSet = 1
+    state.lostItems = 3
+    erro = nil
+    ns.Data.Apply({ name = "Tank", spec = 2, talent = nil, gear = 3 }, function(text, isError)
+        if isError then erro = text end
+    end)
+    fire("EQUIPMENT_SWAP_FINISHED", false, 3)
+    check("a falha diz quantas pecas faltam",
+        erro ~= nil and erro:find("3", 1, true) ~= nil, true)
+    -- ⚑ PROCURA A LINHA DA RECUSA, e nao "perdidas=3" em qualquer lugar. A contagem tambem sai na
+    -- linha de ANTES da chamada, entao a busca solta passava mesmo com o retrato da recusa
+    -- apagado -- foi a sabotagem que denunciou. O que importa e o estado no instante em que o
+    -- jogo disse nao: e o unico momento em que a resposta existe.
+    local diario = table.concat(ns.Log.Tail(50), " ~ ")
+    local ondeRecusou = diario:find("recusou", 1, true)
+    check("  e o diario guarda o estado do conjunto na hora da recusa",
+        ondeRecusou ~= nil and diario:find("perdidas=3", ondeRecusou, true) ~= nil, true)
+
+    -- 4. E SEM PECA FALTANDO A FRASE GENERICA VOLTA. Inventar um motivo quando o jogo nao deu
+    --    nenhum e pior que nao ter motivo: manda o jogador procurar o que nao existe.
+    ns.Log.Clear()
+    state.equippedSet, state.lostItems = 1, 0
+    erro = nil
+    ns.Data.Apply({ name = "Tank", spec = 2, talent = nil, gear = 3 }, function(text, isError)
+        if isError then erro = text end
+    end)
+    fire("EQUIPMENT_SWAP_FINISHED", false, 3)
+    check("sem peca faltando, nao inventa motivo",
+        erro ~= nil and erro:find("%d") == nil, true)
+
+    state.lostItems = 0
 end
 
 print("== o diario ve o evento que chega de fora ==")
