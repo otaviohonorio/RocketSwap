@@ -2964,7 +2964,17 @@ do
 
     -- TODO ATLAS CITADO EXISTE. `SetAtlas` falha em silencio, entao um nome errado nao daria erro
     -- nenhum -- so um retangulo vazio no lugar do visto.
-    for estado, visual in pairs(m.states) do
+    -- ⚑ ORDEM FIXA, e nao a de `pairs`. Ela varia entre EXECUCOES no LuaJIT, e com ela variava a
+    -- ordem destas linhas na saida. Os checks passam de qualquer jeito -- mas o `sabotar.py` casa a
+    -- saida por TEXTO para decidir qual check reprovou primeiro, e saida que muda de ordem sem o
+    -- codigo mudar torna a suite de sabotagem irrepetivel. Suite instavel nao distingue "o teste
+    -- nao pega" de "deu azar agora". (Mesmo defeito achado no RocketMeter em 10/09/2026.)
+    local estados = {}
+    for estado in pairs(m.states) do estados[#estados + 1] = estado end
+    table.sort(estados)
+
+    for _, estado in ipairs(estados) do
+        local visual = m.states[estado]
         if visual.atlas then
             check("o atlas de " .. estado .. " existe",
                 ns.SetAtlasSafe(painel.rows[1].icon, visual.atlas), true)
