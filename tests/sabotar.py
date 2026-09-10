@@ -206,6 +206,37 @@ SABOTAGENS = [
      u'panel:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, -60)',
      u'panel:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, -230)',
      "com as quatro etapas ele ainda para antes dos Avisos"),
+    # ------------------------------------------------ captura de erro no diario (09/09/2026)
+    # ⚑ A CONFERENCIA DO HANDLER. O !BugGrabber faz `function seterrorhandler() end`, entao
+    # instalar um handler com ele presente e uma chamada que nao faz nada e nao avisa. Sem esta
+    # linha a captura se declara ligada estando desligada -- e "o arquivo nao tem erro nenhum"
+    # vira mentira, que e a pior falha possivel num instrumento de diagnostico.
+    ("a captura deixa de conferir se o handler pegou", "Log.lua",
+     u"        if type(geterrorhandler) == \"function\" and geterrorhandler() == meu then",
+     u"        if true then",
+     "seterrorhandler mudo e sem BugGrabber: admite que nao captura"),
+
+    # O FILTRO. Sem ele o diario enche do erro dos outros addons -- e, pior, faz parecer que o
+    # defeito e nosso.
+    ("o diario passa a guardar erro alheio", "Log.lua",
+     u"    if not nossos and not pelaMensagem then return end",
+     u"    -- sabotado",
+     "erro de outro addon nao entra"),
+
+    # ENCADEAR, E NAO SUBSTITUIR. Roubar o erro de quem ja tratava apaga o BugSack/ElvUI do
+    # jogador: estragar a ferramenta dos outros para ter a nossa.
+    ("a captura rouba o erro do handler anterior", "Log.lua",
+     u"            if anterior then return anterior(mensagem, ...) end",
+     u"            return",
+     "  e o handler anterior continua sendo chamado"),
+
+    # AGRUPAR REPETICAO. O caso real repetiu 1628 vezes; sem agrupar, o mesmo erro varre o anel
+    # e apaga justamente o contexto que explica ele.
+    ("erro repetido vira linha nova", "Log.lua",
+     u"        if e.mensagem == mensagem then",
+     u"        if false then",
+     "repeticao vira contagem, nao linha nova"),
+
     # ------------------------------------------------- o passo de itens (diario de 09/09/2026)
     # O RETORNO VOLTA A SER JOGADO FORA. Sem ele a recusa imediata vira 20 segundos de espera por
     # um evento que ninguem vai mandar, e o jogador ouve "o jogo nao confirmou a tempo".

@@ -416,9 +416,14 @@ commands["log"] = function(rest)
 
     if arg == "clear" then
         ns.Log.Clear()
+        ns.Log.ClearErrors()
         ns.Print(L["log cleared."])
         return
     end
+
+    -- OS ERROS PRIMEIRO, e no chat. Ler o arquivo exige `/reload` e sair do jogo; a contagem
+    -- aqui responde "aconteceu alguma coisa?" sem nada disso.
+    ns.PrintErrorSummary()
 
     local linhas = ns.Log.Tail(14)
     if #linhas == 0 then
