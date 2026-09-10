@@ -194,3 +194,9 @@ L["Waiting for the game to accept the talents..."] =
     "Esperando o jogo aceitar os talentos..."
 L["the game kept refusing to load the talents."] =
     "o jogo continuou recusando carregar os talentos."
+
+-- Captura de erro no diario (RocketMeter 0.80.0 / RocketSwap 0.21.0)
+L["errors are NOT being captured on this client."] =
+    "os erros NAO estao sendo capturados neste cliente."
+L["no error captured (capture: %s)."] = "nenhum erro capturado (captura: %s)."
+L["%d error(s) captured, %d occurrence(s):"] = "%d erro(s) capturado(s), %d ocorrencia(s):"
