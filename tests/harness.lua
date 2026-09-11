@@ -702,6 +702,16 @@ state.cooldownSecret = false
 -- O config base da spec, contra o qual os eventos de talento se conferem.
 state.activeConfigID = 4242
 
+-- O CAST EM CURSO, redefinido aqui porque o stub la de cima nasce antes de `state`. Devolvia
+-- sempre nil, entao o caminho "o jogador esta conjurando" nao existia para o teste -- e foi por
+-- ele que os itens cairam as 17:46:01 de 11/09. Nove retornos como a API; o 9o e o `spellID`.
+function UnitCastingInfo()
+    if state.casting then
+        return "Conjurando", nil, nil, nil, nil, false, "c", false, state.casting
+    end
+    return nil
+end
+
 local realIsSecretBase = issecretvalue
 function issecretvalue(v) return v == SECRET or realIsSecretBase(v) end
 
@@ -2770,6 +2780,44 @@ do
     fire("EQUIPMENT_SWAP_FINISHED", true, 4)
     check("e a corrente termina depois da insistencia", ns.Data.IsApplying(), false)
     state.loadRefusals = 0
+end
+
+print("== o cast que acabou de terminar ainda consta ==")
+-- O DEFEITO DE 11/09 17:45:47, Tank -> Frost PvE ST, a primeira troca que exercitou a 0.22.0:
+--
+--     17:46:01  UNIT_SPELLCAST_SUCCEEDED 384255   gravou por=cast segundos=5.2
+--     17:46:01  passo gear -> fail "voce esta conjurando algo"
+--
+-- O SUCCEEDED chega com o cast ainda constando em `UnitCastingInfo`; so o STOP o encerra
+-- (`CastingBarFrame.lua:459,482-483`). O stub devolvia sempre nil, entao isso nao existia aqui.
+do
+    abreGravacao()
+    state.casting = 384255
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-e", 384255)
+    check("o cast em curso nao derruba os itens", ns.Data.GetProgress()[3].state, "doing")
+    check("mas tambem nao equipa por cima dele", state.pendingSet, nil)
+
+    state.casting = nil
+    fire("UNIT_SPELLCAST_STOP", "player", "cast-e", 384255)
+    check("o fim do cast libera os itens", state.pendingSet, 4)
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    check("e a corrente termina sem falha", ns.Data.IsApplying(), false)
+end
+
+do
+    -- FIM DE CAST DE OUTRA UNIDADE nao conta; e quem NAO PARA DE CONJURAR faz o passo desistir no
+    -- teto, em vez de a corrente ficar pendurada.
+    abreGravacao()
+    state.casting = 384255
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-f", 384255)
+    fire("UNIT_SPELLCAST_STOP", "target", "cast-g", 1)
+    check("fim de cast de outra unidade nao libera", state.pendingSet, nil)
+
+    for i = 1, 5 do fire("UNIT_SPELLCAST_STOP", "player", "cast-h" .. i, 1) end
+    check("cast sem fim desiste no teto", state.pendingSet, nil)
+    check("e a corrente nao fica presa com cast sem fim", ns.Data.IsApplying(), false)
+    state.casting = nil
 end
 
 do
