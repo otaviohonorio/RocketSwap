@@ -649,6 +649,45 @@ local SPEC_RETRY_MAX = 8
 local TALENT_RETRY_DELAY = 4
 local TALENT_RETRY_MAX = 5      -- 20 s, abaixo do prazo de 30 s do passo
 
+-- ⚑ GRAVAR TALENTO É UM CAST, E OS ITENS NÃO ENTRAM ENQUANTO ELE CORRE.
+--
+-- `LoadConfig` com `LoadInProgress` abre uma gravação, e a UI da Blizzard só a dá por terminada
+-- quando o cast `COMMIT_COMBAT_TRAIT_CONFIG_CHANGES_SPELL_ID` termina
+-- (`Blizzard_ClassTalentsFrame.lua:345-350`). O diário de 11/09 mostra o que acontece quando se
+-- equipa antes disso — troca "Tank" -> "Frost PvP":
+--
+--     17:20:02  ACTIVE_PLAYER_SPECIALIZATION_CHANGED
+--     17:20:02  LoadConfig(66832448)          -> LoadInProgress
+--     17:20:02  TRAIT_CONFIG_UPDATED 59714245        <- o passo fechava AQUI
+--     17:20:02  UseEquipmentSet(0)            -> true, true
+--     17:20:02  TRAIT_CONFIG_UPDATED 59714244
+--     17:20:02  EQUIPMENT_SWAP_FINISHED       -> false   (16 peças na bolsa, 0 perdidas)
+--     17:20:07  TRAIT_CONFIG_UPDATED 59714245        <- a gravação terminando de verdade
+--
+-- O PAR DO MESMO INSTANTE É ECO DA TROCA DE SPEC, e não resposta ao `LoadConfig`: ele aparece nas
+-- sete correntes gravadas que trocaram spec antes dos talentos, inclusive na de 07/09 21:10:59,
+-- em que o `LoadConfig` falhou na hora e nada foi carregado. E nas 24 correntes do diário os
+-- itens foram recusados em exatamente as TRÊS que abriram gravação (09/09 17:22:02 e 17:58:14,
+-- 11/09 17:20:02) — e entraram em todas as outras 21.
+--
+-- O eco traz o MESMO `configID` do evento verdadeiro (59714245 nos dois). É por isso que o filtro
+-- por id da 0.13.0 não tinha como dar certo, e nenhum outro filtro por id dará. O que separa os
+-- dois é o tempo: o eco caiu no segundo do `LoadConfig` nas sete vezes, o verdadeiro chegou 4 a
+-- 7 s depois nas três gravações.
+--
+-- Então o passo fecha com o PRIMEIRO de dois sinais:
+--   1. o fim do cast de gravação — o que a própria Blizzard usa;
+--   2. um `TRAIT_CONFIG_UPDATED` que chegue depois da janela do eco — a reserva, para o caso de o
+--      cast não ser visto (`spellID` opaco, ou um cliente que mude o fluxo).
+--
+-- ⚠️ A JANELA NÃO É MEDIDA COM PRECISÃO: o diário grava segundos inteiros. O que se sabe é que o
+-- eco caiu dentro do mesmo segundo sete vezes em sete, e o verdadeiro nunca antes de 4 s. 2 fica
+-- no meio. O diário grava agora QUAL sinal fechou e em quantos segundos (`event = "gravou"`); se
+-- vier "evento" com menos de 4 s, é este número que precisa ser revisto.
+local COMMIT_SPELL_ID = Constants and Constants.TraitConsts
+    and Constants.TraitConsts.COMMIT_COMBAT_TRAIT_CONFIG_CHANGES_SPELL_ID or 384255
+local COMMIT_ECHO_WINDOW = 2
+
 ---Traduz o resultado de um passo para o estado que a janela desenha.
 ---
 ---UM LUGAR SO, e a razao e um defeito real: isto morava dentro do `RunNext`, e os caminhos de
@@ -910,6 +949,7 @@ function Steps.talent(preset)
     -- TRÊS retornos, não um: `result, changeError, newLearnedNodeIDs`. Capturar só o primeiro
     -- jogava fora justamente a string que diz POR QUE não deu — e o addon respondia com um
     -- "não deu para carregar os talentos" que não ensina nada.
+    running.commit = nil        -- só uma gravação aberta POR ESTA chamada confirma o passo
     local ok, result, changeError = pcall(C_ClassTalents.LoadConfig, preset.talent, true)
     if ns.Log then
         -- O NOME DO ENUM, NAO SO O NUMERO. Ler `result = 0` no diario custou uma ida a
@@ -968,8 +1008,11 @@ function Steps.talent(preset)
         return RetryTalent(preset)
     end
 
+    -- LoadInProgress: a gravação começou, e ela é um cast (ver `COMMIT_ECHO_WINDOW`). A hora é o
+    -- que separa o eco da troca de spec da confirmação de verdade.
+    running.commit = { since = GetTime() }
     Arm()
-    return "wait"           -- LoadInProgress: confirma em TRAIT_CONFIG_UPDATED
+    return "wait"           -- confirma no fim do cast de gravação (ou no TRAIT_CONFIG_UPDATED tardio)
 end
 
 function Steps.gear(preset)
@@ -1345,6 +1388,20 @@ end
 ---O ouvinte só existe enquanto o addon precisa dele. Registrar `TRAIT_CONFIG_UPDATED` e
 ---`EQUIPMENT_SWAP_FINISHED` o tempo todo faria o addon acordar em toda troca manual do
 ---jogador, e não há nada a fazer nesses casos.
+---Fecha o passo de talentos quando a gravação termina, e diz no diário QUAL sinal fechou e em
+---quanto tempo. É esse registro que confere a janela do eco com dado de verdade.
+local function CloseTalentCommit(por, commit)
+    if ns.Log then
+        ns.Log.Add("gravou", {
+            passo = "talent", por = por,
+            segundos = commit and format("%.1f", GetTime() - commit.since) or nil,
+        })
+    end
+    running.commit = nil
+    ConfirmTalent()
+    RunNext()
+end
+
 function Data.EnsureListener()
     if listener then return listener end
 
@@ -1352,10 +1409,12 @@ function Data.EnsureListener()
     listener:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
     listener:RegisterEvent("SPECIALIZATION_CHANGE_CAST_FAILED")
     listener:RegisterEvent("TRAIT_CONFIG_UPDATED")
+    listener:RegisterEvent("CONFIG_COMMIT_FAILED")
+    listener:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     listener:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
     listener:RegisterEvent("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
 
-    listener:SetScript("OnEvent", function(_, event, arg1, arg2)
+    listener:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
         -- REGISTRA ANTES DE DECIDIR, inclusive o evento que chega sem corrente em curso. É o que
         -- responde a hipótese que eu não tinha como testar: estes eventos são GLOBAIS e disparam
         -- quando o JOGADOR mexe à mão ou quando outro addon mexe. Se o log mostrar um evento
@@ -1364,7 +1423,16 @@ function Data.EnsureListener()
         -- não dá para saber se o evento era do nosso conjunto — foi exatamente a pergunta que
         -- ficou sem resposta ao ler o diário de 02:05.
         local emCurso = running and running.steps[running.at] or nil
-        if ns.Log then ns.Log.Event(event, emCurso, running ~= nil, arg1, arg2) end
+        if event == "UNIT_SPELLCAST_SUCCEEDED" then
+            -- O CAST SÓ INTERESSA COM CORRENTE EM CURSO, e só o do jogador. Ele dispara a cada
+            -- magia de qualquer unidade: registrar tudo varreria o diário de 400 linhas em minutos
+            -- de jogo. Com corrente, grava o `spellID` — é ele que diz, na próxima troca real, se
+            -- o fim do cast de gravação chegou e em que ordem com o `TRAIT_CONFIG_UPDATED`.
+            if not running or arg1 ~= "player" then return end
+            if ns.Log then ns.Log.Event(event, emCurso, true, arg3) end
+        elseif ns.Log then
+            ns.Log.Event(event, emCurso, running ~= nil, arg1, arg2)
+        end
 
         if not running then return end
         local step = running.steps[running.at]
@@ -1407,8 +1475,47 @@ function Data.EnsureListener()
             -- risco do filtro errado é o addon travar. Volto ao que funcionava, e o diário grava
             -- o `arg1` de cada evento — com uma troca real na mão dá para fechar a questão com
             -- dado em vez de com dedução.
-            ConfirmTalent()
-            RunNext()
+            --
+            -- ⚑ O DADO CHEGOU (11/09), E DESFAZ METADE DA RETIRADA. Os eventos que fechavam o
+            -- passo eram o ECO da troca de spec, com o mesmo id do verdadeiro — ver
+            -- `COMMIT_ECHO_WINDOW`. Aceitar qualquer um pedia os itens com a gravação em curso, e
+            -- o jogo recusava: três vezes em três.
+            --
+            -- A regra agora é a da própria Blizzard — o evento só confirma o commit que ela mesma
+            -- abriu (`Blizzard_SharedTalentFrame.lua:358`) —, mais a janela do eco:
+            --   - SEM `running.commit`, o passo está na INSISTÊNCIA (`Error` sem motivo): o jogo
+            --     recusou o `LoadConfig`, e o evento que chega é eco. As três correntes do diário
+            --     que fecharam assim (15:51:07, 21:59:36, 00:00:26) anunciaram "pronto" sem nada
+            --     que prove que os talentos entraram — e o `ConfirmTalent` ainda marcava o loadout
+            --     como selecionado. Agora a insistência segue e pergunta de novo;
+            --   - COM `running.commit`, o evento só vale depois da janela.
+            local commit = running.commit
+            if commit and (GetTime() - commit.since) >= COMMIT_ECHO_WINDOW then
+                CloseTalentCommit("evento", commit)
+            end
+
+        elseif event == "UNIT_SPELLCAST_SUCCEEDED" and step == "talent" then
+            -- O FIM DO CAST DE GRAVAÇÃO, o sinal que a janela de talentos do jogo usa
+            -- (`Blizzard_ClassTalentsFrame.lua:345-350`). `issecretvalue` ANTES do `==`: o
+            -- `spellID` deste evento vem opaco sob restrição (`UnitDocumentation.lua:4702`), e
+            -- comparar valor opaco é erro.
+            if running.commit and not (issecretvalue and issecretvalue(arg3))
+                and arg3 == COMMIT_SPELL_ID then
+                CloseTalentCommit("cast", running.commit)
+            end
+
+        elseif event == "CONFIG_COMMIT_FAILED" and step == "talent" then
+            -- A GRAVAÇÃO FALHOU — e a Blizzard encerra o commit dela no mesmo evento
+            -- (`Blizzard_SharedTalentFrame.lua:346-349`). Sem este ramo, a falha só seria
+            -- percebida pelo prazo do passo. Marca "failed" ANTES do `RunNext`, pela mesma razão
+            -- do prazo em `Arm`: senão ele promove o passo a "done".
+            if running.commit then
+                running.commit = nil
+                if running.progress then running.progress.talent = "failed" end
+                running.failures = running.failures or {}
+                running.failures[#running.failures + 1] = L["the talent loadout could not be loaded."]
+                RunNext()
+            end
 
         elseif event == "TRANSMOG_DISPLAYED_OUTFIT_CHANGED" and step == "transmog" then
             -- O EVENTO NÃO DIZ QUAL conjunto entrou — não tem carga útil
