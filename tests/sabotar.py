@@ -267,6 +267,55 @@ SABOTAGENS = [
      u"    if c and type(c.perdidas) == \"number\" and c.perdidas > 0 then",
      u"    if false then",
      "a falha diz quantas pecas faltam"),
+
+    # ----------------------------------- gravar talento e um cast (diario de 11/09/2026)
+    # O ECO VOLTA A FECHAR O PASSO. E o defeito relatado: os itens pedidos com a gravacao em curso,
+    # e o jogo recusando -- tres vezes em tres no diario.
+    ("o eco da troca de spec volta a fechar a gravacao", "Data.lua",
+     u"            if commit and (GetTime() - commit.since) >= COMMIT_ECHO_WINDOW then",
+     u"            if commit then",
+     "o eco da troca de spec nao pede os itens"),
+
+    # O EVENTO VOLTA A CONFIRMAR O QUE NINGUEM GRAVOU: na insistencia o jogo recusou o LoadConfig,
+    # e fechar no eco anunciava "pronto" e marcava o loadout como selecionado.
+    ("o evento confirma sem gravacao nossa", "Data.lua",
+     u"            local commit = running.commit\n",
+     u"            local commit = running.commit or { since = -math.huge }\n",
+     "o eco nao confirma o que o jogo recusou"),
+
+    # QUALQUER CAST FECHA A GRAVACAO: o jogador lanca magia o tempo todo.
+    ("qualquer magia fecha a gravacao", "Data.lua",
+     u"                and arg3 == COMMIT_SPELL_ID then",
+     u"                then",
+     "cast alheio nao fecha a gravacao"),
+
+    ("cast de outra unidade fecha a gravacao", "Data.lua",
+     u"            if not running or arg1 ~= \"player\" then return end",
+     u"            if not running then return end",
+     "cast alheio nao fecha a gravacao"),
+
+    # O SINAL DA BLIZZARD DEIXA DE SER OUVIDO: sobra so a reserva, 2 s depois no melhor caso.
+    ("o fim do cast deixa de ser ouvido", "Data.lua",
+     u"    listener:RegisterEvent(\"UNIT_SPELLCAST_SUCCEEDED\")\n",
+     u"",
+     "o fim do cast de gravacao libera os itens"),
+
+    ("a gravacao que falha deixa de ser ouvida", "Data.lua",
+     u"    listener:RegisterEvent(\"CONFIG_COMMIT_FAILED\")\n",
+     u"",
+     "gravacao que falha vira falha anotada"),
+
+    # A FALHA VIRA VISTO VERDE: sem o "failed", o `RunNext` promove o passo a "done".
+    ("a gravacao que falha vira concluida", "Data.lua",
+     u"                if running.progress then running.progress.talent = \"failed\" end\n",
+     u"",
+     "gravacao que falha vira falha anotada"),
+
+    # A GRAVACAO NAO E MARCADA: nada mais confirma o passo, e a corrente so anda pelo prazo.
+    ("o passo de talentos nao marca a gravacao", "Data.lua",
+     u"    running.commit = { since = GetTime() }",
+     u"    running.commit = nil",
+     "agora sim equipou o conjunto de PvP"),
 ]
 
 

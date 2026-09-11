@@ -747,6 +747,9 @@ C_Spell = {
 
 Constants = {
     TransmogOutfitDataConsts = { EQUIP_TRANSMOG_OUTFIT_MANUAL_SPELL_ID = 1247613 },
+    -- O cast que grava talentos (`Blizzard_ClassTalentsFrame.lua:345-350`). O valor e o do cliente
+    -- 12.1.0, conferido na lista de constantes que o Details carrega (`luaserver.lua:1048`).
+    TraitConsts = { COMMIT_COMBAT_TRAIT_CONFIG_CHANGES_SPELL_ID = 384255 },
 }
 
 Enum = {
@@ -888,6 +891,17 @@ local function check(label, got, want)
     if not ok then os.exit(1) end
 end
 
+---A GRAVACAO DE TALENTOS TERMINANDO, como o jogo faz: segundos depois do `LoadConfig`.
+---
+---Os testes disparavam `TRAIT_CONFIG_UPDATED` no mesmo instante e chamavam isso de confirmacao.
+---No jogo, o evento desse instante e o ECO da troca de spec, e o da gravacao chegou 4 a 7 s depois
+---nas tres vezes medidas (diario de 09/09 e 11/09). Um teste que confirma no instante zero
+---aprovava justamente o defeito que recusava os itens.
+local function gravacaoTermina(configID)
+    AdvanceClock(5)
+    fire("TRAIT_CONFIG_UPDATED", configID or 999)
+end
+
 print("== ciclo de vida ==")
 fire("ADDON_LOADED", ADDON)
 fire("PLAYER_LOGIN")
@@ -922,7 +936,7 @@ check("ainda NAO equipou — espera os talentos", state.pendingSet, nil)
 
 -- Confirma os talentos; so entao o equipamento pode ir.
 state.activeLoadout[251] = 10
-fire("TRAIT_CONFIG_UPDATED", 10)
+gravacaoTermina(10)
 check("agora sim equipou o conjunto de PvP", state.pendingSet, 4)
 
 state.equippedSet = 4
@@ -957,7 +971,7 @@ ns.Data.Apply({ name = "Arena", spec = 2, talent = 10, gear = 4 }, function(text
     if isError then erro = text end
 end)
 state.activeLoadout[251] = 10
-fire("TRAIT_CONFIG_UPDATED", 10)
+gravacaoTermina(10)
 fire("EQUIPMENT_SWAP_FINISHED", false, 4)
 check("a falha de equipar foi reportada", erro ~= nil, true)
 check("e o addon nao ficou preso aplicando", ns.Data.IsApplying(), false)
@@ -1419,7 +1433,7 @@ do
     ns.Data.Apply({ name = "So talento", spec = 2, talent = 11 }, function() end)
     check("o passo de talentos esperou", ns.Data.IsApplying(), true)
 
-    fire("TRAIT_CONFIG_UPDATED", 999)
+    gravacaoTermina(999)
     check("o evento fecha o passo", ns.Data.IsApplying(), false)
 
     -- E A ESCRITA DE "QUAL LOADOUT VALE" SO ACONTECE DEPOIS DA CONFIRMACAO. Feita antes, e como o
@@ -1812,7 +1826,7 @@ do
     RunTimers()                       -- a tentativa marcada acontece, e agora o jogo aceita
     state.specIndex = 1
     fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
-    fire("TRAIT_CONFIG_UPDATED", 999)
+    gravacaoTermina(999)
     fire("EQUIPMENT_SWAP_FINISHED", true, 3)
     check("e quando o jogo aceita, ela continua sozinha", ns.Data.IsApplying(), false)
     C_SpecializationInfo.SetSpecialization = function() return false end
@@ -2661,10 +2675,100 @@ do
     RunTimers(5)          -- terceira, e agora o jogo aceita
     check("o jogo aceitou na terceira", state.pendingLoadout, 11)
 
-    fire("TRAIT_CONFIG_UPDATED", 999)
+    gravacaoTermina(999)
     passos = ns.Data.GetProgress()
     check("e o passo fecha como concluido", passos[2].state, "done")
 
+    state.loadRefusals = 0
+end
+
+print("== gravar talento e um cast: os itens esperam ele acabar ==")
+-- O DEFEITO DE 11/09 17:19:53 (*"fui usar o rocketswap pra trocar de tank para pvp frost e nao
+-- deu, gerou erro"*), e o de 09/09 17:22:02 e 17:58:14, todos com a mesma forma:
+--
+--     ACTIVE_PLAYER_SPECIALIZATION_CHANGED
+--     LoadConfig              -> LoadInProgress
+--     TRAIT_CONFIG_UPDATED 59714245   \  eco da troca de spec, no mesmo instante --
+--     TRAIT_CONFIG_UPDATED 59714244   /  o addon fechava o passo no primeiro
+--     EQUIPMENT_SWAP_FINISHED -> false     (16 pecas na bolsa, 0 perdidas)
+--     TRAIT_CONFIG_UPDATED 59714245      5 s depois: a gravacao terminando de verdade
+--
+-- O stub nao produzia o eco, entao o teste mandava UM evento e ele era, por construcao, o
+-- verdadeiro. O que o simulador nao sabe representar, o teste nao ve.
+local function abreGravacao()
+    state.specIndex, state.equippedSet = 1, 9
+    state.pendingSet, state.pendingLoadout = nil, nil
+    state.activeLoadout[251] = 10
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, talent = 11, gear = 4 }, function() end)
+    state.specIndex = 2
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+    -- o eco, como o jogo o manda: dois eventos, no instante da troca, com o id do verdadeiro
+    fire("TRAIT_CONFIG_UPDATED", 59714245)
+    fire("TRAIT_CONFIG_UPDATED", 59714244)
+end
+
+do
+    abreGravacao()
+    check("a troca de spec abriu a gravacao", state.pendingLoadout, 11)
+    check("o eco da troca de spec nao pede os itens", state.pendingSet, nil)
+    check("nem da os talentos por gravados", ns.Data.GetProgress()[2].state, "doing")
+    check("nem marca o loadout como selecionado", state.activeLoadout[251], 10)
+
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-a", 12345)
+    fire("UNIT_SPELLCAST_SUCCEEDED", "target", "cast-b", 384255)
+    check("cast alheio nao fecha a gravacao", state.pendingSet, nil)
+
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-c", 384255)
+    check("o fim do cast de gravacao libera os itens", state.pendingSet, 4)
+    check("e so entao o loadout vira o selecionado", state.activeLoadout[251], 11)
+
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    check("e a corrente termina", ns.Data.IsApplying(), false)
+end
+
+do
+    -- A RESERVA: sem o cast visivel, o `TRAIT_CONFIG_UPDATED` tardio fecha.
+    abreGravacao()
+    check("o eco sozinho nao fecha", state.pendingSet, nil)
+    AdvanceClock(5)
+    fire("TRAIT_CONFIG_UPDATED", 59714245)
+    check("o evento tardio fecha a gravacao", state.pendingSet, 4)
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    check("e a corrente termina pela reserva", ns.Data.IsApplying(), false)
+end
+
+do
+    -- A GRAVACAO QUE FALHA vira falha anotada, e os itens seguem.
+    abreGravacao()
+    fire("CONFIG_COMMIT_FAILED", 59714245)
+    check("gravacao que falha vira falha anotada", ns.Data.GetProgress()[2].state, "failed")
+    check("e os itens seguem mesmo assim", state.pendingSet, 4)
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    check("e a corrente nao fica presa", ns.Data.IsApplying(), false)
+end
+
+do
+    -- NA INSISTENCIA NAO HA GRAVACAO NOSSA. `LoadConfig` devolveu `Error` sem motivo, o addon vai
+    -- perguntar de novo em 4 s, e o eco chega no meio. As tres correntes do diario que tomaram
+    -- esse caminho fecharam NO ECO e anunciaram "pronto" -- sem nada que provasse que os talentos
+    -- entraram.
+    state.loadRefusals, state.loadError = 1, nil
+    abreGravacao()
+    check("recusado, o talento nao foi carregado", state.pendingLoadout, nil)
+    check("o eco nao confirma o que o jogo recusou", ns.Data.GetProgress()[2].state, "doing")
+    check("nem marca o loadout", state.activeLoadout[251], 10)
+    check("nem pede os itens", state.pendingSet, nil)
+
+    RunTimers(5)                      -- a insistencia pergunta de novo, e o jogo aceita
+    check("a insistencia abriu a gravacao", state.pendingLoadout, 11)
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-d", 384255)
+    check("e o fim do cast fecha como sempre", state.pendingSet, 4)
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    check("e a corrente termina depois da insistencia", ns.Data.IsApplying(), false)
     state.loadRefusals = 0
 end
 
@@ -2783,7 +2887,7 @@ do
     check("spec confirmada vira concluida", passos[1].state, "done")
     check("e o passo seguinte assume o andamento", passos[2].state, "doing")
 
-    fire("TRAIT_CONFIG_UPDATED", 999)
+    gravacaoTermina(999)
     check("talentos confirmados", ns.Data.GetProgress()[2].state, "done")
 
     fire("EQUIPMENT_SWAP_FINISHED", true, 3)
