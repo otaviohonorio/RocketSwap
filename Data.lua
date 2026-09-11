@@ -1015,6 +1015,11 @@ function Steps.talent(preset)
     return "wait"           -- confirma no fim do cast de gravação (ou no TRAIT_CONFIG_UPDATED tardio)
 end
 
+-- Quantas vezes o passo de itens espera um cast acabar antes de desistir. O caso medido é UMA (o
+-- cast de gravação de talentos); três deixa folga para o jogador lançar mais alguma coisa sem
+-- deixar a corrente pendurada em quem não para de conjurar.
+local GEAR_CAST_WAIT_MAX = 3
+
 function Steps.gear(preset)
     if not preset.gear then return "skip" end
     if Data.GetEquippedSetID() == preset.gear then return "skip" end
@@ -1025,8 +1030,32 @@ function Steps.gear(preset)
         and C_EquipmentSet.EquipmentSetContainsLockedItems(preset.gear) then
         return "fail", L["some items of this set are locked (in use, or in the mail)."]
     end
-    if UnitCastingInfo("player") then
-        return "fail", L["you are casting something — try again in a second."]
+    -- ⚑ CAST EM CURSO NÃO É FALHA, É ESPERA. Diário de 11/09 17:46:01, a primeira troca que
+    -- exercitou a 0.22.0:
+    --
+    --     17:46:01  UNIT_SPELLCAST_SUCCEEDED 384255   -> o passo de talentos fecha (certo)
+    --     17:46:01  passo gear -> fail "você está conjurando algo"
+    --
+    -- O cast que acabara de TERMINAR ainda constava. A barra de cast do jogo nem olha o
+    -- SUCCEEDED: ela só dá o cast por encerrado no `UNIT_SPELLCAST_STOP`, e é ali que a
+    -- informação dele deixa de existir (`CastingBarFrame.lua:459,482-483`). Recusar por isso
+    -- derrubava os itens justamente na troca que o addon existe para fazer. Agora o passo espera o
+    -- fim do cast — STOP, FAILED ou INTERRUPTED do jogador — e tenta de novo.
+    --
+    -- O TETO é para o jogador que segue conjurando uma magia atrás da outra: sem ele a espera se
+    -- re-armaria a cada cast e o prazo nunca venceria.
+    local conjurando, _, _, _, _, _, _, _, magia = UnitCastingInfo("player")
+    if conjurando then
+        running.gearCastWaits = (running.gearCastWaits or 0) + 1
+        -- O QUE ESTÁ SENDO CONJURADO vai para o diário. A recusa das 17:46:01 não dizia, e foi
+        -- preciso deduzir pelo instante que era o próprio cast de gravação.
+        if ns.Log then ns.Log.Call("gear", "UnitCastingInfo", conjurando, magia) end
+        if running.gearCastWaits > GEAR_CAST_WAIT_MAX then
+            return "fail", L["you are casting something — try again in a second."]
+        end
+        running.gearWaitsCast = true
+        Arm()
+        return "wait"       -- o fim do cast chama o passo de novo (`RerunStep`)
     end
 
     Report(L["Equipping gear..."], false)
@@ -1388,6 +1417,40 @@ end
 ---O ouvinte só existe enquanto o addon precisa dele. Registrar `TRAIT_CONFIG_UPDATED` e
 ---`EQUIPMENT_SWAP_FINISHED` o tempo todo faria o addon acordar em toda troca manual do
 ---jogador, e não há nada a fazer nesses casos.
+-- Os eventos de cast que o ouvinte escuta. Todos só interessam do jogador e com corrente em curso.
+local CAST_EVENTS = {
+    UNIT_SPELLCAST_SUCCEEDED   = true,
+    UNIT_SPELLCAST_STOP        = true,
+    UNIT_SPELLCAST_FAILED      = true,
+    UNIT_SPELLCAST_INTERRUPTED = true,
+}
+
+---Roda de novo o passo em curso quando o que o fazia esperar acabou.
+---
+---O mesmo desfecho que `RunNext` dá a um passo, sem avançar o índice — e com o mesmo `pcall`,
+---pela mesma razão: erro de Lua aqui dentro deixaria `running` preso e o botão mudo.
+local function RerunStep(name)
+    local okStep, outcome, message = pcall(Steps[name], running.preset)
+    if not okStep then
+        if ns.Log then ns.Log.Step(name, "erro de lua", tostring(outcome)) end
+        message, outcome = L["an internal error interrupted this step."], "fail"
+    elseif ns.Log then
+        ns.Log.Step(name, outcome or "wait", message)
+    end
+    NoteOutcome(name, outcome)
+
+    if outcome == "skip" then
+        RunNext()
+    elseif outcome == "abort" then
+        Finish(false, message)
+    elseif outcome == "fail" then
+        if not running then return end
+        running.failures = running.failures or {}
+        running.failures[#running.failures + 1] = message
+        RunNext()
+    end
+end
+
 ---Fecha o passo de talentos quando a gravação termina, e diz no diário QUAL sinal fechou e em
 ---quanto tempo. É esse registro que confere a janela do eco com dado de verdade.
 local function CloseTalentCommit(por, commit)
@@ -1411,6 +1474,9 @@ function Data.EnsureListener()
     listener:RegisterEvent("TRAIT_CONFIG_UPDATED")
     listener:RegisterEvent("CONFIG_COMMIT_FAILED")
     listener:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    listener:RegisterEvent("UNIT_SPELLCAST_STOP")
+    listener:RegisterEvent("UNIT_SPELLCAST_FAILED")
+    listener:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     listener:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
     listener:RegisterEvent("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
 
@@ -1423,7 +1489,7 @@ function Data.EnsureListener()
         -- não dá para saber se o evento era do nosso conjunto — foi exatamente a pergunta que
         -- ficou sem resposta ao ler o diário de 02:05.
         local emCurso = running and running.steps[running.at] or nil
-        if event == "UNIT_SPELLCAST_SUCCEEDED" then
+        if CAST_EVENTS[event] then
             -- O CAST SÓ INTERESSA COM CORRENTE EM CURSO, e só o do jogador. Ele dispara a cada
             -- magia de qualquer unidade: registrar tudo varreria o diário de 400 linhas em minutos
             -- de jogo. Com corrente, grava o `spellID` — é ele que diz, na próxima troca real, se
@@ -1515,6 +1581,15 @@ function Data.EnsureListener()
                 running.failures = running.failures or {}
                 running.failures[#running.failures + 1] = L["the talent loadout could not be loaded."]
                 RunNext()
+            end
+
+        elseif CAST_EVENTS[event] and event ~= "UNIT_SPELLCAST_SUCCEEDED" and step == "gear" then
+            -- O CAST ACABOU, ou foi cortado — é agora que `UnitCastingInfo` deixa de responder
+            -- (`CastingBarFrame.lua:459,482-483`). SUCCEEDED fica de fora de propósito: é ele que
+            -- chega com o cast ainda constando, e foi exatamente ele que derrubou os itens.
+            if running.gearWaitsCast then
+                running.gearWaitsCast = nil
+                RerunStep("gear")
             end
 
         elseif event == "TRANSMOG_DISPLAYED_OUTFIT_CHANGED" and step == "transmog" then

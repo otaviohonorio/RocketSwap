@@ -316,6 +316,24 @@ SABOTAGENS = [
      u"    running.commit = { since = GetTime() }",
      u"    running.commit = nil",
      "agora sim equipou o conjunto de PvP"),
+
+    # ------------------------ o cast que acabou de terminar ainda consta (diario de 11/09 17:46)
+    # CAST VOLTA A DERRUBAR OS ITENS: e o defeito da primeira troca que exercitou a 0.22.0.
+    ("o cast em curso volta a derrubar os itens", "Data.lua",
+     u"        running.gearWaitsCast = true\n",
+     u"        do return \"fail\", L[\"you are casting something — try again in a second.\"] end\n",
+     "o cast em curso nao derruba os itens"),
+
+    ("o fim do cast deixa de ser ouvido pelos itens", "Data.lua",
+     u"    listener:RegisterEvent(\"UNIT_SPELLCAST_STOP\")\n",
+     u"",
+     "o fim do cast libera os itens"),
+
+    # SEM TETO, quem segue conjurando pendura a corrente: cada cast re-arma a espera e o prazo.
+    ("cast sem fim espera para sempre", "Data.lua",
+     u"        if running.gearCastWaits > GEAR_CAST_WAIT_MAX then",
+     u"        if false then",
+     "e a corrente nao fica presa com cast sem fim"),
 ]
 
 
