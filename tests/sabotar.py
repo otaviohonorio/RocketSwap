@@ -66,10 +66,12 @@ SABOTAGENS = [
     # Com War Mode o contexto nao e "pvp", entao quem perguntar `context == \"pvp\"` joga o modo
     # guerra silenciosamente para o lado do PvE -- e passa a cobrar equipamento de PvE de quem
     # esta exposto.
+    # O rotulo mudou em 12/09, quando o aviso de modo guerra virou opt-in: o check que prova esta
+    # regra agora e o que LIGA a opcao -- sem ela marcada nao ha aviso nenhum para comparar.
     ("o modo guerra cai do lado do PvE", "Alert.lua",
      u"    return context == \"pvp\" or context == \"warmode\"",
      u"    return context == \"pvp\"",
-     "de PvE com modo guerra ligado, o aviso aparece"),
+     "marcando a opcao, o aviso aparece"),
 
     # Saber nao depende de poder consertar: a restricao de PvP fica ativa a partida inteira.
     ("o aviso volta a depender de poder consertar", "Alert.lua",
@@ -389,6 +391,47 @@ SABOTAGENS = [
      u"    if running.specCastCuts > SPEC_CAST_CUT_MAX then",
      u"    if false then",
      "no teto desiste e segue para os itens"),
+
+    # ------------------------- o aviso de modo guerra e opt-in (pedido de 12/09)
+    ("o aviso de modo guerra volta a ser ligado de fabrica", "Core.lua",
+     u"    warnWarMode = false,",
+     u"    warnWarMode = true,",
+     "de fabrica a opcao nasce desmarcada"),
+
+    ("a comporta do modo guerra desaparece", "Alert.lua",
+     u'    if context == "warmode" and ns.db.warnWarMode ~= true then return end',
+     u"    -- sabotado",
+     "sem marcar a opcao, modo guerra nao avisa"),
+
+    # E O OPOSTO: a comporta cobrindo a PARTIDA de PvP tambem, que ninguem pediu para calar.
+    ("a comporta cala a partida de PvP tambem", "Alert.lua",
+     u'    if context == "warmode" and ns.db.warnWarMode ~= true then return end',
+     u"    if ns.db.warnWarMode ~= true then return end",
+     "a partida de PvP continua avisando"),
+
+    # A SUB-OPCAO PERDE O RECUO: sem ele nada na tela diz que ela depende da caixa de cima.
+    ("a sub-opcao perde o recuo de filha", "UI.lua",
+     u'    strip.warMode = Toggle(-54, L["Warn with War Mode on too"], "warnWarMode", CHILD_INDENT)',
+     u'    strip.warMode = Toggle(-54, L["Warn with War Mode on too"], "warnWarMode")',
+     "a sub-opcao e recuada como opcao filha"),
+
+    # E A FAIXA VOLTA A ALTURA DE DUAS CAIXAS: a terceira transborda em silencio.
+    ("a faixa volta a altura de duas caixas", "UI.lua",
+     u"    strip:SetHeight(118)",
+     u"    strip:SetHeight(86)",
+     "a faixa de avisos cabe as tres caixas"),
+
+    # O VAO EXTERNO ENCOSTA NO INTERNO: o olho perde a quem a sub-opcao pertence.
+    ("o vao que separa vira igual ao que associa", "UI.lua",
+     u'    strip.ready = Toggle(-88, L["Show my setup on ready check"], "readyCheck")',
+     u'    strip.ready = Toggle(-78, L["Show my setup on ready check"], "readyCheck")',
+     "e o vao que separa e maior que o que associa"),
+
+    # A PORTA SOME DO DIAGNOSTICO: `/rs gear` mostraria tudo aberto com o aviso calado.
+    ("a porta do modo guerra some do diagnostico", "Alert.lua",
+     u"        avisoModoGuerra = ns.db and ns.db.warnWarMode == true or false,",
+     u"        avisoModoGuerra = true,",
+     "  e o diagnostico mostra a porta fechada"),
 
     # A INTERRUPCAO VOLTA A SER MUDA: o diario termina no ultimo passo, sem dizer que houve /reload.
     ("a interrupcao deixa de ser gravada", "Data.lua",

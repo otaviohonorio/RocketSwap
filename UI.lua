@@ -30,7 +30,11 @@ local UI = {}
 ns.UI = UI
 
 -- Todos os números têm origem. Onde há citação, ela é de arquivo do cliente 12.1.0.
-local WIDTH, HEIGHT = 520, 420
+-- A altura subiu de 420 para 452 quando a sub-opção de modo guerra entrou na faixa de Avisos
+-- (12/09). A conta é fechada, não estética: a faixa começa em −304, três caixas terminam em −112
+-- dentro dela (118 de altura), e o rodapé que o `ButtonFrameTemplate` reserva come 26 px do fundo
+-- ⇒ 304 + 118 + 26 = 448, mais os mesmos 4 px de folga que a janela de 420 já tinha.
+local WIDTH, HEIGHT = 520, 452
 local LIST_W = 260            -- largura externa do inset da lista: x 4..264
 local GUTTER = 20             -- calha entre colunas (MountJournal)
 local COL_X = 284             -- borda esquerda da ARTE da coluna direita
@@ -40,6 +44,7 @@ local FIELD_W = 200           -- combos (o dropdown de loadout de talentos usa 2
 local NAME_W = 211            -- EditBox: a arte termina em 500, alinhada com a dos combos
 local GROUP_STEP = 50         -- rótulo (15) + combo (25) + respiro (10)
 local ATTIC_Y = -30           -- faixa entre o título e o inset
+local CHILD_INDENT = 15       -- recuo de opção filha (`Blizzard_SettingControls.lua:1`)
 
 local frame, editor, selection
 
@@ -698,7 +703,10 @@ local function BuildToggles()
     local strip = CreateFrame("Frame", nil, frame)
     strip:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -304)
     strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -304)
-    strip:SetHeight(86)
+    -- 118 = a última caixa termina em −112, mais 6 de respiro. Era 86 com duas caixas; a
+    -- sub-opção de modo guerra (12/09) trouxe a terceira, e altura fixa que não acompanha o
+    -- conteúdo é o defeito que a faixa transbordando teria produzido em silêncio.
+    strip:SetHeight(118)
 
     strip.divider = strip:CreateTexture(nil, "ARTWORK")
     strip.divider:SetPoint("TOPLEFT", 0, 0)
@@ -746,6 +754,8 @@ local function BuildToggles()
         GameTooltip:AddLine(L["Wrong gear:"], 1, 0.82, 0)
         GameTooltip:AddLine(L["In an arena or battleground it flags every slot WITHOUT the PvP item level line; in a dungeon or raid, every slot WITH it. It names the slots, and offers to load a preset if you have one that fits."],
             0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(L["In the open world with War Mode on it stays quiet unless you tick the second box: out there most of the time is questing, not fighting players."],
+            0.8, 0.8, 0.8, true)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine(L["Ready check:"], 1, 0.82, 0)
         GameTooltip:AddLine(L["When the leader starts one, it prints your specialization, talent loadout and gear set — so you can confirm before the pull."],
@@ -760,10 +770,10 @@ local function BuildToggles()
     ---Uma caixa com rótulo próprio. `UICheckButtonTemplate` tem um `.text` embutido, mas ele
     ---depende de o frame ter nome — e frame nomeado vira global. FontString própria evita as
     ---duas coisas.
-    local function Toggle(y, label, key)
+    local function Toggle(y, label, key, indent)
         local box = CreateFrame("CheckButton", nil, strip, "UICheckButtonTemplate")
         box:SetSize(24, 24)
-        box:SetPoint("TOPLEFT", 0, y)
+        box:SetPoint("TOPLEFT", indent or 0, y)
 
         local text = strip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         text:SetPoint("LEFT", box, "RIGHT", 2, 0)
@@ -777,7 +787,21 @@ local function BuildToggles()
     end
 
     strip.warn = Toggle(-30, L["Warn about wrong gear"], "warn")
-    strip.ready = Toggle(-54, L["Show my setup on ready check"], "readyCheck")
+
+    -- ⚑ SUB-OPÇÃO, e por isso RECUADA 15 — o número é o da Blizzard para opção filha
+    -- (`Blizzard_SettingControls.lua:1`). Ela só faz sentido com a de cima ligada, e o recuo diz
+    -- isso de graça: a alternativa era um rótulo mais comprido explicando a dependência.
+    --
+    -- O passo vertical segue o desta faixa (24), e não os 35 do formulário nativo: as três caixas
+    -- são um grupo só, e misturar dois ritmos na mesma pilha é o que faz uma tela parecer remendada.
+    strip.warMode = Toggle(-54, L["Warn with War Mode on too"], "warnWarMode", CHILD_INDENT)
+
+    -- ⚑ E A DE BAIXO FICA MAIS LONGE, de propósito: 34 contra os 24 de dentro do par acima. É a
+    -- lei da proximidade — o vão que SEPARA tem de ser maior que o que ASSOCIA, senão o olho não
+    -- sabe a quem a sub-opção pertence. 34 é o passo de linha do formulário nativo
+    -- (`Blizzard_SettingControls.xml:108-164` + `Blizzard_SettingsList.lua:46`), e aqui ele marca
+    -- justamente a troca de assunto: sai o aviso de equipamento, entra o do ready check.
+    strip.ready = Toggle(-88, L["Show my setup on ready check"], "readyCheck")
 
     frame.toggles = strip
 end
@@ -1001,6 +1025,12 @@ function UI.Refresh()
     -- As caixas ficam fora do jogo de esconder/mostrar de propósito: elas valem nos dois
     -- estados, e o estado vazio é justamente onde elas mais importam.
     frame.toggles.warn:SetChecked(ns.db.warn ~= false)
+    -- `== true`, e não `~= false`: esta nasce DESMARCADA, então a ausência de valor é "não".
+    -- Copiar o `~= false` das vizinhas a deixaria marcada em quem nunca a viu — o oposto do pedido.
+    frame.toggles.warMode:SetChecked(ns.db.warnWarMode == true)
+    -- E APAGADA QUANDO A MÃE ESTÁ DESMARCADA: sem o aviso de equipamento, esta não tem efeito
+    -- nenhum, e caixa clicável que não faz nada é a versão pior de não ter a caixa.
+    frame.toggles.warMode:SetEnabled(ns.db.warn ~= false)
     frame.toggles.ready:SetChecked(ns.db.readyCheck ~= false)
 
     frame.emptyState:SetShown(empty)

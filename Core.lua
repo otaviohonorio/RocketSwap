@@ -17,6 +17,16 @@ ns.defaults = {
     -- um conjunto. Desligaveis por /rs warn e /rs ready.
     warn = true,          -- equipamento errado para o conteudo
     readyCheck = true,    -- resumo do que voce esta usando, no ready check
+
+    -- ⚑ MODO GUERRA NASCE CALADO (pedido de 12/09: *"tira o alerta dos itens de pvp em mundo
+    -- aberto no war mode, ou transforma em opcao por padrao desmarcada"*).
+    --
+    -- O contexto FICA -- ele existe por pedido dele mesmo, de 08/09 (*"inclusive quando seto para
+    -- pvp, habilitando o war mode on, sem avisos"*) --, mas o aviso dele passa a ser opt-in. A
+    -- razao esta na diferenca entre as duas situacoes: partida de PvP e uma janela fechada em que
+    -- o equipamento errado custa a partida; modo guerra e o mundo aberto, onde a maior parte do
+    -- tempo e missao e farm, e o aviso aparece sem que nada esteja acontecendo.
+    warnWarMode = false,  -- avisar tambem com Modo Guerra ligado, no mundo aberto
     muted = {},           -- situacoes que o usuario mandou calar
     mutedSlots = {},      -- slots que o usuario mandou calar
 }

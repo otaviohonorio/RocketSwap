@@ -122,6 +122,8 @@ L["ready check:"] = "conferência:"
 L["What you are using"] = "O que você está usando"
 L["gear warning on."] = "aviso de equipamento ligado."
 L["gear warning off."] = "aviso de equipamento desligado."
+L["war mode warning on."] = "aviso com Modo Guerra ligado."
+L["war mode warning off."] = "aviso com Modo Guerra desligado."
 L["ready check summary on."] = "resumo no ready check ligado."
 L["ready check summary off."] = "resumo no ready check desligado."
 L["all warnings re-enabled."] = "todos os avisos religados."
@@ -135,11 +137,17 @@ L["turns the gear warning on or off"] = "liga ou desliga o aviso de equipamento"
 L["turns the ready check summary on or off"] = "liga ou desliga o resumo no ready check"
 L["re-enables warnings you silenced"] = "religa os avisos que você silenciou"
 L["Warn about wrong gear"] = "Avisar equipamento errado"
+-- Desmarcada por padrão (12/09). O rótulo diz ONDE o aviso passa a valer, não o que ele é: quem
+-- lê a lista de caixas já sabe que se trata do aviso de equipamento pela caixa de cima.
+L["Warn with War Mode on too"] = "Avisar também com Modo Guerra ligado"
 L["Show my setup on ready check"] = "Resumo no ready check"
 L["Warnings"] = "Avisos"
 L["These two work without any preset — they are what the addon does on the day you install it."] =
     "Os dois funcionam sem nenhum conjunto criado — é o que o addon faz no dia em que você o instala."
 L["Wrong gear:"] = "Equipamento errado:"
+L["In the open world with War Mode on it stays quiet unless you tick the second box: out there most of the time is questing, not fighting players."] =
+    "No mundo aberto com Modo Guerra ligado ele fica calado, a não ser que você marque a segunda " ..
+    "caixa: lá fora a maior parte do tempo é missão, não briga com jogador."
 L["In an arena or battleground it flags every slot WITHOUT the PvP item level line; in a dungeon or raid, every slot WITH it. It names the slots, and offers to load a preset if you have one that fits."] =
     "Em arena ou campo de batalha, marca todo slot SEM a linha de nível de item de PvP; em masmorra ou raide, todo slot COM ela. Diz quais slots são, e oferece carregar um conjunto se você tiver um que sirva."
 L["Ready check:"] = "Ready check:"
