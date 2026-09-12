@@ -29,7 +29,14 @@ local function widget(kind)
     ---O deslocamento de uma ancora, pelo canto que ela prende. Devolve x, y.
     function self.PointOffset(_, corner)
         for _, pt in ipairs(self.__points) do
-            if pt[1] == corner then return pt[4], pt[5] end
+            if pt[1] == corner then
+                -- AS DUAS FORMAS DE `SetPoint`, e so a longa era entendida:
+                -- `("TOPLEFT", pai, "TOPLEFT", x, y)` e `("TOPLEFT", x, y)`. Na forma curta o
+                -- stub devolvia nil, nil -- e um check de posicao comparando nil com nil passa
+                -- sem medir nada. As caixas da faixa de avisos usam a curta.
+                if type(pt[2]) == "number" then return pt[2], pt[3] end
+                return pt[4], pt[5]
+            end
         end
     end
 
@@ -2283,14 +2290,92 @@ do
     check("com modo guerra ligado, o contexto existe", ns.Alert.Context(), "warmode")
     check("  e nao se confunde com uma partida", ns.Alert.Context() ~= "pvp", true)
 
-    -- E O EQUIPAMENTO E COBRADO COMO PvP: e o que "seto para pvp" quer dizer.
+    -- ⚑ E O AVISO NASCE CALADO AQUI (pedido de 12/09: *"tira o alerta dos itens de pvp em mundo
+    -- aberto no war mode, ou transforma em opcao por padrao desmarcada"*). O contexto continua
+    -- existindo -- e o que `/rs gear` mostra --, mas o aviso e opt-in.
     VestirTudo(false)
     ns.Gear.ClearCache()
     ns.Alert.Hide()
+    check("de fabrica a opcao nasce desmarcada", ns.defaults.warnWarMode, false)
+
+    ns.db.warnWarMode = nil                 -- como nasce em quem nunca viu a opcao
     ns.Alert.Check("teste")
-    check("de PvE com modo guerra ligado, o aviso aparece", ns.Alert.__Shown(), true)
+    check("sem marcar a opcao, modo guerra nao avisa", ns.Alert.__Shown(), false)
+
+    -- E O DIAGNOSTICO DIZ ISSO. Sem esta porta no retrato, `/rs gear` mostraria todas as comportas
+    -- abertas e o aviso nao sairia -- o silencio que o diagnostico existe para nao ter.
+    check("  e o diagnostico mostra a porta fechada",
+        ns.Alert.Diagnose().avisoModoGuerra, false)
+
+    -- MARCADA, o aviso volta -- e com a redacao do modo guerra.
+    ns.db.warnWarMode = true
+    ns.Alert.Hide()
+    ns.Alert.Check("teste")
+    check("marcando a opcao, o aviso aparece", ns.Alert.__Shown(), true)
     check("  com a redacao do modo guerra",
         ns.Alert.__Headline(), ns.L["PvE gear with War Mode on."])
+
+    -- ⚑ E A COMPORTA E SO DO MODO GUERRA: uma partida de PvP nao pode emudecer junto. A opcao
+    -- desmarcada com contexto "pvp" tem que continuar avisando.
+    ns.db.warnWarMode = nil
+    state.instance = "arena"
+    ns.Gear.ClearCache()
+    ns.Alert.Hide()
+    ns.Alert.Check("teste")
+    check("a partida de PvP continua avisando", ns.Alert.__Shown(), true)
+    check("  com a redacao da partida", ns.Alert.__Headline(),
+        ns.L["PvE gear in a PvP match."])
+    state.instance = nil
+    ns.Gear.ClearCache()
+
+    -- O COMANDO LIGA E DESLIGA, como o das outras duas caixas.
+    SlashCmdList.ROCKETSWAP("warn warmode")
+    check("/rs warn warmode liga", ns.db.warnWarMode, true)
+    SlashCmdList.ROCKETSWAP("warn warmode")
+    check("  e desliga", ns.db.warnWarMode, false)
+    ns.db.warnWarMode = nil
+
+    -- ⚑ AS DUAS REGRAS DE TELA, que nao aparecem no comportamento do aviso.
+    if not ns.UI.IsShown() then ns.UI.Toggle() end
+    ns.UI.Refresh()
+    local caixas = ns.UI.DebugToggles()
+
+    -- NASCE DESMARCADA: copiar o `~= false` das vizinhas a deixaria marcada em quem nunca a viu,
+    -- que e o oposto do pedido.
+    check("a caixa do modo guerra nasce desmarcada", caixas.warMode:GetChecked(), false)
+
+    -- E APAGADA SEM A MAE: caixa clicavel que nao faz nada e pior que caixa nenhuma.
+    ns.db.warn = false
+    ns.UI.Refresh()
+    check("sem o aviso de equipamento, a sub-opcao fica apagada",
+        caixas.warMode:IsEnabled(), false)
+
+    ns.db.warn = true
+    ns.UI.Refresh()
+    check("  e volta quando a mae e religada", caixas.warMode:IsEnabled(), true)
+
+    -- ⚑ A GEOMETRIA, que e aritmetica e se confere aqui (skill `wow-ui-design`).
+    local xMae = caixas.warn:PointOffset("TOPLEFT")
+    local xFilha, yFilha = caixas.warMode:PointOffset("TOPLEFT")
+    local _, yMae = caixas.warn:PointOffset("TOPLEFT")
+    local _, yReady = caixas.ready:PointOffset("TOPLEFT")
+
+    -- RECUO DE FILHA: e ele que diz, sem palavra nenhuma, que a caixa depende da de cima.
+    check("a sub-opcao e recuada como opcao filha", xFilha - xMae, 15)
+
+    -- LEI DA PROXIMIDADE: o vao que SEPARA tem de ser maior que o que ASSOCIA.
+    local interno, externo = yMae - yFilha, yFilha - yReady
+    check("e o vao que separa e maior que o que associa", externo > interno, true)
+
+    -- E A FAIXA TEM DE CABER AS TRES: altura fixa que nao acompanha o conteudo transborda em
+    -- silencio -- foi o defeito que esta terceira caixa criou e que este check tranca.
+    -- ⚑ A ALTURA SAI DA PROPRIA FAIXA (`caixas` E o strip), e nao de `caixas.warn:GetParent()`:
+    -- no simulador `GetParent` cai no `__index` generico e devolve um widget NOVO, com a altura
+    -- padrao de 400 -- o check comparava 112 com 400 e passava com a faixa transbordando. A
+    -- sabotagem e que denunciou, que e o unico jeito de descobrir check que mede a si mesmo.
+    local CAIXA = 24
+    check("a faixa de avisos cabe as tres caixas", -yReady + CAIXA <= caixas:GetHeight(), true)
+    if ns.UI.IsShown() then ns.UI.Toggle() end
 
     ligado = false
     C_PvP = nil

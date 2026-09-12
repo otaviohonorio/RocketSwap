@@ -161,6 +161,10 @@ function Alert.Diagnose()
         restricoes = restricoes,
         podeConsertar = CanFix(),
         avisoLigado = not (ns.db and ns.db.warn == false),
+        -- A SÉTIMA PORTA, e ela é nova: com Modo Guerra ligado o aviso só sai se o jogador tiver
+        -- marcado a opção. Sem esta linha o retrato diria "tudo pronto para avisar" e o aviso não
+        -- sairia — que é o tipo de silêncio que este diagnóstico existe para não ter.
+        avisoModoGuerra = ns.db and ns.db.warnWarMode == true or false,
         deteccaoViva = ns.Gear.PatternReady(),
         vestido = vestido,
         comoPvP = { errado = #erradoPvP, lido = lidoPvP,
@@ -285,6 +289,16 @@ function Alert.Check(reason)
 
     local context = Alert.Context()
     if not context then return end
+
+    -- ⚑ O AVISO DE MODO GUERRA É OPT-IN (`warnWarMode`, padrão desligado). Pedido de 12/09:
+    -- *"tira o alerta dos itens de pvp em mundo aberto no war mode, ou transforma em opção por
+    -- padrão desmarcada"*.
+    --
+    -- A COMPORTA FICA AQUI, E NÃO EM `Alert.Context()`, de propósito: o contexto continua sendo
+    -- "warmode" para `/rs gear` (o diagnóstico precisa dizer onde o jogador está) e para o resumo
+    -- do ready check. Quem cala é o aviso, que é o que incomodava. Mexer no contexto apagaria
+    -- também as duas coisas que ninguém pediu para apagar.
+    if context == "warmode" and ns.db.warnWarMode ~= true then return end
 
     -- ⚑ EM COMBATE O AVISO CALA, e só em combate. Antes a comporta era `CanFix()`, que também
     -- fecha quando a **restrição de addon** está ativa — e a documentação de API deste cliente

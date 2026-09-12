@@ -40,9 +40,20 @@ commands["list"] = function()
     end
 end
 
-commands["warn"] = function()
+-- `/rs warn` liga/desliga o aviso; `/rs warn warmode` liga/desliga o de modo guerra, que nasce
+-- desligado. A mesma porta para as duas coisas porque e o mesmo aviso -- uma e o recorte da outra.
+commands["warn"] = function(rest)
+    local arg = (rest or ""):lower()
+    if arg:find("warmode", 1, true) or arg:find("guerra", 1, true) then
+        ns.db.warnWarMode = not (ns.db.warnWarMode == true)
+        ns.Print(ns.db.warnWarMode and L["war mode warning on."] or L["war mode warning off."])
+        if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
+        return
+    end
+
     ns.db.warn = ns.db.warn == false
     ns.Print(ns.db.warn and L["gear warning on."] or L["gear warning off."])
+    if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
 end
 
 commands["ready"] = function()
