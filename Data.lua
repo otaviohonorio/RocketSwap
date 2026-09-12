@@ -58,6 +58,11 @@ ns.Data = Data
 --
 -- A aparência é o oposto: ela já foi pedida no clique, antes da corrente começar. Se não chegou
 -- em dois segundos, não vai chegar — esperar doze só atrasa a mensagem.
+-- Os passos que o JOGO recusa em combate, e que por isso esperam a luta acabar em vez de falhar.
+-- A aparência fica fora: quem a troca é o clique seguro, antes da corrente, e o passo dela aqui
+-- só confere — não há o que o combate impeça.
+local COMBAT_SENSITIVE = { spec = true, talent = true, gear = true }
+
 local STEP_TIMEOUT = {
     spec     = 45,
     talent   = 30,
@@ -363,7 +368,12 @@ function Data.CanChangeSpec()
     if getCD then
         local okCD, cd = pcall(getCD, spellID)
         if okCD and type(cd) == "table" and cd.isActive == true then
-            return false, nil       -- sem motivo do jogo: a nossa frase explica a espera
+            -- TERCEIRO RETORNO: "foi a recarga". Sem ele o diário escrevia `pode=false motivo=nil`
+            -- igualzinho ao caso "a interface respondeu não e não disse por que" — duas causas
+            -- diferentes na mesma linha, e a leitura do diário não separava.
+            --
+            -- E quem chama usa isso para decidir entre ESPERAR e desistir: recarga passa.
+            return false, nil, "recarga da magia de spec"
         end
     end
 
@@ -505,6 +515,41 @@ local function Report(text, isError)
     if running and running.report then running.report(text, isError) end
 end
 
+---O passo já está satisfeito no mundo, agora?
+---
+---⚑ EXISTE PARA UMA COISA SÓ: não acusar falha do que deu certo. Quando o prazo vence, a pergunta
+---certa não é "o evento chegou?" mas "está aplicado?" — e o histórico deste addon mostra que as
+---duas divergem: em 07/09 02:05:35 o `EQUIPMENT_SWAP_FINISHED` chegou com `true` e a leitura de
+---estado ainda dizia que o conjunto não estava vestido. A confirmação dos passos continua sendo
+---por EVENTO justamente por isso; esta leitura entra só no fim do prazo, dezenas de segundos
+---depois, quando o estado já teve tempo de assentar.
+---
+---O pedido do usuário é literal: *"devo conseguir fazer as trocas sem que tenha erros"*. Reclamar
+---de algo que está aplicado é o erro mais barato de eliminar.
+local function StepSatisfied(name)
+    if not running or not running.preset then return false end
+    local preset = running.preset
+
+    if name == "spec" then
+        return preset.spec ~= nil and Data.GetCurrentSpecIndex() == preset.spec
+
+    elseif name == "talent" then
+        if not preset.talent then return false end
+        -- Um loadout pertence a uma spec: sem a spec certa a comparação não significa nada.
+        if preset.spec and Data.GetCurrentSpecIndex() ~= preset.spec then return false end
+        local spec = Data.GetSpecByIndex(Data.GetCurrentSpecIndex())
+        return spec ~= nil and Data.GetActiveLoadoutID(spec.id) == preset.talent
+
+    elseif name == "gear" then
+        return preset.gear ~= nil and Data.IsGearSetEquipped(preset.gear)
+
+    elseif name == "transmog" then
+        return preset.transmog ~= nil and Data.GetActiveOutfitID() == preset.transmog
+    end
+
+    return false
+end
+
 local function Finish(ok, message)
     if running and running.timer then running.timer:Cancel() end
 
@@ -556,6 +601,7 @@ local function Finish(ok, message)
 end
 
 local RunNext   -- declarado antes para os passos poderem chamá-lo
+local RerunStep -- idem: o `RunNext` pausa em combate e pede o passo DE NOVO quando a luta acaba
 
 ---Arma o prazo do passo corrente. Sem isso, um passo que nunca confirma deixa o addon
 ---travado em "carregando" para sempre, sem dizer nada.
@@ -588,6 +634,27 @@ local function Arm()
 
     running.timer = C_Timer.NewTimer(prazo, function()
         if not running then return end
+
+        -- ⚑ ANTES DE ACUSAR, CONFERE O ESTADO. Esta é a maior fonte de "erro" que o jogador vê sem
+        -- que nada tenha dado errado: o evento de confirmação não chegou (ou chegou e não era
+        -- nosso), mas a troca aconteceu. Sem esta leitura o addon anuncia "o jogo não confirmou a
+        -- tempo" sobre uma spec que já virou.
+        --
+        -- E o prazo é o lugar seguro para ler estado: são 20 a 45 segundos depois do pedido, não o
+        -- instante seguinte a ele — que é o que fez a 0.13.2 travar a corrente.
+        if StepSatisfied(passo) then
+            if running.progress then running.progress[passo] = "done" end
+            if ns.Log then
+                ns.Log.Add("prazo", { passo = passo, desfecho = "ja estava aplicado" })
+            end
+            RunNext()
+            return
+        end
+
+        -- ⚑ E O PRAZO PASSA A TER LINHA PRÓPRIA. Antes ele só aparecia no `fim`, dentro de
+        -- `falhas`: no diário, um silêncio e depois o veredito. `insistindo` e `gravou` já têm
+        -- linha; o prazo é o desfecho que mais precisa de uma.
+        if ns.Log then ns.Log.Add("prazo", { passo = passo, desfecho = "nao confirmou" }) end
 
         -- O PASSO NÃO CONFIRMOU, E ISSO PRECISA FICAR MARCADO **ANTES** DO `RunNext`.
         --
@@ -802,11 +869,21 @@ function Steps.spec(preset)
 
     -- PERGUNTA ANTES DE CHAMAR, com a condição da própria janela de talentos do jogo. O motivo
     -- vem dele e já vem traduzido; a nossa frase só entra quando ele não manda nenhum.
-    local pode, motivo = Data.CanChangeSpec()
+    local pode, motivo, porque = Data.CanChangeSpec()
     if ns.Log then
-        ns.Log.Call("spec", "CanChangeSpec", pode, motivo, SpecSpellID() or "magia desconhecida")
+        ns.Log.Call("spec", "CanChangeSpec", pode, motivo,
+            porque or SpecSpellID() or "magia desconhecida")
     end
     if not pode then
+        -- ⚑ RECARGA NÃO É MOTIVO PARA DESISTIR — É MOTIVO PARA ESPERAR, e era a causa mais comum
+        -- de o jogador receber "o jogo recusou trocar de especialização agora" logo depois de uma
+        -- troca bem-sucedida. A recarga da magia acaba em segundos, e a insistência já existe.
+        --
+        -- Motivo EM TEXTO continua abortando: aí o jogo disse o que era (combate, área mítica), e
+        -- insistir seria repetir uma pergunta já respondida.
+        if porque and not motivo then
+            return RetrySpec(preset, wanted)
+        end
         return "abort", motivo
             or L["the game refused to change specialization now; wait a few seconds."]
     end
@@ -929,6 +1006,30 @@ function Steps.talent(preset)
     local spec = Data.GetSpecByIndex(atual)
     if spec and Data.GetActiveLoadoutID(spec.id) == preset.talent then return "skip" end
 
+    -- ⚑ O LOADOUT AINDA EXISTE? O id fica salvo em `RocketSwapDB.presets` e o jogador pode apagar
+    -- o loadout na janela de talentos a qualquer momento. Sem esta conferência o addon chamava
+    -- `LoadConfig` num id morto e o jogador ouvia "o jogo continuou recusando carregar os
+    -- talentos" depois de cinco tentativas e vinte segundos — causa errada, espera inútil.
+    --
+    -- É a mesma resposta que a aparência já dava ("esse conjunto não existe mais"), e o que a UI
+    -- nativa faz no caso equivalente: `ERR_TALENT_FAILED_INVALID_CONFIG`
+    -- (`Blizzard_ClassTalentsFrame.lua:1743`).
+    --
+    -- Só decide quando a lista existe: cliente sem a API devolve lista vazia, e aí "não achei" não
+    -- prova que foi apagado.
+    if spec then
+        local loadouts = Data.GetLoadouts(spec.id)
+        if #loadouts > 0 then
+            local existe = false
+            for _, l in ipairs(loadouts) do
+                if l.configID == preset.talent then existe = true end
+            end
+            if not existe then
+                return "fail", L["that talent loadout no longer exists."]
+            end
+        end
+    end
+
     Report(L["Loading talents..."], false)
 
     if not C_ClassTalents or not C_ClassTalents.LoadConfig then
@@ -1023,6 +1124,16 @@ local GEAR_CAST_WAIT_MAX = 3
 function Steps.gear(preset)
     if not preset.gear then return "skip" end
     if Data.GetEquippedSetID() == preset.gear then return "skip" end
+
+    -- ⚑ O CONJUNTO AINDA EXISTE? `GetEquipmentSetInfo` não devolve nada para id apagado
+    -- (`MayReturnNothing`), e é assim que a ficha do personagem decide desabilitar o botão
+    -- Equipar (`PaperDollFrame.lua:2450-2468`). Sem isto o addon pedia a troca, o jogo não fazia
+    -- nada, e o jogador recebia a frase genérica "não deu para equipar o conjunto de itens" — que
+    -- manda procurar peça faltando onde o problema é outro.
+    if C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo
+        and not Data.GearSetCounts(preset.gear) then
+        return "fail", L["that gear set no longer exists."]
+    end
 
     -- As três guardas que o próprio jogo usa antes de equipar um conjunto. A ordem importa
     -- só para a mensagem: cada falha tem a sua, porque `UseEquipmentSet` não devolve motivo.
@@ -1221,6 +1332,35 @@ RunNext = function()
     running.progress = running.progress or {}
     running.progress[name] = "doing"
 
+    -- ⚑ COMBATE NO MEIO DA CORRENTE PAUSA, NÃO FALHA. `Data.Apply` já enfileira quando o clique
+    -- acontece em combate, mas nada reavaliava depois de começar: entrar em combate no meio fazia
+    -- o jogo recusar passo por passo, e o jogador terminava com resultado parcial e uma fila de
+    -- mensagens de erro — três das quatro descrevendo a MESMA causa.
+    --
+    -- `RunWhenSafe` é a fila que já existe (`Core.lua:33-39`, esvaziada em `PLAYER_REGEN_ENABLED`),
+    -- e o token guarda contra o caso de outra corrente ter começado nesse meio tempo.
+    --
+    -- Sem `Arm()` de propósito: passo pausado não tem prazo correndo. Um prazo vencendo durante a
+    -- luta acusaria falha de algo que o addon nem tentou.
+    -- ⚑ `running.preset[name]` NÃO É REDUNDANTE, e o harness pegou isto na primeira rodada: a
+    -- corrente tem SEMPRE os quatro passos, e o passo que o conjunto não define só passa por aqui
+    -- para devolver "skip". Sem esta condição, um conjunto só de spec+itens pausava no passo de
+    -- TALENTOS — parado durante a luta inteira num passo sem trabalho, e invisível na tela, porque
+    -- o painel só desenha os passos que o conjunto define (`Data.GetProgress`). É a mesma
+    -- condição do painel, de propósito.
+    if COMBAT_SENSITIVE[name] and running.preset[name] and InCombatLockdown() then
+        Report(L["in combat: will apply when the fight ends."], false)
+        if ns.Log then ns.Log.Add("pausado", { passo = name, motivo = "combate" }) end
+
+        local token = running
+        ns.RunWhenSafe(function()
+            if not running or running ~= token then return end
+            if running.steps[running.at] ~= name then return end
+            RerunStep(name)
+        end)
+        return
+    end
+
     local okStep, outcome, message = pcall(Steps[name], running.preset)
     if not okStep then
         if ns.Log then ns.Log.Step(name, "erro de lua", tostring(outcome)) end
@@ -1299,6 +1439,11 @@ function Data.Apply(preset, report, byClick)
     end
 
     if Data.IsLoaded(preset) then
+        -- CLIQUE QUE NÃO FEZ NADA TAMBÉM É INFORMAÇÃO. Sem esta linha, um clique que não virou
+        -- corrente ficava invisível no diário — e "cliquei e não aconteceu nada" é relato comum.
+        if ns.Log then
+            ns.Log.Add("recusado", { motivo = "ja esta carregado", conjunto = preset.name or "?" })
+        end
         if report then
             report(format(L["Nothing to change — %s is already loaded."], preset.name or "?"), false)
         end
@@ -1429,7 +1574,7 @@ local CAST_EVENTS = {
 ---
 ---O mesmo desfecho que `RunNext` dá a um passo, sem avançar o índice — e com o mesmo `pcall`,
 ---pela mesma razão: erro de Lua aqui dentro deixaria `running` preso e o botão mudo.
-local function RerunStep(name)
+RerunStep = function(name)
     local okStep, outcome, message = pcall(Steps[name], running.preset)
     if not okStep then
         if ns.Log then ns.Log.Step(name, "erro de lua", tostring(outcome)) end
@@ -1449,6 +1594,57 @@ local function RerunStep(name)
         running.failures[#running.failures + 1] = message
         RunNext()
     end
+end
+
+-- Quantas vezes o cast de troca de spec pode ser cortado antes de o addon desistir. Três porque
+-- cada corte é uma ação do jogador (andar, ser interrompido) e repetir três vezes já é sinal de que
+-- ele não quer esperar parado.
+local SPEC_CAST_CUT_MAX = 3
+
+---O cast que acabou de falhar era o de trocar de especialização?
+---
+---`IsSpecializationActivateSpell` é o predicado que a própria janela de talentos usa para
+---reconhecer o cast dela (`Blizzard_ClassSpecializationsFrame.lua:185-190`). A magia aprendida
+---fica como reserva, para o caso de o predicado não existir neste cliente.
+local function IsSpecCast(spellID)
+    if issecretvalue and issecretvalue(spellID) then return false end
+    if type(spellID) ~= "number" then return false end
+
+    if IsSpecializationActivateSpell then
+        local ok, ehDeSpec = pcall(IsSpecializationActivateSpell, spellID)
+        if ok then return ehDeSpec and true or false end
+    end
+    return spellID == SpecSpellID()
+end
+
+---O cast de troca de spec foi cortado: tenta de novo, em vez de esperar o prazo inteiro.
+---
+---⚑ A BLIZZARD DESCOBRE ISSO ASSIM, e nós não descobríamos: a janela nativa escuta
+---`UNIT_SPELLCAST_FAILED/INTERRUPTED` filtrando pelo predicado da magia
+---(`Blizzard_ClassSpecializationsFrame.lua:69-70,185-190`), porque
+---`SPECIALIZATION_CHANGE_CAST_FAILED` **não é consumido por nenhum arquivo da UI 12.1.0**. Sem
+---isto, andar durante a troca custava os 45 segundos do prazo e terminava com "o jogo não
+---confirmou a tempo" — o erro mais caro da lista, porque o jogador não fez nada de errado.
+local function SpecCastCut(event)
+    running.specCastCuts = (running.specCastCuts or 0) + 1
+    if ns.Log then
+        ns.Log.Add("cast cortado", {
+            passo = "spec", evento = event, vez = running.specCastCuts,
+        })
+    end
+
+    if running.specCastCuts > SPEC_CAST_CUT_MAX then
+        if running.progress then running.progress.spec = "failed" end
+        running.failures = running.failures or {}
+        running.failures[#running.failures + 1] = L["the specialization change failed."]
+        -- O DESFECHO TAMBÉM VAI PARA O DIÁRIO. O evento já ia; o que o passo fez com ele, não.
+        if ns.Log then ns.Log.Step("spec", "fail", L["the specialization change failed."]) end
+        RunNext()
+        return
+    end
+
+    Report(L["Switching specialization..."], false)
+    RerunStep("spec")
 end
 
 ---Fecha o passo de talentos quando a gravação termina, e diz no diário QUAL sinal fechou e em
@@ -1479,6 +1675,11 @@ function Data.EnsureListener()
     listener:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     listener:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
     listener:RegisterEvent("TRANSMOG_DISPLAYED_OUTFIT_CHANGED")
+    -- A CORRENTE MORRE NO `/reload` E NO LOGOUT, e morria calada: `running` é memória, o `Finish`
+    -- não roda, e o diário terminava no último passo sem dizer que foi interrompido. Quem lê
+    -- depois não distingue "ficou pela metade" de "o addon travou".
+    listener:RegisterEvent("PLAYER_LEAVING_WORLD")
+    listener:RegisterEvent("PLAYER_LOGOUT")
 
     listener:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
         -- REGISTRA ANTES DE DECIDIR, inclusive o evento que chega sem corrente em curso. É o que
@@ -1500,6 +1701,19 @@ function Data.EnsureListener()
             ns.Log.Event(event, emCurso, running ~= nil, arg1, arg2)
         end
 
+        -- A INTERRUPÇÃO GANHA LINHA, e ela é gravada mesmo sem corrente em curso não — só com.
+        -- `PLAYER_LOGOUT` é o último instante em que dá para escrever em SavedVariables, então
+        -- esta linha é a única chance de o arquivo dizer que a troca ficou pela metade.
+        if event == "PLAYER_LEAVING_WORLD" or event == "PLAYER_LOGOUT" then
+            if running and ns.Log then
+                ns.Log.Add("interrompido", {
+                    passo = emCurso or "nenhum", motivo = event,
+                    conjunto = running.preset and running.preset.name or "?",
+                })
+            end
+            return
+        end
+
         if not running then return end
         local step = running.steps[running.at]
 
@@ -1508,9 +1722,11 @@ function Data.EnsureListener()
         -- matava a corrente de onde ela estivesse. E `Finish` virou anotação: falhar a spec não
         -- deve impedir os itens de entrar.
         if event == "SPECIALIZATION_CHANGE_CAST_FAILED" and step == "spec" then
-            running.failures = running.failures or {}
-            running.failures[#running.failures + 1] = L["the specialization change failed."]
-            RunNext()
+            -- TENTA DE NOVO EM VEZ DE ANOTAR FALHA. A semântica deste evento não está em lugar
+            -- nenhum da fonte da Blizzard (ninguém o consome, e ele não tem carga útil), mas a
+            -- família é a mesma das outras recusas deste addon: transitória. O teto de `SpecCastCut`
+            -- é que decide quando parar de insistir.
+            SpecCastCut(event)
 
         elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" and step == "spec" then
             RunNext()
@@ -1580,8 +1796,17 @@ function Data.EnsureListener()
                 if running.progress then running.progress.talent = "failed" end
                 running.failures = running.failures or {}
                 running.failures[#running.failures + 1] = L["the talent loadout could not be loaded."]
+                -- O DESFECHO NO DIÁRIO, e não só o evento: era uma das lacunas do mapa.
+                if ns.Log then
+                    ns.Log.Step("talent", "fail", L["the talent loadout could not be loaded."])
+                end
                 RunNext()
             end
+
+        elseif CAST_EVENTS[event] and event ~= "UNIT_SPELLCAST_SUCCEEDED" and step == "spec"
+            and IsSpecCast(arg3) then
+            -- O CAST DE TROCA DE SPEC FOI CORTADO (andar corta, e é o caso do `Core.lua:201-202`).
+            SpecCastCut(event)
 
         elseif CAST_EVENTS[event] and event ~= "UNIT_SPELLCAST_SUCCEEDED" and step == "gear" then
             -- O CAST ACABOU, ou foi cortado — é agora que `UnitCastingInfo` deixa de responder
@@ -1600,8 +1825,18 @@ function Data.EnsureListener()
             -- E se mudou para o ERRADO, isso não é falha a repetir: é o jogador tendo trocado a
             -- aparência à mão no meio da aplicação. O relatório diz o que houve e a corrente
             -- segue, como em todo passo que não deu.
-            if Data.GetActiveOutfitID() ~= running.preset.transmog then
+            local ativa = Data.GetActiveOutfitID()
+            if ativa ~= running.preset.transmog then
                 local porque = Data.TransmogBlockedBy(running.preset.transmog)
+                -- ⚑ AS TRÊS COISAS QUE FALTAVAM NO DIÁRIO. O evento não tem carga útil, e nós só
+                -- gravávamos a nossa conclusão: lendo depois não dava para separar "o jogador
+                -- trocou a roupa à mão" de "uma porta do jogo estava fechada".
+                if ns.Log then
+                    ns.Log.Call("transmog", "divergiu",
+                        "ativa=" .. tostring(ativa),
+                        "desejada=" .. tostring(running.preset.transmog),
+                        porque or "nenhuma porta fechada")
+                end
                 running.failures = running.failures or {}
                 running.failures[#running.failures + 1] =
                     porque or L["the transmog outfit could not be applied."]

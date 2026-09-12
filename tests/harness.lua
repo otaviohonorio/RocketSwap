@@ -907,6 +907,19 @@ end
 ---No jogo, o evento desse instante e o ECO da troca de spec, e o da gravacao chegou 4 a 7 s depois
 ---nas tres vezes medidas (diario de 09/09 e 11/09). Um teste que confirma no instante zero
 ---aprovava justamente o defeito que recusava os itens.
+---O andamento de um passo PELO NOME, e nao pela posicao na lista.
+---
+---⚑ POSICAO E FRAGIL, e a suite de sabotagem provou: a sabotagem que remove o filtro de linhas do
+---painel (`src.preset[key]`) muda quantas linhas existem, e um check que le `[2]` passa a reprovar
+---por um defeito que nao e o dele -- apontando para o check generico em vez do que descreve a
+---falha. Buscar por nome deixa cada sabotagem reprovar onde ela deve.
+local function estadoDoPasso(key)
+    for _, row in ipairs(ns.Data.GetProgress() or {}) do
+        if row.key == key then return row.state end
+    end
+    return nil
+end
+
 local function gravacaoTermina(configID)
     AdvanceClock(5)
     fire("TRAIT_CONFIG_UPDATED", configID or 999)
@@ -2721,7 +2734,7 @@ do
     abreGravacao()
     check("a troca de spec abriu a gravacao", state.pendingLoadout, 11)
     check("o eco da troca de spec nao pede os itens", state.pendingSet, nil)
-    check("nem da os talentos por gravados", ns.Data.GetProgress()[2].state, "doing")
+    check("nem da os talentos por gravados", estadoDoPasso("talent"), "doing")
     check("nem marca o loadout como selecionado", state.activeLoadout[251], 10)
 
     fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-a", 12345)
@@ -2753,7 +2766,7 @@ do
     -- A GRAVACAO QUE FALHA vira falha anotada, e os itens seguem.
     abreGravacao()
     fire("CONFIG_COMMIT_FAILED", 59714245)
-    check("gravacao que falha vira falha anotada", ns.Data.GetProgress()[2].state, "failed")
+    check("gravacao que falha vira falha anotada", estadoDoPasso("talent"), "failed")
     check("e os itens seguem mesmo assim", state.pendingSet, 4)
     state.equippedSet = 4
     fire("EQUIPMENT_SWAP_FINISHED", true, 4)
@@ -2768,7 +2781,7 @@ do
     state.loadRefusals, state.loadError = 1, nil
     abreGravacao()
     check("recusado, o talento nao foi carregado", state.pendingLoadout, nil)
-    check("o eco nao confirma o que o jogo recusou", ns.Data.GetProgress()[2].state, "doing")
+    check("o eco nao confirma o que o jogo recusou", estadoDoPasso("talent"), "doing")
     check("nem marca o loadout", state.activeLoadout[251], 10)
     check("nem pede os itens", state.pendingSet, nil)
 
@@ -2794,7 +2807,7 @@ do
     abreGravacao()
     state.casting = 384255
     fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-e", 384255)
-    check("o cast em curso nao derruba os itens", ns.Data.GetProgress()[3].state, "doing")
+    check("o cast em curso nao derruba os itens", estadoDoPasso("gear"), "doing")
     check("mas tambem nao equipa por cima dele", state.pendingSet, nil)
 
     state.casting = nil
@@ -2818,6 +2831,167 @@ do
     check("cast sem fim desiste no teto", state.pendingSet, nil)
     check("e a corrente nao fica presa com cast sem fim", ns.Data.IsApplying(), false)
     state.casting = nil
+end
+
+print("== prazo vencido nao acusa o que ja esta aplicado ==")
+-- ⚑ A MAIOR FONTE DE "ERRO" QUE O JOGADOR VE SEM QUE NADA TENHA DADO ERRADO. O evento de
+-- confirmacao pode nao chegar (ou chegar e nao ser nosso) com a troca JA FEITA -- e o addon
+-- anunciava "o jogo nao confirmou a tempo" sobre uma spec que virou. Pedido do usuario:
+-- *"devo conseguir fazer as trocas sem que tenha erros"*.
+do
+    state.specIndex, state.equippedSet = 1, 9
+    state.pendingSet, state.pendingLoadout, state.pendingSpec = nil, nil, nil
+    state.activeLoadout[251] = 10
+
+    local houveErro
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, gear = 4 },
+        function(_, isError) houveErro = isError end)
+
+    state.specIndex = 2           -- o jogo virou a spec e NAO mandou evento nenhum
+    RunTimers()                   -- o prazo do passo vence
+    check("prazo vencido com a spec ja virada nao vira falha",
+        estadoDoPasso("spec"), "done")
+    check("e a corrente segue para os itens", state.pendingSet, 4)
+
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    check("terminando sem erro para o jogador", houveErro, false)
+end
+
+print("== combate no meio da corrente pausa, nao falha ==")
+-- `Data.Apply` ja enfileirava o clique feito EM combate; entrar em combate DEPOIS de comecar nao
+-- era reavaliado, e o jogo recusava passo por passo -- resultado parcial e uma fila de mensagens
+-- de erro, tres delas descrevendo a mesma causa.
+do
+    state.specIndex, state.equippedSet = 1, 9
+    state.pendingSet, state.pendingSpec = nil, nil
+
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, gear = 4 }, function() end)
+    state.inCombat = true
+    state.specIndex = 2
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+
+    check("combate no meio pausa em vez de falhar", state.pendingSet, nil)
+    -- ⚑ E PAUSA O PASSO QUE TEM TRABALHO, NAO UM PASSO VAZIO. A primeira versao pausava no passo
+    -- de TALENTOS deste conjunto (que so define spec e itens): parado durante a luta inteira num
+    -- passo que ia ser pulado, e invisivel na tela -- o painel so desenha o que o conjunto define.
+    --
+    -- ⚑ E ESTE CHECK VEM ANTES DO DE ANDAMENTO DE PROPOSITO: quando a pausa pega o passo errado,
+    -- o de andamento tambem reprova (o passo certo fica "pending"), e a sabotagem apontaria para
+    -- o check generico em vez do que descreve o defeito.
+    --
+    -- A ULTIMA linha, e nao as duas ultimas: a penultima e o `passo=talent resultado=skip`, que e
+    -- justamente o certo -- o passo vazio passa e nao para nada.
+    local ultima = ns.Log.Tail(1)[1] or ""
+    check("e pausa o passo que tem trabalho, nao um passo vazio",
+        ultima:find("pausado", 1, true) ~= nil
+            and ultima:find("passo=gear", 1, true) ~= nil, true)
+
+    check("o passo pausado segue em andamento", estadoDoPasso("gear"), "doing")
+    check("e a corrente nao morreu", ns.Data.IsApplying(), true)
+
+    state.inCombat = false
+    fire("PLAYER_REGEN_ENABLED")
+    check("acabou a luta, o passo vai", state.pendingSet, 4)
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    check("e termina normalmente depois do combate", ns.Data.IsApplying(), false)
+end
+
+print("== id apagado tem frase propria ==")
+-- APAGADO E DIFERENTE DE RECUSADO: a frase genarica manda o jogador procurar peca faltando onde o
+-- problema e que ele apagou o loadout/conjunto. A aparencia ja dizia; estas duas nao.
+do
+    state.specIndex, state.equippedSet = 2, 1
+    state.activeLoadout[251] = 10
+
+    local texto
+    ns.Data.Apply({ name = "Fantasma", talent = 777 }, function(t) texto = t end)
+    check("loadout apagado diz que nao existe mais",
+        texto ~= nil and texto:find("existe mais", 1, true) ~= nil, true)
+
+    texto = nil
+    ns.Data.Apply({ name = "Fantasma2", gear = 77 }, function(t) texto = t end)
+    check("conjunto de itens apagado diz que nao existe mais",
+        texto ~= nil and texto:find("existe mais", 1, true) ~= nil, true)
+end
+
+print("== recarga da magia de spec espera, nao aborta ==")
+-- A recarga acaba em segundos e a insistencia ja existe; abortar era devolver erro ao jogador por
+-- algo que se resolve esperando. Motivo EM TEXTO continua abortando -- ai o jogo explicou.
+do
+    state.specIndex, state.equippedSet = 1, 9
+    state.pendingSpec, state.pendingSet = nil, nil
+    RocketSwapLogDB.specSpellID = state.specSpellID     -- o addon ja aprendeu a magia
+    state.specSpellOnCooldown = true
+
+    local houveErro
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, gear = 4 },
+        function(_, isError) houveErro = isError end)
+    check("na recarga o passo nao aborta", ns.Data.IsApplying(), true)
+    check("e nada foi pedido ao jogo", state.pendingSpec, nil)
+
+    state.specSpellOnCooldown = false
+    RunTimers(5)                  -- a insistencia tenta de novo
+    check("passada a recarga, a troca vai", state.pendingSpec, 2)
+
+    state.specIndex = 2
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    check("e termina sem erro depois da recarga", houveErro, false)
+end
+
+print("== cast de troca de spec cortado tenta de novo ==")
+-- ⚑ ANDAR CORTA O CAST, e `SPECIALIZATION_CHANGE_CAST_FAILED` nao cobre isso -- a janela nativa
+-- descobre pelos eventos de cast filtrando `IsSpecializationActivateSpell`
+-- (`Blizzard_ClassSpecializationsFrame.lua:185-190`). Sem isto, andar custava os 45 s do prazo e
+-- terminava com "o jogo nao confirmou a tempo", sem o jogador ter feito nada de errado.
+do
+    state.specIndex, state.equippedSet = 1, 9
+    state.pendingSpec, state.pendingSet = nil, nil
+
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, gear = 4 }, function() end)
+    check("pediu a troca de spec", state.pendingSpec, 2)
+
+    state.pendingSpec = nil
+    fire("UNIT_SPELLCAST_INTERRUPTED", "player", "cast-i", state.specSpellID)
+    check("cast cortado pede a troca de novo", state.pendingSpec, 2)
+
+    state.pendingSpec = nil
+    fire("UNIT_SPELLCAST_INTERRUPTED", "player", "cast-j", 12345)
+    check("cast de outra magia nao mexe na corrente", state.pendingSpec, nil)
+
+    -- O TETO: corte atras de corte nao pendura a corrente.
+    for i = 1, 4 do
+        fire("UNIT_SPELLCAST_FAILED", "player", "cast-k" .. i, state.specSpellID)
+    end
+    check("no teto desiste e segue para os itens", state.pendingSet, 4)
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    check("e nao fica presa depois dos cortes", ns.Data.IsApplying(), false)
+end
+
+print("== interrupcao por /reload deixa marca no diario ==")
+-- `running` e memoria: no /reload a corrente evapora, o `Finish` nao roda e o diario terminava no
+-- ultimo passo. Quem le depois nao distinguia "ficou pela metade" de "o addon travou".
+do
+    state.specIndex, state.equippedSet = 1, 9
+    state.pendingSet, state.pendingSpec = nil, nil
+    ns.Log.Clear()
+
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, gear = 4 }, function() end)
+    fire("PLAYER_LEAVING_WORLD")
+
+    local texto = table.concat(ns.Log.Tail(6), " ~ ")
+    check("a interrupcao vira linha no diario",
+        texto:find("interrompido", 1, true) ~= nil, true)
+    check("e o evento em si nao mata a corrente", ns.Data.IsApplying(), true)
+
+    state.specIndex = 2
+    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+    state.equippedSet = 4
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
 end
 
 do

@@ -334,6 +334,67 @@ SABOTAGENS = [
      u"        if running.gearCastWaits > GEAR_CAST_WAIT_MAX then",
      u"        if false then",
      "e a corrente nao fica presa com cast sem fim"),
+
+    # --------------------------- 0.23.0: a corrente para de reportar erro ao jogador
+    # O PRAZO VOLTA A ACUSAR O QUE ESTA APLICADO. E a maior fonte de "erro" sem erro nenhum.
+    ("o prazo volta a acusar o que esta aplicado", "Data.lua",
+     u"        if StepSatisfied(passo) then",
+     u"        if false then",
+     "prazo vencido com a spec ja virada nao vira falha"),
+
+    # COMBATE NO MEIO VOLTA A FALHAR PASSO POR PASSO, com tres mensagens para a mesma causa.
+    ("combate no meio volta a falhar", "Data.lua",
+     u"    if COMBAT_SENSITIVE[name] and running.preset[name] and InCombatLockdown() then",
+     u"    if false then",
+     "combate no meio pausa em vez de falhar"),
+
+    # A PAUSA VOLTA A PEGAR PASSO VAZIO: parado na luta inteira num passo que ia ser pulado, e sem
+    # aparecer na tela. Foi o que a primeira rodada do harness pegou.
+    ("a pausa de combate volta a pegar passo vazio", "Data.lua",
+     u"    if COMBAT_SENSITIVE[name] and running.preset[name] and InCombatLockdown() then",
+     u"    if COMBAT_SENSITIVE[name] and InCombatLockdown() then",
+     "e pausa o passo que tem trabalho, nao um passo vazio"),
+
+    # ID APAGADO VOLTA A FRASE GENERICA: manda procurar peca faltando onde o conjunto nao existe.
+    ("loadout apagado volta a frase generica", "Data.lua",
+     u"            if not existe then",
+     u"            if false then",
+     "loadout apagado diz que nao existe mais"),
+
+    ("conjunto de itens apagado volta a frase generica", "Data.lua",
+     u"        and not Data.GearSetCounts(preset.gear) then",
+     u"        and false then",
+     "conjunto de itens apagado diz que nao existe mais"),
+
+    # RECARGA VOLTA A ABORTAR: erro ao jogador por algo que passa em segundos.
+    ("a recarga da magia de spec volta a abortar", "Data.lua",
+     u"        if porque and not motivo then",
+     u"        if false then",
+     "na recarga o passo nao aborta"),
+
+    # CAST CORTADO VOLTA A ESPERAR O PRAZO INTEIRO (45 s e "o jogo nao confirmou a tempo").
+    ("cast de spec cortado deixa de ser reconhecido", "Data.lua",
+     u"local function IsSpecCast(spellID)\n",
+     u"local function IsSpecCast(spellID)\n    do return false end\n",
+     "cast cortado pede a troca de novo"),
+
+    # E O OPOSTO: qualquer magia do jogador reiniciando a troca de spec.
+    ("qualquer magia cortada reinicia a troca de spec", "Data.lua",
+     u"        local ok, ehDeSpec = pcall(IsSpecializationActivateSpell, spellID)\n"
+     u"        if ok then return ehDeSpec and true or false end",
+     u"        do return true end",
+     "cast de outra magia nao mexe na corrente"),
+
+    ("o teto de cortes do cast de spec desaparece", "Data.lua",
+     u"    if running.specCastCuts > SPEC_CAST_CUT_MAX then",
+     u"    if false then",
+     "no teto desiste e segue para os itens"),
+
+    # A INTERRUPCAO VOLTA A SER MUDA: o diario termina no ultimo passo, sem dizer que houve /reload.
+    ("a interrupcao deixa de ser gravada", "Data.lua",
+     u"    listener:RegisterEvent(\"PLAYER_LEAVING_WORLD\")\n",
+     u"",
+     "a interrupcao vira linha no diario"),
 ]
 
 

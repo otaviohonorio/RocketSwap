@@ -50,6 +50,10 @@ L["some items of this set are locked (in use, or in the mail)."] =
     "algumas peças deste conjunto estão travadas (em uso, ou no correio)."
 L["you are casting something — try again in a second."] =
     "você está conjurando algo — tente de novo daqui a pouco."
+-- APAGADO É DIFERENTE DE RECUSADO, e cada um manda o jogador procurar em lugar diferente. A
+-- aparência já tinha a frase dela; estas duas faltavam, e no lugar delas saía a genérica.
+L["that talent loadout no longer exists."] = "esse conjunto de talentos não existe mais."
+L["that gear set no longer exists."] = "esse conjunto de itens não existe mais."
 L["timed out waiting for the game to confirm."] = "o jogo não confirmou a tempo."
 -- Com o NOME do passo (0.9.0): numa corrente de quatro, "o jogo nao confirmou a tempo" obriga o
 -- jogador a adivinhar de que passo se trata -- e foi o que aconteceu no relato de 06/09.
