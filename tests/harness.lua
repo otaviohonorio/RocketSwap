@@ -2125,7 +2125,12 @@ end
 
 print("== comandos ==")
 for _, cmd in ipairs({ "", "list", "help", "icon", "i18n", "load Arena", "load nao-existe",
-                       "log", "log clear", "transmog", "Arena" }) do
+                       "log", "log clear", "transmog", "Arena",
+                       -- `/rs gear` nas duas formas: a lista e o despejo de um slot (13/09). O
+                       -- despejo mexe com `line.type`, `rightText` e valor secret -- e um `nil`
+                       -- em qualquer um deles estoura no chat, na hora em que o usuario esta
+                       -- justamente tentando relatar um defeito.
+                       "gear", "gear 5", "gear 3" }) do
     local ok, err = pcall(SlashCmdList.ROCKETSWAP, cmd)
     print(ok and ("  ok    /rs " .. cmd) or ("  ERRO  /rs " .. cmd .. ": " .. tostring(err)))
     if not ok then os.exit(1) end
