@@ -392,6 +392,42 @@ SABOTAGENS = [
      u"    if false then",
      "no teto desiste e segue para os itens"),
 
+    # ------------------- tooltip que ainda nao carregou (defeito de 13/09, com print)
+    # ⚑ O DEFEITO EM PESSOA: o cliente devolve UMA linha ("Recuperando informacoes do item") e o
+    # addon lia isso como "nao tem a linha de PvP" -- marcando peca de PvP como PvE, no cache.
+    ("a tooltip nao carregada volta a contar como leitura", "Gear.lua",
+     u"    if TooltipNotReady(data) then",
+     u"    if false then",
+     "tooltip que ainda nao carregou nao decide nada"),
+
+    # E O RESULTADO INCOMPLETO INDO PARA O CACHE: e o que tornava o erro permanente.
+    ("o desconhecido volta para o cache", "Gear.lua",
+     u"        Gear.RequestLoad(slot)\n        return nil",
+     u"        Gear.RequestLoad(slot)\n        cache[link] = false\n        return false",
+     "tooltip que ainda nao carregou nao decide nada"),
+
+    # SEM PEDIR O CARREGAMENTO, o cliente nao busca sozinho e a peca fica sem dados para sempre.
+    ("ninguem pede o carregamento do item", "Gear.lua",
+     u"        Gear.RequestLoad(slot)\n        return nil",
+     u"        return nil",
+     "o addon pede o carregamento do item"),
+
+    # O PEDIDO REPETIDO A CADA VARREDURA: sao varias por minuto, e cada uma pediria de novo.
+    ("o pedido deixa de ser deduplicado", "Gear.lua",
+     u"    if pendingLoads[id] then return true end     -- já pedimos; não pedir de novo a cada varredura",
+     u"    -- sabotado",
+     "  e nao pede duas vezes o mesmo item"),
+
+    # A REAVALIACAO QUANDO OS DADOS CHEGAM: sem ela, o pedido nao serve para nada.
+    ("os dados chegam e ninguem reavalia", "Gear.lua",
+     u"                if type(Gear.onItemLoaded) == \"function\" then\n"
+     u"                    pcall(Gear.onItemLoaded, id)\n"
+     u"                end",
+     u"                -- sabotado",
+     # O label e o da NOTIFICACAO. O da releitura passa com o aviso arrancado, porque o retorno do
+     # carregamento limpa o cache antes de avisar -- aquele check mede o cache, nao o aviso.
+     "carregado o item, quem espera e avisado"),
+
     # ------------------------- o aviso de modo guerra e opt-in (pedido de 12/09)
     ("o aviso de modo guerra volta a ser ligado de fabrica", "Core.lua",
      u"    warnWarMode = false,",

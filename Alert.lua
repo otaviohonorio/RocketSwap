@@ -508,6 +508,17 @@ end
 function Alert.Create()
     if frame then return frame end
 
+    -- ⚑ QUANDO OS DADOS DO ITEM CHEGAM, A CONTA REFAZ. `Gear` pede o carregamento do que leu como
+    -- "não sei" e avisa por aqui; sem esta inscrição o pedido não serviria para nada -- o aviso
+    -- ficaria com a leitura incompleta até o próximo gatilho, que pode não vir.
+    --
+    -- `lastKey = nil` porque o aviso recusa repetir a mesma chave enquanto está na tela: sem
+    -- zerar, a reavaliação seria descartada justamente quando ela tem algo novo a dizer.
+    ns.Gear.onItemLoaded = function()
+        lastKey = nil
+        Alert.Check("item carregado")
+    end
+
     frame = CreateFrame("Frame", ADDON .. "AlertEvents")
 
     -- Entrar em instância: `PLAYER_ENTERING_WORLD` sozinho é cedo demais — o equipamento
@@ -532,6 +543,13 @@ function Alert.Create()
             ns.Gear.ClearCache()
             lastKey = nil
             Alert.Hide()
+
+            -- Mudou o equipamento: pede o que faltar. Sem isto, uma peça recém-equipada continua
+            -- sem dados até alguém passar o mouse nela -- e foi assim que o aviso de 13/09 acusou
+            -- duas peças de PvP de serem PvE.
+            for _, slot in ipairs(ns.Gear.SLOTS) do
+                ns.Gear.RequestLoad(slot)
+            end
 
         elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
             -- `b` é o estado. `Activating` é a última chamada: ainda dá para trocar.

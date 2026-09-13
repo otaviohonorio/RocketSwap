@@ -121,8 +121,18 @@ end
 -- Aqui, resultado desconhecido **não entra no cache**.
 local cache = {}
 
+-- Itens cujo carregamento já foi pedido. Sem esta lista, cada varredura (e são várias: entrar em
+-- zona, ready check, troca de equipamento) pediria de novo o mesmo item.
+local pendingLoads = {}
+
 function Gear.ClearCache()
     cache = {}
+end
+
+---Esquece também os pedidos em curso. Só o harness usa: no jogo, um pedido pendente que sobrevive
+---a uma troca de equipamento é justamente o que evita pedir duas vezes.
+function Gear.__ResetPending()
+    pendingLoads = {}
 end
 
 ---A deteccao esta viva neste cliente?
@@ -185,6 +195,81 @@ function Gear.PatternWorks()
     return patternWorks
 end
 
+--------------------------------------------------------------------------------
+---A tooltip veio com os dados do item, ou é só o marcador de "estou buscando"?
+---
+---⚑ ESTA FUNÇÃO É A CAUSA DO DEFEITO DE 13/09, E A PROVA VEIO DO DESPEJO DE `/rs gear 5`:
+---
+---     slot 5 (Torso): link: [Peitoral do Necrocavaleiro Pernicioso]
+---     padrão montado: sim | padrão se prova: sim
+---     leitura atual: false
+---     1 linha(s):
+---       1  tipo=41  Recuperando informações do item
+---
+---O cliente devolve UMA linha, de recado, enquanto busca os dados no servidor. A guarda que
+---existia (`#data.lines == 0`) não pega isso: **há** uma linha. Nenhuma casa com o padrão, então a
+---peça virava `false` — e ia para o cache. Peça de PvP marcada como PvE, de forma estável.
+---
+---E o link do slot 3 saiu `[]`, sem nome: o mesmo sintoma pelo outro lado.
+---
+---⚑ E ISSO NÃO SE RESOLVE ESPERANDO: o cliente só busca os dados de um item quando alguém pede.
+---O addon nunca pedia — por isso sobreviveu à troca de personagem, onde o cache nasce vazio.
+---
+---A detecção usa a global do próprio jogo (`RETRIEVING_ITEM_INFO`), e não o número 41 do enum:
+---número de enum muda de patch, a global é a mesma que o cliente escreve na linha.
+local function TooltipNotReady(data)
+    if #data.lines == 0 then return true end
+
+    local recado = RETRIEVING_ITEM_INFO
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if type(text) == "string" and not issecretvalue(text) then
+            if type(recado) == "string" and recado ~= "" and text == recado then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+---Pede ao cliente os dados do item daquele slot, e avisa quem se interessar quando chegarem.
+---
+---`ContinueOnItemLoad` é o caminho que os addons instalados usam (31 ocorrências entre eles). O
+---`RequestLoadItemDataByID` fica como reserva para o cliente que não tenha o mixin.
+---
+---⚑ O CACHE É LIMPO NA VOLTA. Sem isso, a peça continuaria respondendo pelo valor lido enquanto a
+---tooltip era um recado — e o pedido não teria servido para nada.
+function Gear.RequestLoad(slot)
+    local id = GetInventoryItemID and GetInventoryItemID("player", slot)
+    if type(id) ~= "number" then return false end
+
+    if pendingLoads[id] then return true end     -- já pedimos; não pedir de novo a cada varredura
+    pendingLoads[id] = true
+
+    if C_Item and C_Item.RequestLoadItemDataByID then
+        pcall(C_Item.RequestLoadItemDataByID, id)
+    end
+
+    if Item and Item.CreateFromItemID then
+        local ok, obj = pcall(Item.CreateFromItemID, Item, id)
+        if ok and obj and obj.ContinueOnItemLoad then
+            pcall(obj.ContinueOnItemLoad, obj, function()
+                pendingLoads[id] = nil
+                Gear.ClearCache()
+                -- Quem quiser reagir se inscreve. O `Gear` não conhece o aviso de equipamento: se
+                -- chamasse `ns.Alert` direto, a camada de leitura passaria a depender da de tela.
+                if type(Gear.onItemLoaded) == "function" then
+                    pcall(Gear.onItemLoaded, id)
+                end
+            end)
+            return true
+        end
+    end
+
+    pendingLoads[id] = nil
+    return false
+end
+
 ---Esta peça é de PvP?
 ---@return boolean|nil  true = é, false = não é, nil = não deu para saber
 function Gear.IsPvPItem(slot)
@@ -202,7 +287,14 @@ function Gear.IsPvPItem(slot)
     -- Pelo SLOT, e dentro de pcall: ver a decisão 1 no topo do arquivo.
     local ok, data = pcall(C_TooltipInfo.GetInventoryItem, "player", slot)
     if not ok or type(data) ~= "table" or type(data.lines) ~= "table" then return nil end
-    if #data.lines == 0 then return nil end
+
+    -- ⚑ DADOS AINDA NÃO CHEGARAM: "não sei", e **não vai para o cache**. Era aqui que uma peça de
+    -- PvP virava PvE em definitivo (13/09). E pede o carregamento, porque o cliente não busca
+    -- sozinho — sem o pedido, a leitura erraria de novo na próxima varredura, e na seguinte.
+    if TooltipNotReady(data) then
+        Gear.RequestLoad(slot)
+        return nil
+    end
 
     local found = false
     for _, line in ipairs(data.lines) do
