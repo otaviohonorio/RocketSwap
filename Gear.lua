@@ -93,6 +93,15 @@ local function Pattern()
     return pvpPattern or nil
 end
 
+---O padrão, para o despejo de `/rs gear <slot>` poder dizer QUAL linha casa.
+---
+---`Debug` no nome porque produção não usa: quem decide é `IsPvPItem`. É a mesma regra que já
+---governa os outros ganchos deste projeto — código que sobrevive ao único consumidor vira
+---armadilha para a próxima leitura.
+function Gear.DebugPattern()
+    return Pattern()
+end
+
 ---Esquece o padrao e o autoteste dele.
 ---
 ---Existe para o teste poder trocar a global do jogo e conferir o comportamento em outro idioma:

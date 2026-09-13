@@ -130,7 +130,8 @@ L["all warnings re-enabled."] = "todos os avisos religados."
 L["what you are wearing:"] = "o que você está usando:"
 L["context:"] = "contexto:"
 L["(open world)"] = "(mundo aberto)"
-L["shows what each slot is reading as"] = "mostra como cada slot está sendo lido"
+L["shows what each slot is reading as"] =
+    "mostra como cada slot está sendo lido (/rs gear <slot> despeja a tooltip daquele slot)"
 L["shows the appearance sets and tests the switch"] =
     "mostra os conjuntos de aparência e testa a troca"
 L["turns the gear warning on or off"] = "liga ou desliga o aviso de equipamento"

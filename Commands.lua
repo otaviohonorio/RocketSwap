@@ -70,7 +70,65 @@ end
 -- padrao montado a partir de uma string global — e isso pode falhar por idioma, por tooltip
 -- nao carregada ou por a peca nao ter a linha. Sem este comando, a falha e silenciosa e
 -- indistinguivel de "esta tudo certo".
-commands["gear"] = function()
+-- ⚑ `/rs gear <slot>` DESPEJA AS LINHAS CRUAS, e ele nasceu do print de 13/09: o peitoral mostra
+-- na tooltip a linha de PvP ("aumenta o nível do item para um mínimo de 344 em Arenas...") e o
+-- addon insiste em chamá-lo de PvE -- inclusive depois de trocar de personagem, ou seja, com o
+-- cache zerado. O padrão casa com aquele texto (conferido fora do jogo), então o que sobra é a
+-- pergunta que só o cliente responde: **o que `C_TooltipInfo.GetInventoryItem` está devolvendo
+-- para aquele slot?**
+--
+-- Sem este despejo, as hipóteses restantes (linha ausente da estrutura, texto em `rightText`,
+-- valor secret, linha partida em duas) são indistinguíveis -- e cada palpite custa uma ida ao jogo.
+local function DumpSlot(slot)
+    local link = GetInventoryItemLink("player", slot)
+    ns.Print(("slot %d (%s):"):format(slot, ns.Gear.SlotName(slot)))
+    print("   link: " .. (link and (not issecretvalue(link)) and link or "|cffff5555(nenhum ou secret)|r"))
+    print("   padrão montado: " .. (ns.Gear.PatternReady() and "sim" or "|cffff5555não|r")
+        .. "   |   padrão se prova: " .. (ns.Gear.PatternWorks() and "sim" or "|cffff5555não|r"))
+    print("   leitura atual: " .. tostring(ns.Gear.IsPvPItem(slot)))
+
+    if not C_TooltipInfo or not C_TooltipInfo.GetInventoryItem then
+        print("   |cffff5555sem C_TooltipInfo neste cliente|r")
+        return
+    end
+
+    local ok, data = pcall(C_TooltipInfo.GetInventoryItem, "player", slot)
+    if not ok then
+        print("   |cffff5555a leitura da tooltip estourou:|r " .. tostring(data))
+        return
+    end
+    if type(data) ~= "table" or type(data.lines) ~= "table" then
+        print("   |cffff5555a tooltip nao devolveu linhas|r (type=" .. type(data) .. ")")
+        return
+    end
+
+    print(("   %d linha(s):"):format(#data.lines))
+    for i, line in ipairs(data.lines) do
+        -- As BARRAS SÃO DOBRADAS para o chat mostrar o texto cru: sem isso um `|cff...` vira cor e
+        -- a linha aparece pintada e cortada, que é justamente esconder a evidência.
+        local function mostrar(v)
+            if v == nil then return "-" end
+            if issecretvalue and issecretvalue(v) then return "|cffff5555(secret)|r" end
+            if type(v) ~= "string" then return "(" .. type(v) .. ")" end
+            return (v:gsub("|", "||"))
+        end
+        local esquerda = mostrar(line.leftText)
+        local casa = ""
+        if type(line.leftText) == "string" and not issecretvalue(line.leftText) then
+            local padrao = ns.Gear.DebugPattern and ns.Gear.DebugPattern()
+            if padrao and line.leftText:match(padrao) then casa = "  |cff40d878<< CASA|r" end
+        end
+        print(("   %2d  tipo=%s  %s%s"):format(i, tostring(line.type), esquerda, casa))
+        if line.rightText ~= nil then
+            print("        (direita) " .. mostrar(line.rightText))
+        end
+    end
+end
+
+commands["gear"] = function(rest)
+    local alvo = tonumber((rest or ""):match("%d+"))
+    if alvo then return DumpSlot(alvo) end
+
     ns.Print(L["what you are wearing:"] .. "  " .. ns.Alert.Summary())
     local contexto = ns.Alert.Context()
     print("  " .. L["context:"] .. " " .. (contexto or L["(open world)"]))
