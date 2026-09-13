@@ -212,12 +212,21 @@ TRINKET0SLOT, TRINKET1SLOT = "Berloque 1", "Berloque 2"
 BACKSLOT, MAINHANDSLOT, SECONDARYHANDSLOT = "Costas", "Mao principal", "Mao secundaria"
 NORMAL_FONT_COLOR = {}
 
--- Que peca esta em cada slot, e se ela e de PvP. O teste mexe nisto.
+-- O RECADO QUE O CLIENTE DEVOLVE ENQUANTO BUSCA OS DADOS DO ITEM. Global do jogo, e e o texto que
+-- apareceu no despejo de 13/09 (`tipo=41 Recuperando informacoes do item`) -- a linha unica que
+-- fazia o addon marcar peca de PvP como PvE.
+RETRIEVING_ITEM_INFO = "Recuperando informações do item"
+
+-- Que peca esta em cada slot, se ela e de PvP, e se os DADOS dela ja chegaram. O teste mexe nisto.
+--
+-- ⚑ `loaded` NASCEU DO DEFEITO: o stub antigo entregava a tooltip pronta sempre, entao o caminho
+-- "cliente ainda buscando" nao existia aqui -- e era exatamente ele que quebrava no jogo. Stub que
+-- so sabe representar o mundo bom testa a si mesmo.
 local equipped = {}
 local function VestirTudo(ehPvP)
     equipped = {}
     for _, slot in ipairs({ 1,2,3,5,6,7,8,9,10,11,12,13,14,15,16,17 }) do
-        equipped[slot] = { link = "item:" .. slot, pvp = ehPvP }
+        equipped[slot] = { link = "item:" .. slot, pvp = ehPvP, loaded = true }
     end
 end
 VestirTudo(false)
@@ -226,10 +235,51 @@ function GetInventoryItemLink(_, slot)
     return equipped[slot] and equipped[slot].link
 end
 
+-- O id do item daquele slot, que e por onde se pede o carregamento.
+function GetInventoryItemID(_, slot)
+    return equipped[slot] and (1000 + slot) or nil
+end
+
+-- Quantas vezes cada item teve carregamento pedido, e os retornos pendentes.
+pedidos = {}
+local aoCarregar = {}
+
+C_Item = C_Item or {}
+function C_Item.RequestLoadItemDataByID(id)
+    pedidos[id] = (pedidos[id] or 0) + 1
+end
+
+Item = {
+    CreateFromItemID = function(_, id)
+        return {
+            id = id,
+            ContinueOnItemLoad = function(self, cb)
+                aoCarregar[self.id] = aoCarregar[self.id] or {}
+                table.insert(aoCarregar[self.id], cb)
+            end,
+        }
+    end,
+}
+
+---Os dados daquele item chegaram: marca a peca como carregada e chama quem esperava.
+function CarregarItem(slot)
+    if equipped[slot] then equipped[slot].loaded = true end
+    local id = 1000 + slot
+    local fila = aoCarregar[id] or {}
+    aoCarregar[id] = nil
+    for _, cb in ipairs(fila) do cb() end
+end
+
 C_TooltipInfo = {
     GetInventoryItem = function(_, slot)
         local item = equipped[slot]
         if not item then return nil end
+
+        -- DADOS AINDA NAO CHEGARAM: uma linha so, de recado. E o que o cliente faz de verdade.
+        if item.loaded == false then
+            return { lines = { { type = 41, leftText = RETRIEVING_ITEM_INFO } } }
+        end
+
         local lines = { { type = 0, leftText = "Nome do item" } }
         if item.pvp then
             -- EMBRULHADA EM COR: o caso que derruba padrao ancorado.
@@ -2163,6 +2213,61 @@ check("peca sem a linha e reconhecida como PvE", ns.Gear.IsPvPItem(1), false)
 equipped[1] = nil
 ns.Gear.ClearCache()
 check("slot vazio devolve desconhecido", ns.Gear.IsPvPItem(1), nil)
+
+print("== tooltip que ainda nao carregou (defeito de 13/09, com print) ==")
+-- ⚑ O DEFEITO, TRANSCRITO DO DESPEJO QUE O USUARIO MANDOU:
+--
+--     slot 5 (Torso): link: [Peitoral do Necrocavaleiro Pernicioso]
+--     padrao montado: sim | padrao se prova: sim
+--     leitura atual: false
+--     1 linha(s):
+--       1  tipo=41  Recuperando informacoes do item
+--
+-- O cliente devolve UMA linha de recado enquanto busca os dados. A guarda antiga (`#lines == 0`)
+-- nao pega isso, nenhuma linha casa com o padrao, e a peca virava `false` -- no cache. Peca de PvP
+-- acusada de PvE, de forma estavel, e sobrevivendo ate a troca de personagem.
+do
+    VestirTudo(true)              -- tudo de PvP
+    ns.Gear.ClearCache()
+    ns.Gear.__ResetPending()
+    pedidos = {}
+    equipped[5].loaded = false    -- ... mas os dados do peitoral ainda nao chegaram
+
+    check("tooltip que ainda nao carregou nao decide nada", ns.Gear.IsPvPItem(5), nil)
+    check("o addon pede o carregamento do item", pedidos[1005], 1)
+
+    -- E NAO PEDE DE NOVO A CADA VARREDURA: sao varias por minuto (zona, ready check, troca).
+    ns.Gear.IsPvPItem(5)
+    ns.Gear.IsPvPItem(5)
+    check("  e nao pede duas vezes o mesmo item", pedidos[1005], 1)
+
+    -- ⚑ E O RESULTADO INCOMPLETO NAO PODE TER IDO PARA O CACHE: era isso que tornava o erro
+    -- permanente. Depois de carregar, a leitura tem que valer sem ninguem limpar nada na mao.
+    -- ⚑ E QUEM ESPERA TEM DE SER AVISADO, que e coisa diferente de "a leitura agora vale".
+    --
+    -- A primeira versao deste bloco so relia `IsPvPItem` depois de carregar -- e passava mesmo com
+    -- o aviso arrancado, porque o retorno do carregamento limpa o cache ANTES de avisar. O check
+    -- media o cache, nao a notificacao. Quem denunciou foi a sabotagem, de novo.
+    local avisou = false
+    local inscritoAntes = ns.Gear.onItemLoaded
+    ns.Gear.onItemLoaded = function(...)
+        avisou = true
+        if inscritoAntes then return inscritoAntes(...) end
+    end
+
+    CarregarItem(5)
+    check("carregado o item, quem espera e avisado", avisou, true)
+    check("carregado o item, a leitura passa a valer", ns.Gear.IsPvPItem(5), true)
+
+    ns.Gear.onItemLoaded = inscritoAntes
+
+    -- E a peca vizinha, cujos dados sempre estiveram la, nao foi afetada pelo pedido.
+    check("a peca que ja tinha dados segue lida", ns.Gear.IsPvPItem(6), true)
+
+    VestirTudo(false)
+    ns.Gear.ClearCache()
+    ns.Gear.__ResetPending()
+end
 
 -- (3) Camisa e tabardo nao entram: nao tem atributo nem versao de PvP.
 check("a lista de slots ignora camisa e tabardo",
