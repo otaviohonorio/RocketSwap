@@ -426,8 +426,25 @@ function Alert.Summary(separator)
         Add(L["Talents"], name or L["(none)"])
     end
 
+    -- ⚑ `(nenhum)` SÓ QUANDO NÃO HÁ NADA. `isEquipped` é tudo-ou-nada: trocar UMA peça de um
+    -- conjunto de 14 apaga a flag, e o resumo dizia "Itens: (nenhum)" para quem estava com o
+    -- conjunto quase inteiro no corpo. Relato do usuário: *"fica com a mensagem de (nenhum), uma
+    -- mensagem errada, porque ele tá com os itens só que um ou mais não estão salvos"*.
+    --
+    -- Dizer o nome com a contagem é o que separa os dois casos que a frase antiga fundia: quem
+    -- esqueceu de carregar conjunto nenhum e quem trocou uma peça e não salvou. O primeiro precisa
+    -- carregar; o segundo precisa SALVAR — e é o segundo que aparece no ready check.
     local setID = ns.Data.GetEquippedSetID()
-    Add(L["Gear"], setID and ns.Data.GearSetName(setID) or L["(none)"])
+    if setID then
+        Add(L["Gear"], ns.Data.GearSetName(setID))
+    else
+        local _, vestidas, itens, nome = ns.Data.PartialGearSet()
+        if nome then
+            Add(L["Gear"], format(L["%s (%d of %d pieces)"], nome, vestidas, itens))
+        else
+            Add(L["Gear"], L["(none)"])
+        end
+    end
 
     -- UMA FUNÇÃO SÓ, com um separador, e não duas funções. A regra vem de tropeço próprio neste
     -- projeto: duas fontes de verdade para a mesma informação divergem na primeira mudança —

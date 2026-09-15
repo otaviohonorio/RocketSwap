@@ -398,6 +398,57 @@ function Data.GetEquippedSetID()
     return nil
 end
 
+---O conjunto que o jogador ESTÁ usando com peça trocada — o quase-vestido.
+---
+---⚑ ISTO EXISTE POR CAUSA DO `(nenhum)` MENTIROSO. `isEquipped` é tudo-ou-nada: trocar uma única
+---peça de um conjunto de 14 derruba a flag dos 14, e o resumo do ready check passava a dizer
+---"Itens: (nenhum)" para quem estava com o conjunto quase inteiro no corpo. A frase era falsa no
+---momento em que mais custa — o líder acabou de pedir a conferência.
+---
+---A MEDIDA É `numEquipped`, o 6º retorno de `GetEquipmentSetInfo`: quantas peças DESTE conjunto
+---estão no corpo agora. Ela não é uma dedução nossa, é a contabilidade do jogo — a mesma de que
+---`Data.GearSetCounts` já vive.
+---
+---DUAS RECUSAS, e as duas são para não inventar resposta:
+---
+---  * **maioria simples ou nada.** Com metade ou menos das peças casando, "você está com o
+---    conjunto X" deixa de ser verdade: dois conjuntos de raide dividem anel, capa e joia sem
+---    ninguém ter vestido nenhum dos dois. Abaixo do corte a resposta honesta continua sendo
+---    `(nenhum)`;
+---  * **empate não responde.** Dois conjuntos com a mesma contagem são a mesma ambiguidade que o
+---    comentário de `GetEquippedSetID` descreve, e escolher "o primeiro" aqui seria escolher no
+---    sorteio qual nome o jogador lê. Empate devolve `nil`.
+---
+---As peças ignoradas ficam de fora da conta dos dois lados (`itens` já as inclui, e o jogo conta
+---uma ignorada como não-vestida): o denominador é o total do conjunto, que é o número que o
+---jogador vê na janela de equipamento.
+---@return number|nil setID, number|nil vestidas, number|nil itens, string|nil nome
+function Data.PartialGearSet()
+    local melhorID, melhorNome, melhorVestidas, melhorItens
+    local empatado = false
+
+    for _, set in ipairs(Data.GetGearSets()) do
+        if not set.isEquipped then
+            local c = Data.GearSetCounts(set.setID)
+            -- `type` e não só `and`: contagem ausente vira comparação com nil, que é erro de Lua.
+            if c and type(c.vestidas) == "number" and type(c.itens) == "number" and c.itens > 0 then
+                if c.vestidas * 2 > c.itens then
+                    if melhorVestidas == nil or c.vestidas > melhorVestidas then
+                        melhorID, melhorNome = set.setID, set.name
+                        melhorVestidas, melhorItens = c.vestidas, c.itens
+                        empatado = false
+                    elseif c.vestidas == melhorVestidas then
+                        empatado = true
+                    end
+                end
+            end
+        end
+    end
+
+    if empatado then return nil end
+    return melhorID, melhorVestidas, melhorItens, melhorNome
+end
+
 ---**Este** conjunto está vestido?
 ---
 ---É a pergunta certa para confirmar o passo de itens, e ela é diferente da de cima: perguntar

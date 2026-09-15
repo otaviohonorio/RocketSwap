@@ -582,12 +582,20 @@ C_EquipmentSet = {
     -- jogador nao tem a mao agora" -- e a UNICA resposta direta que o jogo da para "por que a
     -- troca falhou": `UseEquipmentSet` nao da motivo e `EQUIPMENT_SWAP_FINISHED` so traz um
     -- booleano. O stub devolvia so quatro, entao o addon nao tinha como perguntar isso aqui.
+    --
+    -- `state.wornPieces[setID]` = PECAS DESTE CONJUNTO NO CORPO AGORA, para o caso em que o
+    -- jogador trocou uma peca a mao: `isEquipped` cai (e tudo-ou-nada) mas `numEquipped` continua
+    -- alto. Sem esse controle o stub so sabia dois estados (14 ou 0) e o quase-vestido --
+    -- justamente o defeito relatado -- nao tinha como ser simulado.
     GetEquipmentSetInfo = function(setID)
         for _, s in ipairs(SETS) do
             if s.setID == setID then
                 local perdidas = state.lostItems or 0
-                return s.name, s.icon, setID, state.equippedSet == setID,
-                    14, state.equippedSet == setID and 14 or 0, 14 - perdidas, perdidas, 2
+                local vestido = state.equippedSet == setID
+                local vestidas = (state.wornPieces and state.wornPieces[setID])
+                    or (vestido and 14 or 0)
+                return s.name, s.icon, setID, vestido,
+                    14, vestidas, 14 - perdidas, perdidas, 2
             end
         end
         return nil
@@ -2630,6 +2638,32 @@ check("sem conjunto, diz (nenhum)",
     ns.Alert.Summary():find(ns.L["Gear"] .. ": " .. ns.L["(none)"], 1, true) ~= nil, true)
 check("e NAO repete o rotulo na frase",
     ns.Alert.Summary():lower():find("conjunto de itens", 1, true), nil)
+
+-- MAS `(nenhum)` ERA FALSO PARA QUEM SO TROCOU UMA PECA. Relato do usuario (15/09): trocar um
+-- item de um conjunto salvo e dar ready check mostrava "Itens: (nenhum)" -- "uma mensagem errada,
+-- porque ele ta com os itens so que um ou mais nao estao salvos".
+--
+-- `isEquipped` e tudo-ou-nada: uma peca fora derruba a flag das catorze. `numEquipped` nao --
+-- e ela que separa "nao carreguei conjunto nenhum" de "troquei uma peca e nao salvei". Os dois
+-- casos pedem acoes opostas (carregar x salvar), e a frase antiga os fundia.
+state.wornPieces = { [1] = 13 }
+check("com uma peca trocada, diz o nome do conjunto",
+    ns.Alert.Summary():find(ns.L["Gear"] .. ": Frost (13", 1, true) ~= nil, true)
+check("e nao diz mais (nenhum)",
+    ns.Alert.Summary():find(ns.L["Gear"] .. ": " .. ns.L["(none)"], 1, true), nil)
+
+-- MAIORIA SIMPLES OU NADA. Dois conjuntos de raide dividem anel, capa e joia sem ninguem ter
+-- vestido nenhum dos dois; abaixo do corte a resposta honesta volta a ser `(nenhum)`.
+state.wornPieces = { [1] = 7 }
+check("metade das pecas nao basta",
+    ns.Alert.Summary():find(ns.L["Gear"] .. ": " .. ns.L["(none)"], 1, true) ~= nil, true)
+
+-- EMPATE NAO RESPONDE. Escolher "o primeiro" aqui seria sortear qual nome o jogador le.
+state.wornPieces = { [1] = 13, [2] = 13 }
+check("empate volta para (nenhum)",
+    ns.Alert.Summary():find(ns.L["Gear"] .. ": " .. ns.L["(none)"], 1, true) ~= nil, true)
+
+state.wornPieces = nil
 state.equippedSet = 1
 
 -- E O RESUMO ESPERA UM OK. Pedido do usuario: "como mostra o aviso e some, o usuario pode nem

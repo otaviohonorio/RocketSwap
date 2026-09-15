@@ -23,6 +23,10 @@ L["Gear"] = "Itens"
 L["Appearance"] = "Aparência"
 
 L["(none)"] = "(nenhum)"
+-- O conjunto que está no corpo com peça trocada. `(nenhum)` era falso aqui — ver o comentário em
+-- `Alert.Summary`. "peças" e não "itens" de propósito: "Itens" é o RÓTULO do campo, e
+-- "Itens: Gélido (13 de 14 itens)" repetiria a etiqueta dentro do valor.
+L["%s (%d of %d pieces)"] = "%s (%d de %d peças)"
 -- Estado vazio (redesenho de 05/09/2026). O texto responde à pergunta que o BOTÃO levanta
 -- ("vou ter que preencher tudo?") em vez de descrever o produto — e a resposta é verdade no
 -- código: `UI.New` já nasce com a spec, o loadout e o conjunto que estão valendo.
