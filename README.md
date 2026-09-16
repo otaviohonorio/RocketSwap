@@ -58,4 +58,4 @@ python tests/sabotar.py
 
 ## Licença
 
-Uso pessoal. Ainda não publicado.
+MIT — ver `LICENSE`.
