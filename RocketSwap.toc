@@ -7,7 +7,7 @@
 ## Notes-ptBR: Conjuntos que relacionam especialização, talentos e itens — troque os três com um clique.
 ## Category-ptBR: Combate
 
-## Author: Otávio Honório
+## Author: Otto Rocket (Otávio Honório)
 ## Version: 0.27.0
 ## SavedVariablesPerCharacter: RocketSwapDB
 ## SavedVariables: RocketSwapLogDB
