@@ -22,9 +22,13 @@ L["Talents"] = "Talentos"
 L["Gear"] = "Itens"
 L["Appearance"] = "Aparência"
 
-L["Show my setup when the queue pops"] = "Mostrar o meu setup quando a fila estourar"
-L["Queue is up — check before you enter"] = "A fila estourou — confira antes de entrar"
-L["queue is up:"] = "fila estourou:"
+-- "Resumo ..." nos dois, e sem "setup": os rótulos são irmãos (mesma informação, gatilho
+-- diferente), e rótulo irmão com forma diferente obriga a ler os dois para notar que dizem a
+-- mesma coisa. "Verificação de prontidão" é o nome da coisa em português — o cliente traduz
+-- READY_CHECK como a pergunta "Todos prontos?", que não serve de rótulo.
+L["Show my setup when the queue pops"] = "Resumo quando a fila chamar"
+L["Queue is up — check before you enter"] = "A fila chamou — confira antes de entrar"
+L["queue is up:"] = "fila chamou:"
 L["queue pop summary on."] = "resumo no convite da fila ligado."
 L["queue pop summary off."] = "resumo no convite da fila desligado."
 L["turns the queue pop summary on or off"] = "liga/desliga o resumo no convite da fila"
@@ -32,7 +36,7 @@ L["turns the queue pop summary on or off"] = "liga/desliga o resumo no convite d
 -- do começo ao fim da partida. Daí o resumo aparecer aqui e não só no ready check.
 L["Queue pop:"] = "Convite da fila:"
 L["When the arena or battleground invite shows up, it prints the same summary — the last moment when you can still fix the build."] =
-    "Quando aparece o convite da arena ou do campo de batalha, ele mostra o mesmo resumo — é o último momento em que ainda dá para arrumar a build."
+    "Quando aparece o convite da arena ou do campo de batalha, ele mostra o mesmo resumo — é o último momento em que ainda dá para ajustar talentos e itens."
 
 L["(none)"] = "(nenhum)"
 -- O conjunto que está no corpo com peça trocada. `(nenhum)` era falso aqui — ver o comentário em
@@ -157,7 +161,7 @@ L["Warn about wrong gear"] = "Avisar equipamento errado"
 -- Desmarcada por padrão (12/09). O rótulo diz ONDE o aviso passa a valer, não o que ele é: quem
 -- lê a lista de caixas já sabe que se trata do aviso de equipamento pela caixa de cima.
 L["Warn with War Mode on too"] = "Avisar também com Modo Guerra ligado"
-L["Show my setup on ready check"] = "Resumo no ready check"
+L["Show my setup on ready check"] = "Resumo na verificação de prontidão"
 L["Warnings"] = "Avisos"
 L["These two work without any preset — they are what the addon does on the day you install it."] =
     "Os dois funcionam sem nenhum conjunto criado — é o que o addon faz no dia em que você o instala."
@@ -167,7 +171,7 @@ L["In the open world with War Mode on it stays quiet unless you tick the second 
     "caixa: lá fora a maior parte do tempo é missão, não briga com jogador."
 L["In an arena or battleground it flags every slot WITHOUT the PvP item level line; in a dungeon or raid, every slot WITH it. It names the slots, and offers to load a preset if you have one that fits."] =
     "Em arena ou campo de batalha, marca todo slot SEM a linha de nível de item de PvP; em masmorra ou raide, todo slot COM ela. Diz quais slots são, e oferece carregar um conjunto se você tiver um que sirva."
-L["Ready check:"] = "Ready check:"
+L["Ready check:"] = "Verificação de prontidão:"
 L["When the leader starts one, it prints your specialization, talent loadout and gear set — so you can confirm before the pull."] =
     "Quando o líder manda, mostra sua especialização, seus talentos e seu conjunto de itens — para conferir antes de puxar."
 L["It stays quiet in combat, once the gates are open, and whenever the reading is not reliable. Type /rs gear to see what it reads on each slot."] =

@@ -17,7 +17,7 @@ ns.defaults = {
     -- um conjunto. Desligaveis por /rs warn e /rs ready.
     warn = true,          -- equipamento errado para o conteudo
     readyCheck = true,    -- resumo do que voce esta usando, no ready check
-    queuePop = true,      -- o mesmo resumo quando a fila de PvP estoura (convite na tela)
+    queuePop = true,      -- o mesmo resumo quando a fila de PvP chama (convite na tela)
 
     -- ⚑ MODO GUERRA NASCE CALADO (pedido de 12/09: *"tira o alerta dos itens de pvp em mundo
     -- aberto no war mode, ou transforma em opcao por padrao desmarcada"*).
