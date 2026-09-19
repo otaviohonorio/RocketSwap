@@ -43,7 +43,7 @@ function Alert.Context()
 
     -- FILA DE PvP: qualquer uma conta, inclusive a espera.
     --
-    -- ⚑ ANTES SÓ VALIAM `"confirm"` E `"active"`, e `"confirm"` **não é a espera** — é o estouro
+    -- ⚑ ANTES SÓ VALIAM `"confirm"` E `"active"`, e `"confirm"` **não é a espera** — é a chamada
     -- da fila, o convite com contagem para aceitar. (O DBM prova: ele só cria a barra de "tempo
     -- restante para aceitar uma fila" quando o status vira `"confirm"`, medindo-a com
     -- `GetBattlefieldPortExpiration`.) Então, no momento literal do pedido do usuário — *"quando
@@ -455,7 +455,7 @@ function Alert.Summary(separator)
 end
 
 --------------------------------------------------------------------------------
--- Fila estourou: o resumo antes de aceitar
+-- A fila chamou: o resumo antes de aceitar
 --------------------------------------------------------------------------------
 ---O convite da fila de PvP — o momento em que dá para consertar, e o último.
 ---
@@ -493,7 +493,7 @@ function Alert.OnQueuePop()
     end
 
     -- ⚑ UM AVISO ENQUANTO HOUVER CONVITE, e não um por fila. O resumo fala da SUA build, que é a
-    -- mesma para as duas filas — com uma trava por índice, duas filas estourando juntas abriam a
+    -- mesma para as duas filas — com uma trava por índice, duas filas chamando juntas abriam a
     -- mesma caixa duas vezes, e a segunda só substituía a primeira (a chave do diálogo é uma só).
     --
     -- E uma vez por convite, não por disparo: `UPDATE_BATTLEFIELD_STATUS` dispara várias vezes
