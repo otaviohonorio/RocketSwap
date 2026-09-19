@@ -1,8 +1,10 @@
 -- RocketSwap | Alert.lua
--- Dois avisos, e os dois funcionam SEM que o jogador crie um conjunto:
+-- Três avisos, e os três funcionam SEM que o jogador crie um conjunto:
 --
 --   1. Equipamento errado para o conteúdo — de PvE em arena, de PvP em masmorra.
 --   2. No ready check, um resumo do que você está usando, para o grupo conferir antes de puxar.
+--   3. No convite da fila de PvP, o mesmo resumo — e ali ele vale mais: dentro da partida a
+--      restrição de addon fecha a troca do começo ao fim, então o convite é a última janela.
 --
 -- O MODO DE FALHA DESTE ARQUIVO NÃO É ERRO DE LUA — é o usuário desligar porque encheu o saco.
 -- O critério de aceitação é: quem fez tudo certo por duas semanas viu o addon zero vezes.
@@ -452,6 +454,90 @@ function Alert.Summary(separator)
     return table.concat(parts, separator or "  ·  ")
 end
 
+--------------------------------------------------------------------------------
+-- Fila estourou: o resumo antes de aceitar
+--------------------------------------------------------------------------------
+---O convite da fila de PvP — o momento em que dá para consertar, e o último.
+---
+---Pedido do usuário (18/09/2026): *"quando chama para entrar na arena após ter esperado na fila,
+---tem como dar o aviso de qual build tá setado?"*.
+---
+---É a mesma pergunta do ready check, num instante em que ela vale mais: dentro da arena a troca
+---de talentos é recusada pela restrição de addon, e a partida inteira é uma janela fechada (ver
+---o comentário de `Alert.Check`). Quem descobre depois de aceitar, descobre tarde.
+---
+---`GetBattlefieldStatus(i)` devolve `"confirm"` exatamente enquanto o convite está na tela
+---(documentada no cliente 12.1.5; é o mesmo caminho que o DBM usa para a barra de tempo do
+---convite, `DBM-Core.lua:3360-3364`). O 2º retorno é o nome do mapa e o 3º, o tamanho do time
+---da arena — 0 em campo de batalha.
+---
+---UMA VEZ POR CONVITE. `UPDATE_BATTLEFIELD_STATUS` dispara várias vezes com o mesmo `"confirm"`
+---(o relógio do convite anda), e a caixa espera OK: sem trava, cada disparo empilharia a mesma
+---caixa por cima da anterior.
+local queueShown = false
+
+function Alert.OnQueuePop()
+    if not GetBattlefieldStatus then return end
+
+    -- `GetMaxBattlefieldID` é quem diz quantas filas existem. Sem ela, duas — que é o que o DBM
+    -- percorre, e é o teto histórico.
+    local quantas = (GetMaxBattlefieldID and GetMaxBattlefieldID()) or 2
+
+    local mapa, teamSize
+    for i = 1, quantas do
+        local ok, status, m, t = pcall(GetBattlefieldStatus, i)
+        if ok and status == "confirm" then
+            mapa, teamSize = m, t
+            break
+        end
+    end
+
+    -- ⚑ UM AVISO ENQUANTO HOUVER CONVITE, e não um por fila. O resumo fala da SUA build, que é a
+    -- mesma para as duas filas — com uma trava por índice, duas filas estourando juntas abriam a
+    -- mesma caixa duas vezes, e a segunda só substituía a primeira (a chave do diálogo é uma só).
+    --
+    -- E uma vez por convite, não por disparo: `UPDATE_BATTLEFIELD_STATUS` dispara várias vezes
+    -- com o mesmo convite na tela, porque o relógio dele anda.
+    if mapa ~= nil or teamSize ~= nil then
+        if not queueShown and ns.db and ns.db.queuePop ~= false then
+            queueShown = true
+            Alert.ShowQueueSummary(mapa, teamSize)
+        end
+    elseif queueShown then
+        -- Saiu do convite (aceitou, recusou ou expirou): a caixa perde o assunto e some, e a
+        -- trava libera o próximo convite. Sem isto, a caixa ficaria pendurada dentro da partida,
+        -- que é onde ela não serve para mais nada.
+        queueShown = false
+        if StaticPopup_Hide then pcall(StaticPopup_Hide, "ROCKETSWAP_READY_CHECK") end
+    end
+end
+
+---A caixa do convite. Mesmo formato do ready check — um rótulo por linha, esperando OK.
+---
+---O TÍTULO DIZ O MAPA quando o jogo informa: "Nagrand Arena" responde *por que isto apareceu* sem
+---gastar uma frase explicando. Sem o nome, a frase genérica.
+function Alert.ShowQueueSummary(mapa, teamSize)
+    local resumo = Alert.Summary()
+    local titulo = L["Queue is up — check before you enter"]
+    if type(mapa) == "string" and mapa ~= "" then
+        if type(teamSize) == "number" and teamSize > 0 then
+            titulo = format("%s (%dv%d)", mapa, teamSize, teamSize)
+        else
+            titulo = mapa
+        end
+    end
+
+    ns.Print(L["queue is up:"] .. " " .. resumo)
+
+    if StaticPopup_Show then
+        local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",
+            titulo .. "\n\n" .. Alert.Summary("\n"))
+        if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
+            pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
+        end
+    end
+end
+
 -- A CAIXA DE CONFIRMAÇÃO DO RESUMO.
 --
 -- O resumo era chat + aviso de raide, e os dois SOMEM sozinhos. Pedido do usuário: *"como mostra
@@ -555,6 +641,13 @@ function Alert.Create()
     frame:SetScript("OnEvent", function(_, event, a, b)
         if event == "READY_CHECK" then
             Alert.OnReadyCheck()
+
+        elseif event == "UPDATE_BATTLEFIELD_STATUS" then
+            -- DUAS COISAS NO MESMO EVENTO, e na ordem certa: primeiro o resumo do convite, que é
+            -- imediato e tem prazo (o convite expira), e só depois a checagem de equipamento, que
+            -- espera os 2 segundos de sempre porque depende da tooltip ter carregado.
+            Alert.OnQueuePop()
+            C_Timer.After(2, function() Alert.Check(event) end)
 
         elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "EQUIPMENT_SWAP_FINISHED" then
             ns.Gear.ClearCache()
