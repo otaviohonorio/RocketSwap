@@ -22,6 +22,18 @@ L["Talents"] = "Talentos"
 L["Gear"] = "Itens"
 L["Appearance"] = "Aparência"
 
+L["Show my setup when the queue pops"] = "Mostrar o meu setup quando a fila estourar"
+L["Queue is up — check before you enter"] = "A fila estourou — confira antes de entrar"
+L["queue is up:"] = "fila estourou:"
+L["queue pop summary on."] = "resumo no convite da fila ligado."
+L["queue pop summary off."] = "resumo no convite da fila desligado."
+L["turns the queue pop summary on or off"] = "liga/desliga o resumo no convite da fila"
+-- O CONVITE DA FILA É O ÚLTIMO MOMENTO ÚTIL: dentro da arena a restrição de addon fecha a troca
+-- do começo ao fim da partida. Daí o resumo aparecer aqui e não só no ready check.
+L["Queue pop:"] = "Convite da fila:"
+L["When the arena or battleground invite shows up, it prints the same summary — the last moment when you can still fix the build."] =
+    "Quando aparece o convite da arena ou do campo de batalha, ele mostra o mesmo resumo — é o último momento em que ainda dá para arrumar a build."
+
 L["(none)"] = "(nenhum)"
 -- O conjunto que está no corpo com peça trocada. `(nenhum)` era falso aqui — ver o comentário em
 -- `Alert.Summary`. "peças" e não "itens" de propósito: "Itens" é o RÓTULO do campo, e

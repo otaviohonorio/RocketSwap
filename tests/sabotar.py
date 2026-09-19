@@ -452,10 +452,17 @@ SABOTAGENS = [
      "a sub-opcao e recuada como opcao filha"),
 
     # E A FAIXA VOLTA A ALTURA DE DUAS CAIXAS: a terceira transborda em silencio.
-    ("a faixa volta a altura de duas caixas", "UI.lua",
+    ("a faixa volta a altura de tres caixas", "UI.lua",
+     u"    strip:SetHeight(142)",
      u"    strip:SetHeight(118)",
-     u"    strip:SetHeight(86)",
-     "a faixa de avisos cabe as tres caixas"),
+     "a faixa de avisos cabe todas as caixas"),
+
+    # O CONVITE DE FILA VIRA "OUTRO ASSUNTO": com o vao de troca de tema, o olho desagrupa as duas
+    # caixas que dizem a mesma coisa.
+    ("o convite de fila se afasta do ready check", "UI.lua",
+     u"    strip.queue = Toggle(-112,",
+     u"    strip.queue = Toggle(-122,",
+     "o convite de fila anda junto do ready check"),
 
     # O VAO EXTERNO ENCOSTA NO INTERNO: o olho perde a quem a sub-opcao pertence.
     ("o vao que separa vira igual ao que associa", "UI.lua",
@@ -468,6 +475,26 @@ SABOTAGENS = [
      u"        avisoModoGuerra = ns.db and ns.db.warnWarMode == true or false,",
      u"        avisoModoGuerra = true,",
      "  e o diagnostico mostra a porta fechada"),
+
+    # ---------------------------------------------------------- o resumo no convite da fila
+    # A TRAVA E O QUE SEPARA "avisa" de "entope a tela": `UPDATE_BATTLEFIELD_STATUS` dispara
+    # varias vezes com o mesmo convite, e a caixa espera OK.
+    ("a trava do convite some e a caixa empilha", "Alert.lua",
+     u"        if not queueShown and ns.db and ns.db.queuePop ~= false then",
+     u"        if ns.db and ns.db.queuePop ~= false then",
+     "disparo repetido nao empilha caixa"),
+
+    # A CAIXA FICA PENDURADA DENTRO DA PARTIDA: aceitar o convite deixa de fecha-la.
+    ("a caixa deixa de fechar quando o convite acaba", "Alert.lua",
+     u"        if StaticPopup_Hide then pcall(StaticPopup_Hide, \"ROCKETSWAP_READY_CHECK\") end\n",
+     u"",
+     "entrou na partida e a caixa fecha"),
+
+    # O AVISO DEIXA DE SER DESLIGAVEL: a opcao vira enfeite.
+    ("a opcao do convite de fila para de valer", "Alert.lua",
+     u"        if not queueShown and ns.db and ns.db.queuePop ~= false then",
+     u"        if not queueShown then",
+     "desligado nao abre caixa nenhuma"),
 
     # A INTERRUPCAO VOLTA A SER MUDA: o diario termina no ultimo passo, sem dizer que houve /reload.
     ("a interrupcao deixa de ser gravada", "Data.lua",

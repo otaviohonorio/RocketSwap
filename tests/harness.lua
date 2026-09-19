@@ -309,6 +309,14 @@ function StaticPopup_Show(which, arg1)
     return {}
 end
 
+-- `StaticPopup_Hide` fecha a caixa. O addon usa para tirar da tela o resumo do convite quando o
+-- convite acaba -- aceito, recusado ou expirado --, e sem este stub nao dava para conferir que
+-- ele fecha, so que ele abre.
+hiddenPopups = {}
+function StaticPopup_Hide(which)
+    hiddenPopups[#hiddenPopups + 1] = which
+end
+
 -- `SuppressMessagesThisFrame` e metodo da propria Blizzard
 -- (`Blizzard_UIErrorsFrame/Mainline/UIErrorsFrame.lua:182-189`): suprime as mensagens de erro por
 -- UM quadro e se desarma sozinho. Sem ele aqui nao dava para conferir que o addon engole o erro
@@ -2477,6 +2485,7 @@ do
     local xFilha, yFilha = caixas.warMode:PointOffset("TOPLEFT")
     local _, yMae = caixas.warn:PointOffset("TOPLEFT")
     local _, yReady = caixas.ready:PointOffset("TOPLEFT")
+    local _, yQueue = caixas.queue:PointOffset("TOPLEFT")
 
     -- RECUO DE FILHA: e ele que diz, sem palavra nenhuma, que a caixa depende da de cima.
     check("a sub-opcao e recuada como opcao filha", xFilha - xMae, 15)
@@ -2485,14 +2494,20 @@ do
     local interno, externo = yMae - yFilha, yFilha - yReady
     check("e o vao que separa e maior que o que associa", externo > interno, true)
 
-    -- E A FAIXA TEM DE CABER AS TRES: altura fixa que nao acompanha o conteudo transborda em
-    -- silencio -- foi o defeito que esta terceira caixa criou e que este check tranca.
+    -- O CONVITE DE FILA ANDA COM O READY CHECK: as duas dizem "mostra o meu setup", mudando so o
+    -- gatilho. Entao o vao entre elas e o de DENTRO do grupo (o mesmo `interno`), e nao o de
+    -- trocar de assunto -- com 34 aqui o olho leria o convite como outro tema.
+    check("o convite de fila anda junto do ready check", yReady - yQueue, interno)
+
+    -- E A FAIXA TEM DE CABER TODAS: altura fixa que nao acompanha o conteudo transborda em
+    -- silencio -- foi o defeito que a terceira caixa criou e que este check tranca; a quarta
+    -- (convite de fila, 18/09) passou por ele.
     -- ⚑ A ALTURA SAI DA PROPRIA FAIXA (`caixas` E o strip), e nao de `caixas.warn:GetParent()`:
     -- no simulador `GetParent` cai no `__index` generico e devolve um widget NOVO, com a altura
     -- padrao de 400 -- o check comparava 112 com 400 e passava com a faixa transbordando. A
     -- sabotagem e que denunciou, que e o unico jeito de descobrir check que mede a si mesmo.
     local CAIXA = 24
-    check("a faixa de avisos cabe as tres caixas", -yReady + CAIXA <= caixas:GetHeight(), true)
+    check("a faixa de avisos cabe todas as caixas", -yQueue + CAIXA <= caixas:GetHeight(), true)
     if ns.UI.IsShown() then ns.UI.Toggle() end
 
     ligado = false
@@ -2665,6 +2680,65 @@ check("empate volta para (nenhum)",
 
 state.wornPieces = nil
 state.equippedSet = 1
+
+print("== resumo no convite da fila de PvP ==")
+-- Pedido do usuario (18/09): *"quando chama para entrar na arena apos ter esperado na fila, tem
+-- como dar o aviso de qual build ta setado?"*. E o mesmo resumo do ready check, no instante em
+-- que ele vale mais: DENTRO da arena a restricao de addon fecha a troca do comeco ao fim da
+-- partida, entao o convite e a ultima janela para arrumar a build.
+--
+-- `GetBattlefieldStatus(i) == "confirm"` e o convite na tela (mesmo caminho do DBM,
+-- `DBM-Core.lua:3360-3364`); o 2o retorno e o mapa e o 3o, o tamanho do time.
+do
+    local real = GetBattlefieldStatus
+    local status = "none"
+    GetBattlefieldStatus = function() return status, "Nagrand Arena", 3 end
+
+    wipe(shownPopups)
+    wipe(hiddenPopups)
+    ns.db.queuePop = true
+
+    -- Fila andando: nao ha o que conferir ainda.
+    ns.Alert.OnQueuePop()
+    check("fila sem convite nao abre caixa", #shownPopups, 0)
+
+    status = "confirm"
+    ns.Alert.OnQueuePop()
+    check("o convite abre a caixa", #shownPopups, 1)
+    check("com o resumo dentro",
+        shownPopups[1].text and shownPopups[1].text:find("Gelido", 1, true) ~= nil, true)
+    check("e o titulo diz o mapa e o tamanho do time",
+        shownPopups[1].text:find("Nagrand Arena (3v3)", 1, true) ~= nil, true)
+
+    -- UMA VEZ POR CONVITE. `UPDATE_BATTLEFIELD_STATUS` dispara varias vezes com o mesmo convite
+    -- (o relogio dele anda) -- e a caixa espera OK, entao sem trava cada disparo empilharia outra.
+    ns.Alert.OnQueuePop()
+    ns.Alert.OnQueuePop()
+    check("disparo repetido nao empilha caixa", #shownPopups, 1)
+
+    -- Saiu do convite: a caixa perde o assunto. Sem isto ela ficaria pendurada DENTRO da partida.
+    status = "active"
+    ns.Alert.OnQueuePop()
+    check("entrou na partida e a caixa fecha", hiddenPopups[1], "ROCKETSWAP_READY_CHECK")
+
+    -- E o proximo convite volta a avisar -- a trava e por convite, nao para sempre.
+    status = "confirm"
+    ns.Alert.OnQueuePop()
+    check("o convite seguinte avisa de novo", #shownPopups, 2)
+
+    -- DESLIGAVEL, como os outros dois avisos (/rs queue).
+    status = "none"; ns.Alert.OnQueuePop()
+    ns.db.queuePop = false
+    status = "confirm"
+    wipe(shownPopups)
+    ns.Alert.OnQueuePop()
+    check("desligado nao abre caixa nenhuma", #shownPopups, 0)
+
+    ns.db.queuePop = true
+    status = "none"
+    ns.Alert.OnQueuePop()
+    GetBattlefieldStatus = real
+end
 
 -- E O RESUMO ESPERA UM OK. Pedido do usuario: "como mostra o aviso e some, o usuario pode nem
 -- ver". Ele tem razao -- o ready check e justamente o momento em que a pessoa esta olhando para

@@ -61,6 +61,14 @@ commands["ready"] = function()
     ns.Print(ns.db.readyCheck and L["ready check summary on."] or L["ready check summary off."])
 end
 
+-- `/rs queue`: o mesmo resumo do ready check, no convite da fila de PvP. Comando proprio, e nao
+-- um argumento de `/rs ready`, porque sao dois gatilhos independentes -- ha quem queira so um.
+commands["queue"] = function()
+    ns.db.queuePop = ns.db.queuePop == false
+    ns.Print(ns.db.queuePop and L["queue pop summary on."] or L["queue pop summary off."])
+    if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
+end
+
 commands["unmute"] = function()
     ns.db.muted, ns.db.mutedSlots = {}, {}
     ns.Print(L["all warnings re-enabled."])
@@ -518,6 +526,7 @@ commands["help"] = function()
     print("  /rs i18n            " .. L["checks the labels taken from the game"])
     print("  /rs warn            " .. L["turns the gear warning on or off"])
     print("  /rs ready           " .. L["turns the ready check summary on or off"])
+    print("  /rs queue           " .. L["turns the queue pop summary on or off"])
     print("  /rs unmute          " .. L["re-enables warnings you silenced"])
     print("  /rs log [clear]     " .. L["shows the log of the last swaps"])
 end

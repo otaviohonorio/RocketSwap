@@ -32,9 +32,10 @@ ns.UI = UI
 -- Todos os números têm origem. Onde há citação, ela é de arquivo do cliente 12.1.0.
 -- A altura subiu de 420 para 452 quando a sub-opção de modo guerra entrou na faixa de Avisos
 -- (12/09). A conta é fechada, não estética: a faixa começa em −304, três caixas terminam em −112
--- dentro dela (118 de altura), e o rodapé que o `ButtonFrameTemplate` reserva come 26 px do fundo
--- ⇒ 304 + 118 + 26 = 448, mais os mesmos 4 px de folga que a janela de 420 já tinha.
-local WIDTH, HEIGHT = 520, 452
+-- dentro dela (142 de altura), e o rodapé que o `ButtonFrameTemplate` reserva come 26 px do fundo
+-- ⇒ 304 + 142 + 26 = 472, mais os mesmos 4 px de folga que a janela de 420 já tinha.
+-- (Era 118/452 com três caixas; a do convite de fila, 18/09, trouxe a quarta.)
+local WIDTH, HEIGHT = 520, 476
 local LIST_W = 260            -- largura externa do inset da lista: x 4..264
 local GUTTER = 20             -- calha entre colunas (MountJournal)
 local COL_X = 284             -- borda esquerda da ARTE da coluna direita
@@ -703,10 +704,10 @@ local function BuildToggles()
     local strip = CreateFrame("Frame", nil, frame)
     strip:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -304)
     strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -304)
-    -- 118 = a última caixa termina em −112, mais 6 de respiro. Era 86 com duas caixas; a
-    -- sub-opção de modo guerra (12/09) trouxe a terceira, e altura fixa que não acompanha o
-    -- conteúdo é o defeito que a faixa transbordando teria produzido em silêncio.
-    strip:SetHeight(118)
+    -- 142 = a última caixa termina em −136, mais 6 de respiro. Era 86 com duas caixas, 118 com
+    -- a sub-opção de modo guerra (12/09) e 142 com a do convite de fila (18/09). Altura fixa que
+    -- não acompanha o conteúdo é o defeito que a faixa transbordando teria produzido em silêncio.
+    strip:SetHeight(142)
 
     strip.divider = strip:CreateTexture(nil, "ARTWORK")
     strip.divider:SetPoint("TOPLEFT", 0, 0)
@@ -761,6 +762,10 @@ local function BuildToggles()
         GameTooltip:AddLine(L["When the leader starts one, it prints your specialization, talent loadout and gear set — so you can confirm before the pull."],
             0.8, 0.8, 0.8, true)
         GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(L["Queue pop:"], 1, 0.82, 0)
+        GameTooltip:AddLine(L["When the arena or battleground invite shows up, it prints the same summary — the last moment when you can still fix the build."],
+            0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
         GameTooltip:AddLine(L["It stays quiet in combat, once the gates are open, and whenever the reading is not reliable. Type /rs gear to see what it reads on each slot."],
             0.6, 0.6, 0.6, true)
         GameTooltip:Show()
@@ -802,6 +807,11 @@ local function BuildToggles()
     -- (`Blizzard_SettingControls.xml:108-164` + `Blizzard_SettingsList.lua:46`), e aqui ele marca
     -- justamente a troca de assunto: sai o aviso de equipamento, entra o do ready check.
     strip.ready = Toggle(-88, L["Show my setup on ready check"], "readyCheck")
+
+    -- ⚑ 24, o vão de DENTRO do grupo, e não os 34 da troca de assunto: as duas caixas dizem a
+    -- mesma coisa ("mostra o meu setup"), mudando só o gatilho. Pôr 34 aqui sugeriria que o
+    -- convite de fila é outro assunto, e o olho agruparia errado.
+    strip.queue = Toggle(-112, L["Show my setup when the queue pops"], "queuePop")
 
     frame.toggles = strip
 end
@@ -1032,6 +1042,7 @@ function UI.Refresh()
     -- nenhum, e caixa clicável que não faz nada é a versão pior de não ter a caixa.
     frame.toggles.warMode:SetEnabled(ns.db.warn ~= false)
     frame.toggles.ready:SetChecked(ns.db.readyCheck ~= false)
+    frame.toggles.queue:SetChecked(ns.db.queuePop ~= false)
 
     frame.emptyState:SetShown(empty)
     if frame.Inset then frame.Inset:SetShown(not empty) end
