@@ -4009,9 +4009,9 @@ do
     print("-- card da lista: altura por conteudo")
 
     local m = ns.UI.DebugCardMetrics()
-    -- A "base" do card e tudo que existe antes da primeira linha de campo: respiro, o icone
-    -- (que desde 22/09 fica NO ALTO, e nao ao lado) e o titulo.
-    local base = m.pad * 2 + m.icon + m.iconGap + m.name
+    -- A "base" do card: o titulo com os respiros, ate onde o bloco de campos comeca. O icone
+    -- fica AO LADO do bloco, entao ele nao soma altura -- mas e o PISO dela.
+    local base = m.top + m.pad
 
     state.lostItems = 0
     state.wornPieces = nil
@@ -4019,8 +4019,22 @@ do
     local soItens = { name = "So itens", gear = 3 }
     local tudo = { name = "Tudo", spec = 2, talent = 10, gear = 3, transmog = 71 }
 
-    check("uma linha: base + um passo", ns.UI.DebugCardHeight(soItens), base + m.line)
-    check("quatro linhas: base + quatro passos", ns.UI.DebugCardHeight(tudo), base + m.line * 4)
+    -- (!) O BLOCO DE CAMPOS COMECA ABAIXO DO TITULO, e isto nao pode sair de `m.top` sozinho:
+    -- `base` e derivado dele, entao um `CARD_TOP` errado passaria nos dois lados da conta. A
+    -- invariante e outra -- tem que caber o respiro MAIS a tinta do titulo antes do primeiro
+    -- campo, senao o titulo e a primeira linha se sobrepoem.
+    check("os campos comecam abaixo do titulo", m.top >= m.pad + m.name, true)
+
+    -- COM UM CAMPO SO, QUEM MANDA E O ICONE: uma linha mede 15 e o icone 32, e sem esse piso
+    -- ele vazaria o card por baixo.
+    check("um campo: o icone e o piso da altura", ns.UI.DebugCardHeight(soItens), base + m.icon)
+    check("quatro campos: as linhas passam o icone",
+        ns.UI.DebugCardHeight(tudo), base + m.line * 4)
+
+    -- E O TEXTO NAO PODE TRANSBORDAR A LINHA: o teto e derivado da largura da lista justamente
+    -- para isso, e um teto escolhido a olho maior que a lista nao encurtaria nada -- so deixaria
+    -- o texto sair pela borda, que e pior que a linha comprida.
+    check("o texto cabe na largura da lista", m.left + m.textW <= m.listW - 14, true)
     check("e o card de quatro e mais alto que o de uma",
         ns.UI.DebugCardHeight(tudo) > ns.UI.DebugCardHeight(soItens), true)
 
@@ -4029,7 +4043,7 @@ do
     state.lostItems = 2
     state.wornPieces = { [3] = 12 }
     check("com peca perdida o card cresce a faixa do aviso",
-        ns.UI.DebugCardHeight(soItens), base + m.line + m.warn)
+        ns.UI.DebugCardHeight(soItens), base + m.icon + m.warn)
     check("  e a faixa cabe onde foi reservada", m.warn >= 22, true)
 
     -- TRES CARDS INTEIROS CABEM SEM ROLAR. Pedido do usuario, e e o unico numero da janela que
