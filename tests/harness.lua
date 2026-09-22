@@ -4012,6 +4012,34 @@ do
         ns.UI.DebugCardHeight(soItens), base + m.line + m.warn)
     check("  e a faixa cabe onde foi reservada", m.warn >= 22, true)
 
+    -- TRES CARDS INTEIROS CABEM SEM ROLAR. Pedido do usuario, e e o unico numero da janela que
+    -- ele enxerga: "quantos conjuntos vejo de uma vez".
+    --
+    -- (!) O inset da lista tinha altura FIXA e nao acompanhava a janela -- aumentar `HEIGHT` na
+    -- rodada anterior nao deu um pixel a mais de lista. Agora a lista manda na janela, e este
+    -- teste e que garante que continue assim: mexer no card sem mexer na janela reprova.
+    -- (!) O NUMERO E LITERAL, e nao `m.visiveis`. A primeira versao comparava a constante com
+    -- ela mesma: baixar CARDS_VISIVEIS para 2 mudava os DOIS lados e o teste continuava verde.
+    -- Teste tautologico nao afirma nada -- ele so repete a implementacao com outras palavras.
+    --
+    -- E a altura conferida e a REAL do inset (`listTop` - `listBottom`), nao a variavel que a
+    -- calculou: e o inset que o jogador ve, e foi um inset de altura fixa que causou o problema.
+    local alturaReal = m.listTop - m.listBottom
+    local cabem = math.floor((alturaReal - 6 + m.spacing) / (m.cardMax + m.spacing))
+    check("cabem TRES cards inteiros na lista", cabem >= 3, true)
+    check("  e nao muito mais que tres (janela nao incha a toa)", cabem <= 4, true)
+    -- A conta e feita sobre o card de quatro campos SEM aviso, e isso e escolha: com aviso ele
+    -- mede 116, e dimensionar por ele deixaria a janela 72 px mais alta para todo mundo por
+    -- causa de um estado que e erro e e para durar pouco.
+    state.lostItems = 0
+    check("  e a conta usa o card de quatro campos",
+        m.cardMax, ns.UI.DebugCardHeight(tudo))
+    state.lostItems = 2
+    check("  o card com aviso e maior, e por isso rola",
+        ns.UI.DebugCardHeight(tudo) > m.cardMax, true)
+    check("  e a faixa de avisos comeca ABAIXO do inset", m.stripY < m.listBottom, true)
+    check("  e a janela cabe tudo isso", m.height >= -m.stripY + 142 + 26, true)
+
     state.lostItems = 0
     state.wornPieces = nil
 end
