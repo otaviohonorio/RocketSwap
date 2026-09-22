@@ -4000,7 +4000,9 @@ do
     print("-- card da lista: altura por conteudo")
 
     local m = ns.UI.DebugCardMetrics()
-    local base = m.pad * 2 + m.name
+    -- A "base" do card e tudo que existe antes da primeira linha de campo: respiro, o icone
+    -- (que desde 22/09 fica NO ALTO, e nao ao lado) e o titulo.
+    local base = m.pad * 2 + m.icon + m.iconGap + m.name
 
     state.lostItems = 0
     state.wornPieces = nil
@@ -4051,6 +4053,15 @@ do
     -- A faixa de avisos ja mediu 86, 118, 142 e agora 106; um literal aqui viraria falso a cada
     -- vez que ela mudasse, e o teste passaria a reprovar a verdade em vez do defeito.
     check("  e a janela cabe tudo isso", m.height >= -m.stripY + m.stripH + m.footer, true)
+
+    -- (!) E UM TETO, que ate agora nao existia. Desde que a janela passou a ser DERIVADA do card,
+    -- qualquer folga a mais no card empurra a janela junto -- e ninguem percebe lendo o diff.
+    -- Dobrar o icone, por exemplo, levaria a janela a 690 e ela sairia da tela de quem joga em
+    -- 1280x720 com escala padrao (768 de altura util, menos a barra de acao).
+    --
+    -- 640 e o limite pratico: o Guia de Aventuras da Blizzard, que e das janelas mais altas do
+    -- jogo, mede 638.
+    check("  e a janela nao passa do teto de tela pequena", m.height <= 640, true)
 
     state.lostItems = 0
     state.wornPieces = nil
