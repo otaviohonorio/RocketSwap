@@ -254,3 +254,8 @@ L["updates a broken gear set with what you are wearing"] = "salva o conjunto que
 L["%s: %d item(s) missing"] = "%s: falta %d item(ns)"
 L["Save set"] = "Salvar conjunto"
 L["Equipment Manager"] = "Gerenciador"
+
+-- Colunas dos avisos (0.34.0)
+L["In any content"] = "Em qualquer conteúdo"
+L["PvP only"] = "Só em PvP"
+L["Turn on the wrong gear warning first."] = "Ligue antes o aviso de equipamento errado."

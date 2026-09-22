@@ -1,4 +1,4 @@
-# Rocket Swap 0.33.0
+# Rocket Swap 0.34.0
 
 - **The preset list is now a card.** Each field gets its own labelled line — Specialization,
   Talents, Gear, Appearance — instead of one run-on line with dots between values. The card is
@@ -14,3 +14,6 @@
 - Every label for the queue-pop summary now says **PvP queue**, because that is all it watches:
   battlegrounds and arenas. The dungeon and raid finders are a different system and never
   triggered it, and the old wording did not say so.
+- The warning checkboxes are now two columns: **In any content** and **PvP only**. There is no
+  PvE-only warning — the wrong-gear warning and the ready check summary both work in either —
+  so a "PvE" column would have been empty or misleading.
