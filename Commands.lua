@@ -6,6 +6,36 @@ local commands = {}
 
 -- O painel flutuante da troca. Existe desligamento porque quem joga com a janela do addon
 -- aberta o tempo todo já tem a mesma informação na coluna da direita, e aí ele é repetição.
+-- (!) `SaveEquipmentSet` grava o que você está vestindo POR CIMA do conjunto. Isso conserta a
+-- peça que sumiu — e destruiria o conjunto inteiro se você estivesse vestindo outra coisa. Por
+-- isso o comando confere `consertavel` antes: ele só age quando você já está vestindo o conjunto
+-- inteiro menos o que sumiu, que é o único caso em que "salvar" significa "consertar".
+commands["fix"] = function()
+    local presets = ns.db and ns.db.presets or {}
+    local consertados = 0
+
+    for _, preset in ipairs(presets) do
+        if preset.gear then
+            local problema = ns.Data.GearSetProblem(preset.gear)
+            if problema and problema.consertavel then
+                if ns.Data.SaveGearSet(preset.gear) then
+                    consertados = consertados + 1
+                    ns.Print(format(L["%s updated with what you are wearing."], problema.nome or "?"))
+                end
+            elseif problema then
+                ns.Print(format(L["%s is missing %d item(s): update the set before switching."],
+                    problema.nome or "?", problema.perdidas))
+                ns.Print(L["Open the equipment manager, fix the set and save it, then switch."])
+            end
+        end
+    end
+
+    if consertados == 0 then
+        ns.Print(L["nothing to fix: no gear set is missing items you are wearing."])
+    end
+    if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
+end
+
 commands["progress"] = function()
     ns.db.hideProgress = not ns.db.hideProgress
     if ns.db.hideProgress and ns.Progress and ns.Progress.Frame() then
@@ -544,6 +574,7 @@ commands["help"] = function()
     print("  /rs ready           " .. L["turns the ready check summary on or off"])
     print("  /rs queue           " .. L["turns the queue pop summary on or off"])
     print("  /rs unmute          " .. L["re-enables warnings you silenced"])
+    print("  /rs fix             " .. L["updates a broken gear set with what you are wearing"])
     print("  /rs progress        " .. L["turns the swap progress panel on or off"])
     print("  /rs log [clear]     " .. L["shows the log of the last swaps"])
 end

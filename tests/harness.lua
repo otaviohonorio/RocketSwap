@@ -2032,13 +2032,19 @@ do
 
     -- 3. QUANDO O JOGO SABE O MOTIVO, A MENSAGEM DIZ O MOTIVO. `numLost` e "pecas que o jogador
     --    nao tem a mao agora" -- a unica causa que a API prova. Sem ela, a frase generica fica.
+    --
+    -- (!) O CONJUNTO QUEBRA NO MEIO DA TROCA, e nao antes: desde 0.31.0 o `Data.Apply` RECUSA
+    -- comecar com peca perdida, entao a corrente so chega aqui quando a peca some depois que
+    -- ela ja estava a caminho (vendida noutra janela, mochila cheia). O caminho continua vivo e
+    -- continua precisando dizer o motivo -- o que mudou foi quando ele acontece.
     ns.Log.Clear()
     state.equippedSet = 1
-    state.lostItems = 3
+    state.lostItems = 0
     erro = nil
     ns.Data.Apply({ name = "Tank", spec = 2, talent = nil, gear = 3 }, function(text, isError)
         if isError then erro = text end
     end)
+    state.lostItems = 3
     fire("EQUIPMENT_SWAP_FINISHED", false, 3)
     check("a falha diz quantas pecas faltam",
         erro ~= nil and erro:find("3", 1, true) ~= nil, true)
@@ -3884,6 +3890,61 @@ do
     AdvanceClock(10)
     TickUI(0.2)
     check("e falha nao tem prazo para sumir", painel:IsShown(), true)
+end
+
+
+--------------------------------------------------------------------------------
+-- (!) CONJUNTO DE ITENS COM PECA PERDIDA (defeito relatado em 22/09)
+--
+-- O jogador trocou uma peca e vendeu a anterior sem salvar o conjunto. O jogo poe o nome do
+-- conjunto em vermelho; o addon trocava assim mesmo, e o passo nunca fechava com o "V" --
+-- porque com peca perdida o `isEquipped` do jogo nunca fica true. A roupa mudava e a tela
+-- dizia que nao. Decisao do usuario: NAO TROCAR, avisar e mandar consertar primeiro.
+--------------------------------------------------------------------------------
+do
+    print("")
+    print("-- conjunto com peca perdida: recusa antes de comecar")
+
+    for _ = 1, 40 do
+        if not ns.Data.IsApplying() then break end
+        AdvanceClock(60); RunTimers(999)
+    end
+
+    state.equippedSet = 9
+    state.lostItems = 2
+    state.wornPieces = { [3] = 12 }      -- 12 vestidas + 2 perdidas = 14: da para consertar
+
+    local erroRecusa
+    local comecou = ns.Data.Apply({ name = "Tank", spec = nil, talent = nil, gear = 3 },
+        function(text, isError) if isError then erroRecusa = text end end, true)
+
+    check("a troca NAO comeca", comecou, false)
+    check("e nem fica corrente em curso", ns.Data.IsApplying(), false)
+    check("o aviso diz quantas pecas faltam",
+        erroRecusa ~= nil and erroRecusa:find("2", 1, true) ~= nil, true)
+
+    -- O diagnostico separa "da para consertar" de "nao da", e e ele que decide se o addon
+    -- pode salvar por cima: salvar grava a roupa ATUAL no conjunto, entao so e conserto
+    -- quando voce ja esta vestindo o conjunto inteiro menos o que sumiu.
+    local problema = ns.Data.GearSetProblem(3)
+    check("o diagnostico acha o problema", problema ~= nil, true)
+    check("  e conta as pecas", problema.perdidas, 2)
+    check("  e diz que da para consertar", problema.consertavel, true)
+
+    -- VESTINDO OUTRA COISA: salvar destruiria o conjunto. O diagnostico tem que dizer NAO.
+    state.wornPieces = { [3] = 1 }
+    local outro = ns.Data.GearSetProblem(3)
+    check("vestindo outra coisa, NAO se oferece para salvar", outro.consertavel, false)
+
+    -- Conjunto inteiro: nenhum problema, nenhuma recusa.
+    state.lostItems = 0
+    state.wornPieces = nil
+    check("conjunto inteiro nao tem problema", ns.Data.GearSetProblem(3), nil)
+
+    for _ = 1, 40 do
+        if not ns.Data.IsApplying() then break end
+        AdvanceClock(60); RunTimers(999)
+    end
 end
 
 

@@ -517,6 +517,75 @@ function Data.GearFailureReason(setID)
     return L["the gear set could not be equipped."]
 end
 
+---O conjunto de itens está quebrado? E dá para consertar agora?
+---
+---(!) DEFEITO RELATADO EM 22/09. O jogador trocou uma peça e **vendeu a anterior** sem salvar o
+---conjunto. O jogo mostra o nome do conjunto em VERMELHO no gerenciador; o Rocket Swap trocava
+---assim mesmo, mas o passo nunca fechava com o "V" — porque com peça perdida o `isEquipped` do
+---jogo nunca fica `true`, e "vestido" é o que confirma o passo. Relato dele: *"ele troca, mas não
+---fica marcado como trocado e em uso"*.
+---
+---O dado já estava aqui desde 09/09: `numLost` é lido e registrado no diário. Só que ele era usado
+---**depois** da falha, para explicá-la. A informação certa chegando tarde demais é quase igual a
+---não ter a informação.
+---
+---`consertavel` responde a pergunta que torna o conserto SEGURO. Salvar um conjunto grava o que
+---você está vestindo por cima dele — então só é a coisa certa a fazer quando você **já está
+---vestindo o conjunto inteiro menos o que sumiu**. Fora disso, salvar destruiria o conjunto
+---trocando-o pela roupa do momento, que é um estrago bem pior que o defeito original.
+---@return table|nil `{ nome, perdidas, consertavel }`, ou nil se não há problema
+function Data.GearSetProblem(setID)
+    local c = Data.GearSetCounts(setID)
+    if not c then return nil end
+    if type(c.perdidas) ~= "number" or c.perdidas <= 0 then return nil end
+
+    local vestidas = type(c.vestidas) == "number" and c.vestidas or 0
+    local itens = type(c.itens) == "number" and c.itens or 0
+
+    -- QUAL PEÇA SUMIU, e não só quantas. "Falta 1 item" manda o jogador procurar; "falta o
+    -- Elmo" ele já sabe o que fazer. `GetItemLocations` marca com **-1** o slot cuja peça não
+    -- está disponível.
+    --
+    -- ⚠️ A própria documentação avisa que `-1` **não distingue** "sumiu" de "este slot não dá
+    -- para equipar". Por isso os nomes só são colhidos quando `numLost > 0` (aí sabemos que há
+    -- peça perdida de verdade) e a lista é cortada em `numLost`: mais nomes que isso seria
+    -- inventar, e nomear o slot errado é pior que não nomear nenhum.
+    local slots
+    if C_EquipmentSet and C_EquipmentSet.GetItemLocations then
+        local okLoc, locais = pcall(C_EquipmentSet.GetItemLocations, setID)
+        if okLoc and type(locais) == "table" then
+            slots = {}
+            for slot, onde in pairs(locais) do
+                if onde == -1 and #slots < c.perdidas then
+                    slots[#slots + 1] = ns.Gear and ns.Gear.SlotName(slot) or tostring(slot)
+                end
+            end
+            if #slots == 0 then slots = nil end
+        end
+    end
+
+    return {
+        nome = c.nome,
+        perdidas = c.perdidas,
+        slots = slots,
+        consertavel = (itens > 0) and (vestidas + c.perdidas == itens) or false,
+    }
+end
+
+---Grava o que o jogador está vestindo AGORA por cima do conjunto, consertando a peça que sumiu.
+---
+---`SaveEquipmentSet` só modifica conjunto existente e roda em contexto não contaminado — a mesma
+---classe do `UseEquipmentSet`, que esta corrente já usa com sucesso. O retorno vai para o diário
+---porque é aí que se descobre, de fora do jogo, se a chamada pegou.
+function Data.SaveGearSet(setID)
+    if not C_EquipmentSet or not C_EquipmentSet.SaveEquipmentSet then return false end
+    local ok, err = pcall(C_EquipmentSet.SaveEquipmentSet, setID)
+    if ns.Log then
+        ns.Log.Call("gear", "SaveEquipmentSet(" .. tostring(setID) .. ")", ok, err)
+    end
+    return ok
+end
+
 ---Nome de um loadout/conjunto por id, para a lista mostrar texto em vez de número.
 function Data.LoadoutName(specID, configID)
     if not configID then return nil end
@@ -1575,6 +1644,41 @@ function Data.Apply(preset, report, byClick)
         if report then
             report(format(L["still applying %s: waiting for %s."],
                 running.preset.name or "?", passo), true)
+        end
+        return false
+    end
+
+    -- (!) CONJUNTO DE ITENS QUEBRADO NÃO TROCA — avisa e manda consertar primeiro.
+    --
+    -- Relato de 22/09: o jogador trocou uma peça e vendeu a anterior sem salvar o conjunto. O
+    -- jogo põe o nome do conjunto em vermelho; o addon trocava assim mesmo, mas o passo nunca
+    -- fechava com o "V", porque com peça perdida o `isEquipped` do jogo nunca fica `true`. O
+    -- resultado é o pior dos dois mundos: a roupa muda e a tela diz que não mudou.
+    --
+    -- Trocar assim não serve para nada: o conjunto **não tem como** ficar em uso enquanto pedir
+    -- uma peça que não existe mais. Então a corrente nem começa, e a mensagem diz o que fazer.
+    local problema = preset.gear and Data.GearSetProblem(preset.gear)
+    if problema then
+        local msg = format(L["%s is missing %d item(s): update the set before switching."],
+            problema.nome or "?", problema.perdidas)
+        if problema.slots then
+            msg = msg .. "  (" .. table.concat(problema.slots, ", ") .. ")"
+        end
+        ns.Print(msg)
+        -- A SAÍDA, em uma linha. Recusar sem dizer o caminho é só uma parede.
+        if problema.consertavel then
+            ns.Print(L["You are already wearing the rest of it — use /rs fix to update the set."])
+        else
+            ns.Print(L["Open the equipment manager, fix the set and save it, then switch."])
+        end
+        if report then report(msg, true) end
+        if ns.Log then
+            ns.Log.Add("recusado", {
+                motivo = "conjunto de itens com peca perdida",
+                conjunto = problema.nome or "?",
+                perdidas = problema.perdidas,
+                consertavel = problema.consertavel and "sim" or "nao",
+            })
         end
         return false
     end
