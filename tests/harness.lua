@@ -4034,10 +4034,35 @@ do
     local linha = ns.UI.DebugLastRow()
     check("o harness alcanca uma linha de verdade", linha ~= nil, true)
     if linha then
-        local _, yIcone = linha.icon:PointOffset("TOPLEFT")
+        local xIcone, yIcone = linha.icon:PointOffset("TOPLEFT")
         local _, yNome = linha.name:PointOffset("TOPLEFT")
         check("o icone encosta no titulo", -yIcone, m.top)
         check("  ou seja, logo abaixo dele", -yIcone > -yNome, true)
+
+        -- (!) O ICONE PREENCHE O BLOCO DE CAMPOS: com quatro linhas ele mede as quatro. Antes
+        -- eram 32 fixos e sobrava um vazio embaixo dele.
+        -- O NUMERO DE CAMPOS VEM DA LINHA, e nao de um 4 cravado: o conjunto desta fixture
+        -- pode ter tres, e um literal aqui faria o teste reprovar a verdade.
+        local campos = 0
+        for _, fs in ipairs(linha.lines) do
+            if fs:IsShown() then campos = campos + 1 end
+        end
+        check("a linha tem campos para medir", campos > 0, true)
+        check("o icone tem a altura do bloco de campos",
+            linha.icon:GetHeight(), math.max(m.line * campos, m.icon))
+        check("  e e quadrado", linha.icon:GetWidth(), linha.icon:GetHeight())
+
+        -- E O RECUO DO TEXTO NAO ACOMPANHA O ICONE: se acompanhasse, cards com numeros de
+        -- campos diferentes comecariam o texto em X diferentes, e o alinhamento ENTRE cards e o
+        -- que faz uma lista parecer uma lista.
+        local xCampo = linha.lines[1]:PointOffset("TOPLEFT")
+        check("o texto comeca no recuo fixo", xCampo, m.left)
+        check("  que cabe o maior icone", m.left >= m.iconX + m.iconMax, true)
+        -- (!) A CENTRALIZACAO SE AFIRMA COM IGUALDADE, e nao com `>=`. A primeira versao deste
+        -- check aceitava qualquer x a direita da margem -- inclusive o icone colado nela, que e
+        -- justamente o defeito que ele deveria pegar. A sabotagem denunciou.
+        local esperado = m.iconX + math.floor((m.iconMax - linha.icon:GetHeight()) / 2)
+        check("  e o icone menor se centraliza nessa coluna", xIcone, esperado)
     end
 
     -- COM UM CAMPO SO, QUEM MANDA E O ICONE: uma linha mede 15 e o icone 32, e sem esse piso
