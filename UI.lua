@@ -63,7 +63,17 @@ local CARD_PAD = 8            -- respiro acima do nome e abaixo da última linha
 local CARD_NAME_INK = 16      -- `GameFontNormal` a 13pt, arredondado pela caixa da fonte
 local CARD_LINE = 15          -- passo entre linhas de detalhe (11pt de tinta + 4 de respiro)
 local CARD_WARN = 24          -- a placa do aviso: altura de botão (22) mais 2 de folga
-local CARD_LEFT = 44          -- depois do ícone de 32 com a margem dele
+-- (!) O ICONE DEIXOU DE EMPURRAR O TEXTO (22/09). Pedido: *"deixar o titulo do conjunto no
+-- comeco da linha, abaixo do icone"*. Antes o icone ficava a esquerda e TODAS as linhas
+-- comecavam depois dele, 44 px adentro -- e com os rotulos ("Especializacao:", "Equipamento:")
+-- esses 44 px saiam justamente de onde o texto mais precisava.
+--
+-- Agora o icone e um distintivo no alto, o botao divide a linha dele, e titulo e campos comecam
+-- na margem. Cada linha ganhou 36 px de texto, que e mais do que parece quando o valor e um nome
+-- de conjunto comprido.
+local CARD_LEFT = 8           -- a margem: titulo e campos comecam aqui
+local CARD_ICON = 32          -- o distintivo no alto
+local CARD_ICON_GAP = 4       -- entre o icone e o titulo
 
 -- ⛑ QUANTOS CARDS INTEIROS TÊM QUE CABER SEM ROLAR. Pedido do usuário: três.
 --
@@ -75,7 +85,7 @@ local CARDS_VISIVEIS = 3
 -- 116, e dimensionar a janela por ele a deixaria 72 px mais alta **para todo mundo, o tempo
 -- todo**, por causa de um estado que é erro e é para durar pouco. Com peca perdida em todos os
 -- três conjuntos, a lista rola um pouco; e o certo é o jogador consertar, não a janela crescer.
-local CARD_MAX = CARD_PAD * 2 + CARD_NAME_INK + CARD_LINE * 4   -- 92
+local CARD_MAX = CARD_PAD * 2 + CARD_ICON + CARD_ICON_GAP + CARD_NAME_INK + CARD_LINE * 4
 local LIST_TOP = -60
 local LIST_H = CARD_MAX * CARDS_VISIVEIS + ROW_SPACING * (CARDS_VISIVEIS - 1) + 6  -- 6 = 3+3 do inset
 local LIST_BOTTOM = LIST_TOP - LIST_H
@@ -148,7 +158,7 @@ end
 ---Quanto este card mede. A lista pergunta isto por elemento, e não uma altura fixa para todos.
 local function CardHeight(preset)
     local n = #CardLines(preset)
-    local altura = CARD_PAD + CARD_NAME_INK + CARD_LINE * n + CARD_PAD
+    local altura = CARD_PAD + CARD_ICON + CARD_ICON_GAP + CARD_NAME_INK + CARD_LINE * n + CARD_PAD
     if preset.gear and ns.Data.GearSetProblem(preset.gear) then
         altura = altura + CARD_WARN
     end
@@ -211,13 +221,14 @@ local function BuildRow(row)
     end
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetSize(36, 36)
-    row.icon:SetPoint("LEFT", 4, 0)
+    row.icon:SetSize(CARD_ICON, CARD_ICON)
+    row.icon:SetPoint("TOPLEFT", CARD_LEFT, -CARD_PAD)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.name:SetPoint("TOPLEFT", 44, -8)
-    row.name:SetPoint("RIGHT", row, "RIGHT", -86, 0)
+    -- O TITULO COMECA NA MARGEM, abaixo do icone.
+    row.name:SetPoint("TOPLEFT", CARD_LEFT, -(CARD_PAD + CARD_ICON + CARD_ICON_GAP))
+    row.name:SetPoint("RIGHT", row, "RIGHT", -8, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
@@ -226,8 +237,9 @@ local function BuildRow(row)
     row.lines = {}
     for i = 1, 4 do
         local fs = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        fs:SetPoint("TOPLEFT", CARD_LEFT, -(CARD_PAD + CARD_NAME_INK + CARD_LINE * (i - 1)))
-        fs:SetPoint("RIGHT", row, "RIGHT", -86, 0)
+        fs:SetPoint("TOPLEFT", CARD_LEFT,
+            -(CARD_PAD + CARD_ICON + CARD_ICON_GAP + CARD_NAME_INK + CARD_LINE * (i - 1)))
+        fs:SetPoint("RIGHT", row, "RIGHT", -8, 0)
         fs:SetJustifyH("LEFT")
         fs:SetWordWrap(false)
         row.lines[i] = fs
@@ -238,7 +250,7 @@ local function BuildRow(row)
     -- fracos. Aqui são três: placa vermelha atrás, o "!" e a cor do texto.
     row.warn = CreateFrame("Frame", nil, row)
     row.warn:SetHeight(CARD_WARN - 2)
-    row.warn:SetPoint("LEFT", CARD_LEFT - 4, 0)
+    row.warn:SetPoint("LEFT", CARD_LEFT, 0)
     row.warn:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     row.warn.bg = row.warn:CreateTexture(nil, "BACKGROUND")
     row.warn.bg:SetAllPoints()
@@ -288,7 +300,9 @@ local function BuildRow(row)
     row.load = CreateFrame("Button", nil, row,
         "UIPanelButtonTemplate, SecureActionButtonTemplate")
     row.load:SetSize(74, 22)
-    row.load:SetPoint("RIGHT", -6, 0)
+    -- NA LINHA DO ICONE: e a unica faixa do card sem texto, e assim o botao para de disputar
+    -- altura com o titulo. De quebra, ele fica no canto onde o olho ja procura acao.
+    row.load:SetPoint("TOPRIGHT", -6, -CARD_PAD - 2)
     row.load:SetText(L["Load"])
     row.load:RegisterForClicks("AnyUp")
     row.load:SetAttribute("useOnKeyDown", false)
@@ -309,7 +323,7 @@ local function BuildRow(row)
 
     row.check = row:CreateTexture(nil, "OVERLAY")
     row.check:SetSize(16, 16)
-    row.check:SetPoint("RIGHT", -8, 0)
+    row.check:SetPoint("TOPRIGHT", -8, -CARD_PAD - 4)
     row.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
     row.check:Hide()
 
@@ -419,10 +433,10 @@ local function FillRow(row, preset)
     row.warn:SetShown(problema ~= nil)
     if problema then
         row.warn:ClearAllPoints()
-        row.warn:SetPoint("LEFT", CARD_LEFT - 4, 0)
+        row.warn:SetPoint("LEFT", CARD_LEFT, 0)
         row.warn:SetPoint("RIGHT", row, "RIGHT", -6, 0)
-        row.warn:SetPoint("TOP", row, "TOP",
-            0, -(CARD_PAD + CARD_NAME_INK + CARD_LINE * #linhas + 2))
+        row.warn:SetPoint("TOP", row, "TOP", 0,
+            -(CARD_PAD + CARD_ICON + CARD_ICON_GAP + CARD_NAME_INK + CARD_LINE * #linhas + 2))
         row.warn.text:SetText("|cffff5a52!|r  " .. format(L["%s: %d item(s) missing"],
             problema.nome or "?", problema.perdidas))
         row.fix.action = ns.Data.GearFixAction(preset)
@@ -1220,6 +1234,7 @@ end
 function UI.DebugCardMetrics()
     return {
         pad = CARD_PAD, name = CARD_NAME_INK, line = CARD_LINE, warn = CARD_WARN,
+        icon = CARD_ICON, iconGap = CARD_ICON_GAP, left = CARD_LEFT,
         cardMax = CARD_MAX, visiveis = CARDS_VISIVEIS, spacing = ROW_SPACING,
         listH = LIST_H, listTop = LIST_TOP, listBottom = LIST_BOTTOM,
         stripY = WARN_STRIP_Y, stripH = WARN_STRIP_H, footer = TEMPLATE_FOOTER,
