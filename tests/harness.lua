@@ -355,6 +355,10 @@ function CreateScrollBoxListLinearView()
     local view = {}
     function view.SetVirtualized() end
     function view.SetElementExtent() end
+    -- ALTURA POR ELEMENTO. O stub GUARDA a funcao em vez de engolir: com ela guardada, o teste
+    -- consegue perguntar quanto mede um card -- que e a unica parte da geometria do card que da
+    -- para conferir em disco, e e a que muda quando alguem mexe nos campos.
+    function view.SetElementExtentCalculator(_, fn) view.__extent = fn end
     function view.SetPadding() end
     function view.SetElementInitializer(_, _, fn) view.__init = fn end
     return view
@@ -3948,9 +3952,19 @@ do
     check("vestindo outra coisa, leva ao gerenciador", ns.Data.GearFixAction(quebrado), "manager")
     state.wornPieces = { [3] = 12 }
 
+    -- E O BOTAO CARREGAR FICA APAGADO. Pedido literal do usuario: *"se tiver com erro de
+    -- equipamentos, o botao de carregar fica indisponivel para trocar"*. E a mesma regra que ele
+    -- ja tinha dado para a restricao de spec: botao que aceita clique e depois responde "nao
+    -- deu" e pior que botao apagado.
+    check("com peca perdida, Carregar fica bloqueado",
+        ns.Data.LoadBlockedReason(quebrado) ~= nil, true)
+    check("  e o motivo diz quantas pecas faltam",
+        ns.Data.LoadBlockedReason(quebrado):find("2", 1, true) ~= nil, true)
+
     -- Conjunto sao: o botao continua sendo o de carregar.
     state.lostItems = 0
     check("conjunto inteiro nao muda o botao", ns.Data.GearFixAction(quebrado), nil)
+    check("e com o conjunto inteiro, Carregar volta", ns.Data.LoadBlockedReason(quebrado), nil)
     state.lostItems = 2
 
     -- Conjunto inteiro: nenhum problema, nenhuma recusa.
@@ -3962,6 +3976,44 @@ do
         if not ns.Data.IsApplying() then break end
         AdvanceClock(60); RunTimers(999)
     end
+end
+
+
+--------------------------------------------------------------------------------
+-- O CARD DA LISTA: a altura acompanha os campos que o conjunto define
+--
+-- Geometria e aritmetica e se confere em disco. Reservar quatro linhas sempre deixaria tres
+-- vazias num conjunto so de itens, e espaco guardado para conteudo que nao existe e o que mais
+-- faz uma janela parecer quebrada.
+--------------------------------------------------------------------------------
+do
+    print("")
+    print("-- card da lista: altura por conteudo")
+
+    local m = ns.UI.DebugCardMetrics()
+    local base = m.pad * 2 + m.name
+
+    state.lostItems = 0
+    state.wornPieces = nil
+
+    local soItens = { name = "So itens", gear = 3 }
+    local tudo = { name = "Tudo", spec = 2, talent = 10, gear = 3, transmog = 71 }
+
+    check("uma linha: base + um passo", ns.UI.DebugCardHeight(soItens), base + m.line)
+    check("quatro linhas: base + quatro passos", ns.UI.DebugCardHeight(tudo), base + m.line * 4)
+    check("e o card de quatro e mais alto que o de uma",
+        ns.UI.DebugCardHeight(tudo) > ns.UI.DebugCardHeight(soItens), true)
+
+    -- A faixa do aviso ocupa lugar: sem somar a altura dela, ela sairia POR CIMA da ultima
+    -- linha do card, que e exatamente o tipo de colisao vertical que a skill manda travar.
+    state.lostItems = 2
+    state.wornPieces = { [3] = 12 }
+    check("com peca perdida o card cresce a faixa do aviso",
+        ns.UI.DebugCardHeight(soItens), base + m.line + m.warn)
+    check("  e a faixa cabe onde foi reservada", m.warn >= 22, true)
+
+    state.lostItems = 0
+    state.wornPieces = nil
 end
 
 

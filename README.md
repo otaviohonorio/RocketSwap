@@ -34,11 +34,12 @@ have, the game does not leave that slot empty — it **keeps whatever you are we
 "works" and you walk away with the previous role's trinket in a set built for another role, with
 nothing on screen saying so. On top of that, a set with a missing piece can never report itself as
 in use, so the step never closes. Rocket Swap refuses the swap instead, marks the preset in red
-before you click, names the missing slots, and and turns the Load button into the
-action that actually helps: **Save set** when you are already wearing the whole set except what
-went missing — the only case where saving over it fixes rather than destroys — or **Equipment
-Manager**, which opens the game's own manager on the right tab so you can fix it there. Same from
-chat with `/rs fix`.
+before you click, names the missing slots, and The Load button goes dark — a button that
+takes the click and then answers "it did not work" is worse than one that is plainly disabled —
+and the red strip carries the action that helps: **Save set** when you are already wearing the
+whole set except what went missing (the only case where saving over it fixes rather than
+destroys), or **Equipment Manager**, which opens the game's own manager on the right tab. Same
+from chat with `/rs fix`.
 
 ## How to use it
 

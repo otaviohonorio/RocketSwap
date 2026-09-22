@@ -35,10 +35,11 @@ você não tem mais, o jogo não deixa o espaço vazio — ele **mantém o que v
 A troca "dá certo" e você sai com o berloque do papel anterior num conjunto feito para outro,
 sem nada na tela dizendo isso. Somando a isso, conjunto com peça perdida nunca consegue se
 declarar em uso, então o passo nunca fecha. O Rocket Swap recusa a troca, marca o conjunto em
-vermelho antes do clique, nomeia as peças que sumiram e transforma o botão Carregar na ação que
-resolve: **Salvar conjunto** quando você já está vestindo o conjunto inteiro menos o que sumiu —
-o único caso em que salvar por cima conserta em vez de destruir — ou **Gerenciador**, que abre o
-gerenciador do próprio jogo na aba certa para você ajustar lá. Pelo chat, `/rs fix`.
+vermelho antes do clique, nomeia as peças que sumiram O botão Carregar fica apagado — botão que aceita
+o clique e depois responde "não deu" é pior que botão apagado — e a faixa vermelha carrega a
+ação que resolve: **Salvar conjunto** quando você já está vestindo o conjunto inteiro menos o
+que sumiu (o único caso em que salvar por cima conserta em vez de destruir), ou **Gerenciador**,
+que abre o gerenciador do próprio jogo na aba certa. Pelo chat, `/rs fix`.
 
 ## Como se usa
 

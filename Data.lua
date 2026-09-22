@@ -586,6 +586,36 @@ function Data.SaveGearSet(setID)
     return ok
 end
 
+---Por que o botão Carregar está apagado, ou `nil` se ele pode ser clicado.
+---
+---(!) A REGRA VIVE AQUI, e não dentro do desenho da linha. Ela já morou lá, e a sabotagem
+---mostrou o custo: desligar a linha que apagava o botão **não reprovava nada**, porque nenhum
+---teste alcança um widget. Regra que decide comportamento não pode morar onde só o olho vê.
+---
+---São dois motivos, e a ordem importa: peça perdida primeiro, porque ela vale para qualquer
+---conjunto, e a restrição de especialização depois, porque ela só vale para conjunto que troca
+---de spec — apagar por causa dela um conjunto que só mexe em itens seria punir o inocente.
+---@return string|nil motivo
+function Data.LoadBlockedReason(preset)
+    if not preset then return nil end
+
+    local problema = preset.gear and Data.GearSetProblem(preset.gear)
+    if problema then
+        return format(
+            L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."],
+            problema.nome or "?", problema.perdidas)
+    end
+
+    if preset.spec ~= nil and preset.spec ~= Data.GetCurrentSpecIndex() then
+        local pode, motivo = Data.CanChangeSpec()
+        if not pode then
+            return motivo or L["the game refused to change specialization now; wait a few seconds."]
+        end
+    end
+
+    return nil
+end
+
 ---Que ação o botão da linha deve oferecer: nenhuma mudança, salvar, ou abrir o gerenciador.
 ---
 ---Vive aqui, e não na UI, por duas razões: a decisão é sobre **dado do jogo**, não sobre pixel;
