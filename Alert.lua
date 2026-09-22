@@ -6,6 +6,18 @@
 --   3. No convite da fila de PvP, o mesmo resumo — e ali ele vale mais: dentro da partida a
 --      restrição de addon fecha a troca do começo ao fim, então o convite é a última janela.
 --
+-- ⛑ O AVISO 3 É SÓ DE PvP, E O RÓTULO TEM QUE DIZER ISSO (22/09). Ele pendura em
+-- `UPDATE_BATTLEFIELD_STATUS` e lê `GetBattlefieldStatus`, que cobrem **campo de batalha e
+-- arena, e nada mais**. Fila de PvE é outro sistema inteiro (`LFG_PROPOSAL_SHOW` /
+-- `GetLFGProposal`) e não passa por aqui.
+--
+-- O usuário perguntou exatamente isso ao ler "Resumo quando a fila chamar": *"é para PvP certo?
+-- ou vai funcionar para outros localizadores também?"*. Rótulo que levanta essa pergunta já
+-- falhou — por isso todos passaram a dizer **fila de PvP**.
+--
+-- E a assimetria não é esquecimento: em masmorra você AINDA pode trocar depois de entrar, então
+-- o convite não é a última janela como é na arena. Estender para PvE é possível; só vale menos.
+--
 -- O MODO DE FALHA DESTE ARQUIVO NÃO É ERRO DE LUA — é o usuário desligar porque encheu o saco.
 -- O critério de aceitação é: quem fez tudo certo por duas semanas viu o addon zero vezes.
 -- Daí as quatro comportas antes de qualquer pixel:
@@ -518,7 +530,7 @@ end
 ---gastar uma frase explicando. Sem o nome, a frase genérica.
 function Alert.ShowQueueSummary(mapa, teamSize)
     local resumo = Alert.Summary()
-    local titulo = L["Queue is up — check before you enter"]
+    local titulo = L["PvP queue is up — check before you enter"]
     if type(mapa) == "string" and mapa ~= "" then
         if type(teamSize) == "number" and teamSize > 0 then
             titulo = format("%s (%dv%d)", mapa, teamSize, teamSize)
@@ -527,7 +539,7 @@ function Alert.ShowQueueSummary(mapa, teamSize)
         end
     end
 
-    ns.Print(L["queue is up:"] .. " " .. resumo)
+    ns.Print(L["PvP queue is up:"] .. " " .. resumo)
 
     if StaticPopup_Show then
         local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",

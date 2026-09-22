@@ -951,7 +951,7 @@ local function BuildToggles()
         GameTooltip:AddLine(L["When the leader starts one, it prints your specialization, talent loadout and gear set — so you can confirm before the pull."],
             0.8, 0.8, 0.8, true)
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(L["Queue pop:"], 1, 0.82, 0)
+        GameTooltip:AddLine(L["PvP queue pop:"], 1, 0.82, 0)
         GameTooltip:AddLine(L["When the arena or battleground invite shows up, it prints the same summary — the last moment when you can still fix the build."],
             0.8, 0.8, 0.8, true)
         GameTooltip:AddLine(" ")
@@ -1000,7 +1000,7 @@ local function BuildToggles()
     -- ⚑ 24, o vão de DENTRO do grupo, e não os 34 da troca de assunto: as duas caixas dizem a
     -- mesma coisa ("mostra o meu setup"), mudando só o gatilho. Pôr 34 aqui sugeriria que o
     -- convite de fila é outro assunto, e o olho agruparia errado.
-    strip.queue = Toggle(-112, L["Show my setup when the queue pops"], "queuePop")
+    strip.queue = Toggle(-112, L["Show my setup when a PvP queue pops"], "queuePop")
 
     frame.toggles = strip
 end
