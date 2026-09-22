@@ -43,6 +43,10 @@ local HOLD = 3
 -- estava acompanhando já viu cada um fechar. O que ainda falta comunicar é uma coisa só, e de
 -- longe: **acabou, e deu certo**. Uma linha grande diz isso melhor que quatro linhas de detalhe.
 --
+-- E é **só a frase**. Uma versão anterior deixava "Trocando para <conjunto>" embaixo dela, e o
+-- usuário apontou o óbvio: nessa altura já trocou, então a linha estava no tempo errado —
+-- anunciava como presente o que tinha acabado de virar passado.
+--
 -- SÓ NO SUCESSO. Se algum passo falhou, o painel continua mostrando a lista e fica até o
 -- jogador fechar: comemorar por cima de um passo que não deu seria o pior desfecho possível.
 --
@@ -199,12 +203,6 @@ local function Build()
     frame.shout:SetTextColor(1, 0.82, 0)
     frame.shout:Hide()
 
-    frame.done = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    frame.done:SetPoint("TOP", frame.shout, "BOTTOM", 0, -4)
-    frame.done:SetWidth(WIDTH - PAD * 2)
-    frame.done:SetJustifyH("CENTER")
-    frame.done:Hide()
-
     frame.close = CreateFrame("Button", nil, frame)
     frame.close:SetSize(14, 14)
     frame.close:SetPoint("TOPRIGHT", -4, -4)
@@ -255,9 +253,8 @@ end
 ---As duas caras do painel: o relatório (enquanto troca, e quando falha) e o grito (quando
 ---termina bem). Uma esconde a outra inteira — sobrepor as duas deixaria o grito ilegiível por
 ---cima das linhas de passo.
-local function ShowShout(frame_, mostrar, nome)
+local function ShowShout(frame_, mostrar)
     frame_.shout:SetShown(mostrar)
-    frame_.done:SetShown(mostrar)
     frame_.trilho:SetShown(not mostrar)
     frame_.clock:SetShown(not mostrar)
     frame_.title:SetShown(not mostrar)
@@ -266,7 +263,6 @@ local function ShowShout(frame_, mostrar, nome)
     end
     if mostrar then
         frame_.shout:SetText(SHOUT)
-        frame_.done:SetText(format(L["Switching to %s"], nome or "?"))
     end
 end
 
@@ -303,8 +299,8 @@ function Progress.Refresh()
 
     -- TERMINOU E DEU CERTO: o painel troca de conteúdo pelos três segundos que lhe restam.
     if frame.shouting then
-        ShowShout(frame, true, info.preset and info.preset.name)
-        frame:SetHeight(PAD * 2 + 44)
+        ShowShout(frame, true)
+        frame:SetHeight(PAD * 2 + 26)
         if not frame:IsShown() then frame:Show() end
         return
     end
