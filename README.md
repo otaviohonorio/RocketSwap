@@ -29,6 +29,15 @@ the game refuses to start a specialization change while another cast is in fligh
 gap between them. The specialization step now waits for the in-flight cast to clear before
 asking. Diagnosed from the addon's own diary, not from a guess.
 
+**A gear set missing an item does not switch.** When a saved set asks for a piece you no longer
+have, the game does not leave that slot empty — it **keeps whatever you are wearing**. So the swap
+"works" and you walk away with the previous role's trinket in a set built for another role, with
+nothing on screen saying so. On top of that, a set with a missing piece can never report itself as
+in use, so the step never closes. Rocket Swap refuses the swap instead, marks the preset in red
+before you click, names the missing slots, and offers `/rs fix` when it is safe — that is, when
+you are already wearing the whole set except what went missing, which is the only case where
+saving over it means fixing it rather than destroying it.
+
 ## How to use it
 
 | Command | What it does |
