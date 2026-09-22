@@ -113,3 +113,5 @@ L["%s updated with what you are wearing."] = "%s updated with what you are weari
 L["nothing to fix: no gear set is missing items you are wearing."] = "nothing to fix: no gear set is missing items you are wearing."
 L["updates a broken gear set with what you are wearing"] = "updates a broken gear set with what you are wearing"
 L["%s: %d item(s) missing"] = "%s: %d item(s) missing"
+L["Save set"] = "Save set"
+L["Equipment Manager"] = "Equipment Manager"

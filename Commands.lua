@@ -25,7 +25,9 @@ commands["fix"] = function()
             elseif problema then
                 ns.Print(format(L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."],
                     problema.nome or "?", problema.perdidas))
+                -- LEVA, em vez de explicar onde fica. O jogador está no meio de outra coisa.
                 ns.Print(L["Open the equipment manager, fix the set and save it, then switch."])
+                ns.Data.OpenEquipmentManager()
             end
         end
     end

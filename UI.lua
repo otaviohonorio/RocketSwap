@@ -164,7 +164,23 @@ local function BuildRow(row)
     row.load:RegisterForClicks("AnyUp")
     row.load:SetAttribute("useOnKeyDown", false)
     row.load:SetScript("PostClick", function(self)
-        UI.Load(self:GetParent().preset)
+        local preset = self:GetParent().preset
+        -- (!) O BOTÃO QUE NÃO PODE CARREGAR VIRA O QUE CONSERTA. Com peça perdida, "Carregar" é
+        -- recusado de qualquer jeito — deixar o rótulo ali seria oferecer uma ação que não
+        -- acontece. Então o botão passa a ser a única ação útil naquele estado, e o jogador
+        -- resolve sem sair da janela nem decorar onde fica o gerenciador.
+        if self.fixAction == "save" then
+            local problema = preset and preset.gear and ns.Data.GearSetProblem(preset.gear)
+            if problema and problema.consertavel and ns.Data.SaveGearSet(preset.gear) then
+                ns.Print(format(L["%s updated with what you are wearing."], problema.nome or "?"))
+            end
+            UI.Refresh()
+            return
+        elseif self.fixAction == "manager" then
+            ns.Data.OpenEquipmentManager()
+            return
+        end
+        UI.Load(preset)
     end)
 
     -- BOTÃO APAGADO TEM QUE DIZER POR QUÊ, senão ele é só um botão quebrado. O motivo vem do
@@ -297,6 +313,21 @@ local function FillRow(row, preset)
     -- SÓ VALE PARA CONJUNTO QUE TROCA DE SPEC. Um conjunto que só mexe em itens não tem por que
     -- ficar bloqueado por uma restrição de especialização, e desabilitar todos seria punir o
     -- inocente — a regra é a MESMA que o passo aplica, e por isso as duas não podem divergir.
+    -- COM PEÇA PERDIDA, CARREGAR NÃO É A AÇÃO: a corrente recusa. O botão assume a ação que
+    -- resolve — salvar o conjunto, quando isso é seguro, ou abrir o Gerenciador de Equipamento,
+    -- quando não é. Levar é melhor que explicar onde fica.
+    if problema then
+        row.load.fixAction = ns.Data.GearFixAction(preset)
+        row.load:SetText(problema.consertavel and L["Save set"] or L["Equipment Manager"])
+        row.load:SetEnabled(true)
+        row.load.blockedReason = nil
+        row.load:SetShown(true)
+        row.selected:SetShown(selection ~= nil and selection:IsElementDataSelected(preset))
+        return
+    end
+    row.load.fixAction = nil
+    row.load:SetText(L["Load"])
+
     local precisaTrocarSpec = preset.spec ~= nil
         and preset.spec ~= ns.Data.GetCurrentSpecIndex()
 
