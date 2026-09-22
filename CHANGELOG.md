@@ -1,10 +1,10 @@
-# Rocket Swap 0.35.0
+# Rocket Swap 0.35.1
 
 - **The preset list is now a card.** Each field gets its own labelled line — Specialization,
   Talents, Gear, Appearance — instead of one run-on line with dots between values. The card is
   only as tall as the fields the preset actually defines, and the list is sized so three full
-  presets are visible without scrolling. The icon sits at the top and the title starts at the
-  margin below it, so every line gets the full width of the card.
+  presets are visible without scrolling. The name gets the first line to itself and the icon sits
+  beside the fields.
 - **A gear set missing an item no longer switches.** The game does not leave the empty slot alone
   — it keeps whatever you are wearing, so the swap "works" and you end up with the previous
   role's piece in a set built for another one. And such a set can never report itself as in use,
