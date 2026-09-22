@@ -40,7 +40,10 @@ ns.UI = UI
 -- com a borda (a arte terminava em 500 com janela de 520, e termina em 600 com janela de 620).
 -- Dividir o ganho entre as duas colunas obrigaria a recalcular as duas, e a da direita não
 -- estava apertada — quem estava era a lista, que agora mostra um card e não uma linha.
-local WIDTH, HEIGHT = 620, 540
+-- A altura é CALCULADA mais abaixo, quando `LIST_BOTTOM` existe: janela e lista deixaram de ser
+-- dois números escolhidos à parte, e passou a ser a lista que manda no tamanho da janela.
+local WIDTH = 620
+local HEIGHT
 local LIST_W = 360            -- largura externa do inset da lista: x 4..364
 local GUTTER = 20             -- calha entre colunas (MountJournal)
 local COL_X = 384             -- borda esquerda da ARTE da coluna direita
@@ -61,6 +64,30 @@ local CARD_NAME_INK = 16      -- `GameFontNormal` a 13pt, arredondado pela caixa
 local CARD_LINE = 15          -- passo entre linhas de detalhe (11pt de tinta + 4 de respiro)
 local CARD_WARN = 24          -- a placa do aviso: altura de botão (22) mais 2 de folga
 local CARD_LEFT = 44          -- depois do ícone de 32 com a margem dele
+
+-- ⛑ QUANTOS CARDS INTEIROS TÊM QUE CABER SEM ROLAR. Pedido do usuário: três.
+--
+-- O inset da lista tinha altura FIXA (de -60 a -300, 240 px) e não acompanhava a janela — por
+-- isso aumentar `HEIGHT` na rodada anterior não deu um pixel a mais de lista. A altura agora é
+-- DERIVADA do card mais alto, que é o de quatro campos, e o resto da janela desce junto.
+local CARDS_VISIVEIS = 3
+-- O card de QUATRO CAMPOS, sem a faixa de aviso — e a escolha é deliberada. Com a faixa ele mede
+-- 116, e dimensionar a janela por ele a deixaria 72 px mais alta **para todo mundo, o tempo
+-- todo**, por causa de um estado que é erro e é para durar pouco. Com peca perdida em todos os
+-- três conjuntos, a lista rola um pouco; e o certo é o jogador consertar, não a janela crescer.
+local CARD_MAX = CARD_PAD * 2 + CARD_NAME_INK + CARD_LINE * 4   -- 92
+local LIST_TOP = -60
+local LIST_H = CARD_MAX * CARDS_VISIVEIS + ROW_SPACING * (CARDS_VISIVEIS - 1) + 6  -- 6 = 3+3 do inset
+local LIST_BOTTOM = LIST_TOP - LIST_H
+-- A faixa de Avisos começa logo abaixo do inset, com a mesma folga de 4 que ela sempre teve.
+local WARN_STRIP_Y = LIST_BOTTOM - 4
+
+-- A conta fechada da janela, herdada da versão anterior e agora ancorada na lista:
+-- faixa de Avisos (142 de conteúdo) + o rodapé de 26 que o `ButtonFrameTemplate` reserva,
+-- mais os 4 de folga que a janela sempre teve.
+local WARN_STRIP_H = 142
+local TEMPLATE_FOOTER = 26
+HEIGHT = -WARN_STRIP_Y + WARN_STRIP_H + TEMPLATE_FOOTER + 4
 local FIELD_W = 200           -- combos (o dropdown de loadout de talentos usa 200)
 local NAME_W = 211            -- EditBox: a arte termina em 500, alinhada com a dos combos
 local GROUP_STEP = 50         -- rótulo (15) + combo (25) + respiro (10)
@@ -864,8 +891,8 @@ end
 ---está acontecendo, não uma promessa.
 local function BuildToggles()
     local strip = CreateFrame("Frame", nil, frame)
-    strip:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -304)
-    strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -304)
+    strip:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, WARN_STRIP_Y)
+    strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, WARN_STRIP_Y)
     -- 142 = a última caixa termina em −136, mais 6 de respiro. Era 86 com duas caixas, 118 com
     -- a sub-opção de modo guerra (12/09) e 142 com a do convite de fila (18/09). Altura fixa que
     -- não acompanha o conteúdo é o defeito que a faixa transbordando teria produzido em silêncio.
@@ -1008,8 +1035,8 @@ local function Create()
     -- de LISTA, e sob um formulário ele compete com a arte dos combos.
     if frame.Inset then
         frame.Inset:ClearAllPoints()
-        frame.Inset:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -60)
-        frame.Inset:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 4 + LIST_W, -300)
+        frame.Inset:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, LIST_TOP)
+        frame.Inset:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 4 + LIST_W, LIST_BOTTOM)
     end
     local host = frame.Inset or frame
 
@@ -1128,7 +1155,12 @@ function UI.DebugCardHeight(preset)
 end
 
 function UI.DebugCardMetrics()
-    return { pad = CARD_PAD, name = CARD_NAME_INK, line = CARD_LINE, warn = CARD_WARN }
+    return {
+        pad = CARD_PAD, name = CARD_NAME_INK, line = CARD_LINE, warn = CARD_WARN,
+        cardMax = CARD_MAX, visiveis = CARDS_VISIVEIS, spacing = ROW_SPACING,
+        listH = LIST_H, listTop = LIST_TOP, listBottom = LIST_BOTTOM,
+        stripY = WARN_STRIP_Y, height = HEIGHT, width = WIDTH,
+    }
 end
 
 function UI.DebugToggles()
