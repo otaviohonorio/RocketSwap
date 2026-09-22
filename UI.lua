@@ -216,7 +216,14 @@ end
 local function ArmOutfit(button, preset)
     if InCombatLockdown() then return end
 
-    local index = preset and preset.transmog and ns.Data.OutfitIndex(preset.transmog)
+    -- (!) CONJUNTO QUEBRADO NÃO ARMA A AÇÃO SEGURA. A ação `outfit` roda DENTRO do clique, antes
+    -- de qualquer Lua nosso — então recusar a troca no `Data.Apply` chegaria tarde para ela, e o
+    -- jogador ficaria com a roupa trocada e nada mais. Desarmar aqui é o único ponto em que dá
+    -- para impedir a aparência de ir sozinha.
+    local quebrado = preset and preset.gear and ns.Data.GearSetProblem(preset.gear)
+
+    local index = not quebrado and preset and preset.transmog
+        and ns.Data.OutfitIndex(preset.transmog)
     if index then
         button:SetAttribute("type", "outfit")
         button:SetAttribute("outfit-index", index)
@@ -246,6 +253,18 @@ local function FillRow(row, preset)
     -- UM canal por fato: a barra dourada diz "selecionado", o slot do botão diz "aplicado".
     -- A versão anterior também tingia o nome, e dourado-contra-quase-branco é distinção que
     -- ninguém lê — dois sinais para o mesmo fato brigando com a barra de seleção.
+    -- O conjunto quebrado se anuncia NA LINHA, antes de qualquer clique: é o mesmo sinal que o
+    -- gerenciador de equipamento do jogo dá (nome em vermelho), e é o aviso que o usuário pediu
+    -- — *"a gente consegue antes de trocar, avisar isso"*.
+    local problema = preset.gear and ns.Data.GearSetProblem(preset.gear)
+    if problema then
+        row.detail:SetText(format(L["%s is missing %d item(s): update the set before switching."],
+            problema.nome or "?", problema.perdidas))
+        row.detail:SetTextColor(1, 0.35, 0.35)
+    else
+        row.detail:SetTextColor(0.62, 0.62, 0.66)
+    end
+
     local loaded = ns.Data.IsLoaded(preset)
     row.check:SetShown(loaded)
     row.load:SetShown(not loaded)
