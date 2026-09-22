@@ -99,8 +99,21 @@ commands["warn"] = function(rest)
         return
     end
 
-    ns.db.warn = ns.db.warn == false
-    ns.Print(ns.db.warn and L["gear warning on."] or L["gear warning off."])
+    -- `/rs warn` sem argumento mexe nos DOIS, que e o que quem digita o comando curto espera.
+    -- `/rs warn pve` e `/rs warn pvp` mexem num so.
+    local qual = (rest or ""):lower():gsub("%s", "")
+    if qual == "pve" then
+        ns.db.warnPvE = ns.db.warnPvE == false
+        ns.Print(ns.db.warnPvE and L["gear warning on."] or L["gear warning off."])
+    elseif qual == "pvp" then
+        ns.db.warnPvP = ns.db.warnPvP == false
+        ns.Print(ns.db.warnPvP and L["gear warning on."] or L["gear warning off."])
+    else
+        local novo = not (ns.db.warnPvE ~= false and ns.db.warnPvP ~= false)
+        ns.db.warnPvE, ns.db.warnPvP = novo, novo
+        ns.Print(novo and L["gear warning on."] or L["gear warning off."])
+    end
+    if ns.UI and ns.UI.RefreshToggles then ns.UI.RefreshToggles() end
     if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
 end
 

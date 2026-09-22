@@ -117,6 +117,8 @@ L["Save set"] = "Save set"
 L["Equipment Manager"] = "Equipment Manager"
 
 -- Colunas dos avisos (0.34.0)
-L["In any content"] = "In any content"
-L["PvP only"] = "PvP only"
 L["Turn on the wrong gear warning first."] = "Turn on the wrong gear warning first."
+
+-- Colunas dos avisos por conteudo (0.35.0)
+L["PvE"] = "PvE"
+L["PvP"] = "PvP"

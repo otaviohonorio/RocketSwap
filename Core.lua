@@ -15,7 +15,15 @@ ns.defaults = {
 
     -- Os dois avisos, ligados por padrao: eles sao o que o addon faz por quem nunca criar
     -- um conjunto. Desligaveis por /rs warn e /rs ready.
-    warn = true,          -- equipamento errado para o conteudo
+    -- (!) UM POR CONTEXTO (22/09). Era uma chave so (`warn`) para os dois conteudos, e o
+    -- pedido foi separar: *"tem como separar os avisos para PVP e PVE?"*. Faz sentido porque as
+    -- duas situacoes nao andam juntas -- quem faz mitica+ toda noite e PvP de vez em quando quer
+    -- o aviso ligado num e calado no outro, e com uma chave so tinha que escolher.
+    --
+    -- A chave velha continua lida uma vez, na migracao (ver `Core.lua`, ADDON_LOADED): quem
+    -- tinha desligado o aviso nao pode ver ele voltar sozinho.
+    warnPvE = true,       -- equipamento de PvP em masmorra ou raide
+    warnPvP = true,       -- equipamento de PvE em arena ou campo de batalha
     readyCheck = true,    -- resumo do que voce esta usando, no ready check
     queuePop = true,      -- o mesmo resumo quando a fila de PvP chama (convite na tela)
 
@@ -161,6 +169,17 @@ function handlers:ADDON_LOADED(addon)
 
     -- SavedVariables so existem a partir daqui.
     RocketSwapDB = RocketSwapDB or {}
+    -- (!) MIGRACAO DA CHAVE UNICA `warn` PARA AS DUAS POR CONTEXTO (0.35.0).
+    --
+    -- Roda ANTES dos defaults, de proposito: depois deles, `warnPvE`/`warnPvP` ja teriam nascido
+    -- `true` e a escolha de quem tinha DESLIGADO o aviso estaria perdida -- uma opcao que volta
+    -- sozinha e a pior forma de quebrar confianca numa opcao.
+    if RocketSwapDB and RocketSwapDB.warn ~= nil then
+        if RocketSwapDB.warnPvE == nil then RocketSwapDB.warnPvE = RocketSwapDB.warn end
+        if RocketSwapDB.warnPvP == nil then RocketSwapDB.warnPvP = RocketSwapDB.warn end
+        RocketSwapDB.warn = nil
+    end
+
     for k, v in pairs(ns.defaults) do
         if RocketSwapDB[k] == nil then
             RocketSwapDB[k] = type(v) == "table" and CopyTable(v) or v

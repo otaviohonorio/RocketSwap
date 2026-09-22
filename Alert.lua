@@ -117,7 +117,7 @@ end
 ---
 ---O caminho ate o aviso tem SEIS portas, e cada uma fecha em silencio:
 ---
----  1. `ns.db.warn == false`            -- desligado pelo jogador
+---  1. `warnPvE`/`warnPvP` desligado    -- desligado pelo jogador, para ESTE contexto
 ---  2. `Alert.Context()` devolve nil    -- o addon nao opina aqui
 ---  3. `CanFix()` devolve false         -- combate, ou restricao de addon ativa
 ---  4. `Gear.PatternReady()` false      -- a deteccao nao funciona neste idioma
@@ -174,7 +174,8 @@ function Alert.Diagnose()
         emCombate = InCombatLockdown() and true or false,
         restricoes = restricoes,
         podeConsertar = CanFix(),
-        avisoLigado = not (ns.db and ns.db.warn == false),
+        avisoPvE = not (ns.db and ns.db.warnPvE == false),
+        avisoPvP = not (ns.db and ns.db.warnPvP == false),
         -- A SÉTIMA PORTA, e ela é nova: com Modo Guerra ligado o aviso só sai se o jogador tiver
         -- marcado a opção. Sem esta linha o retrato diria "tudo pronto para avisar" e o aviso não
         -- sairia — que é o tipo de silêncio que este diagnóstico existe para não ter.
@@ -298,11 +299,24 @@ local function PresetFor(context)
     return nil
 end
 
+---O aviso de equipamento esta ligado PARA ESTE contexto?
+---
+---(!) Uma chave por contexto desde 0.35.0. Quem faz mitica+ toda noite e PvP de vez em quando
+---quer o aviso ligado num e calado no outro; com `warn` unico tinha que escolher os dois juntos.
+---Modo Guerra e mundo aberto com PvP ligado, entao ele segue a chave de PvP -- mais a comporta
+---propria (`warnWarMode`), que e opt-in por pedido de 12/09.
+local function WarnEnabled(context)
+    if context == "pve" then return ns.db.warnPvE ~= false end
+    if context == "pvp" or context == "warmode" then return ns.db.warnPvP ~= false end
+    return false
+end
+
 function Alert.Check(reason)
-    if not ns.db or ns.db.warn == false then return end
+    if not ns.db then return end
 
     local context = Alert.Context()
     if not context then return end
+    if not WarnEnabled(context) then return end
 
     -- ⚑ O AVISO DE MODO GUERRA É OPT-IN (`warnWarMode`, padrão desligado). Pedido de 12/09:
     -- *"tira o alerta dos itens de pvp em mundo aberto no war mode, ou transforma em opção por
