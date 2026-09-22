@@ -35,12 +35,32 @@ ns.UI = UI
 -- dentro dela (142 de altura), e o rodapé que o `ButtonFrameTemplate` reserva come 26 px do fundo
 -- ⇒ 304 + 142 + 26 = 472, mais os mesmos 4 px de folga que a janela de 420 já tinha.
 -- (Era 118/452 com três caixas; a do convite de fila, 18/09, trouxe a quarta.)
-local WIDTH, HEIGHT = 520, 476
-local LIST_W = 260            -- largura externa do inset da lista: x 4..264
+-- ⛑ A LARGURA SUBIU DE 520 PARA 620, e os 100 px vão INTEIROS para a lista. A coluna da
+-- direita fica pixel a pixel como estava: `FIELD_W` e `NAME_W` são medidas absolutas alinhadas
+-- com a borda (a arte terminava em 500 com janela de 520, e termina em 600 com janela de 620).
+-- Dividir o ganho entre as duas colunas obrigaria a recalcular as duas, e a da direita não
+-- estava apertada — quem estava era a lista, que agora mostra um card e não uma linha.
+local WIDTH, HEIGHT = 620, 540
+local LIST_W = 360            -- largura externa do inset da lista: x 4..364
 local GUTTER = 20             -- calha entre colunas (MountJournal)
-local COL_X = 284             -- borda esquerda da ARTE da coluna direita
-local ROW_HEIGHT = 44         -- GearSetButtonTemplate: a lista de conjuntos da própria Blizzard
+local COL_X = 384             -- borda esquerda da ARTE da coluna direita
 local ROW_SPACING = 2
+
+-- ⛑ A LINHA VIROU CARD, e por isso a altura dela deixou de ser constante.
+--
+-- Pedido do usuário: *"Spec: Tal (quebra linha) Talento: tal (quebra linha) Equipamento: tal"*.
+-- Antes tudo isso era UMA linha com pontos separando — `Sangue · Blood M+ · Blood · Dark` — e
+-- nela o jogador tinha que saber de cor qual valor era o quê. Com rótulo por linha, não tem o
+-- que saber: está escrito.
+--
+-- A altura acompanha o que o conjunto define. Reservar quatro linhas sempre deixaria três vazias
+-- num conjunto só de itens, e espaço guardado para conteúdo que não existe é o que mais faz uma
+-- janela parecer quebrada — a mesma regra que a `Data.GetProgress` já segue ao filtrar passos.
+local CARD_PAD = 8            -- respiro acima do nome e abaixo da última linha
+local CARD_NAME_INK = 16      -- `GameFontNormal` a 13pt, arredondado pela caixa da fonte
+local CARD_LINE = 15          -- passo entre linhas de detalhe (11pt de tinta + 4 de respiro)
+local CARD_WARN = 24          -- a placa do aviso: altura de botão (22) mais 2 de folga
+local CARD_LEFT = 44          -- depois do ícone de 32 com a margem dele
 local FIELD_W = 200           -- combos (o dropdown de loadout de talentos usa 200)
 local NAME_W = 211            -- EditBox: a arte termina em 500, alinhada com a dos combos
 local GROUP_STEP = 50         -- rótulo (15) + combo (25) + respiro (10)
@@ -71,6 +91,43 @@ end
 
 ---Texto de apoio da linha: "Gélido · SBA ST · Frost". Só entra o que o conjunto define — um
 ---conjunto que não mexe em talentos não deve dar a entender que mexe.
+---As linhas do card, cada uma com rótulo próprio, na ordem em que a troca acontece.
+---
+---Só entra o que o conjunto define — mesma regra do painel de progresso. Um conjunto só de
+---itens mostra uma linha, e não quatro, das quais três diriam "(nenhum)".
+local function CardLines(preset)
+    local linhas = {}
+
+    local spec = ns.Data.GetSpecByIndex(preset.spec)
+    if spec then
+        linhas[#linhas + 1] = { L["Specialization"], spec.name }
+    end
+    if preset.talent then
+        linhas[#linhas + 1] = { L["Talents"],
+            ns.Data.LoadoutName(spec and spec.id, preset.talent) or ("#" .. preset.talent) }
+    end
+    if preset.gear then
+        linhas[#linhas + 1] = { L["Gear"],
+            ns.Data.GearSetName(preset.gear) or ("#" .. preset.gear) }
+    end
+    if preset.transmog then
+        linhas[#linhas + 1] = { L["Appearance"],
+            ns.Data.OutfitName(preset.transmog) or ("#" .. preset.transmog) }
+    end
+
+    return linhas
+end
+
+---Quanto este card mede. A lista pergunta isto por elemento, e não uma altura fixa para todos.
+local function CardHeight(preset)
+    local n = #CardLines(preset)
+    local altura = CARD_PAD + CARD_NAME_INK + CARD_LINE * n + CARD_PAD
+    if preset.gear and ns.Data.GearSetProblem(preset.gear) then
+        altura = altura + CARD_WARN
+    end
+    return altura
+end
+
 local function Subtitle(preset)
     local parts = {}
 
@@ -100,7 +157,8 @@ local function BuildRow(row)
     if row.built then return end
     row.built = true
 
-    row:SetHeight(ROW_HEIGHT)
+    -- A altura real vem de `CardHeight`, por elemento; esta é só a de partida.
+    row:SetHeight(CARD_PAD * 2 + CARD_NAME_INK + CARD_LINE)
 
     -- Sem fundo próprio: quem dá o fundo é o mármore do inset. A linha só se pinta quando
     -- está sob o mouse ou selecionada — o padrão do painel de Opções do jogo.
@@ -136,11 +194,55 @@ local function BuildRow(row)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
-    row.detail = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    row.detail:SetPoint("BOTTOMLEFT", 44, 8)
-    row.detail:SetPoint("RIGHT", row, "RIGHT", -86, 0)
-    row.detail:SetJustifyH("LEFT")
-    row.detail:SetWordWrap(false)
+    -- UMA LINHA POR CAMPO, cada uma com rótulo. Quatro vagas fixas porque são quatro campos
+    -- possíveis; as que sobram ficam escondidas, e a ALTURA do card é que acompanha (`CardHeight`).
+    row.lines = {}
+    for i = 1, 4 do
+        local fs = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        fs:SetPoint("TOPLEFT", CARD_LEFT, -(CARD_PAD + CARD_NAME_INK + CARD_LINE * (i - 1)))
+        fs:SetPoint("RIGHT", row, "RIGHT", -86, 0)
+        fs:SetJustifyH("LEFT")
+        fs:SetWordWrap(false)
+        row.lines[i] = fs
+    end
+
+    -- A FAIXA DO AVISO. Vermelho sozinho, num texto de 11pt no meio de outros textos de 11pt,
+    -- é sinal fraco demais — e a skill deste projeto é explícita: destaque se faz somando sinais
+    -- fracos. Aqui são três: placa vermelha atrás, o "!" e a cor do texto.
+    row.warn = CreateFrame("Frame", nil, row)
+    row.warn:SetHeight(CARD_WARN - 2)
+    row.warn:SetPoint("LEFT", CARD_LEFT - 4, 0)
+    row.warn:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+    row.warn.bg = row.warn:CreateTexture(nil, "BACKGROUND")
+    row.warn.bg:SetAllPoints()
+    row.warn.bg:SetColorTexture(0.75, 0.15, 0.15, 0.20)
+
+    row.warn.text = row.warn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.warn.text:SetPoint("LEFT", 6, 0)
+    row.warn.text:SetJustifyH("LEFT")
+    row.warn.text:SetWordWrap(false)
+    row.warn.text:SetTextColor(1, 0.45, 0.42)
+
+    -- O CONSERTO TEM BOTÃO PRÓPRIO, e não toma o lugar do Carregar. O usuário foi explícito
+    -- (*"se tiver com erro de equipamentos, o botão de carregar fica indisponível para trocar"*),
+    -- e é a mesma regra que ele já tinha dado para a restrição de especialização: botão que
+    -- aceita clique e depois responde "não deu" é pior que botão apagado.
+    row.fix = CreateFrame("Button", nil, row.warn, "UIPanelButtonTemplate")
+    row.fix:SetSize(112, 20)
+    row.fix:SetPoint("RIGHT", -2, 0)
+    row.fix:SetScript("OnClick", function(self)
+        local preset = row.preset
+        if self.action == "save" then
+            local problema = preset and preset.gear and ns.Data.GearSetProblem(preset.gear)
+            if problema and problema.consertavel and ns.Data.SaveGearSet(preset.gear) then
+                ns.Print(format(L["%s updated with what you are wearing."], problema.nome or "?"))
+            end
+            UI.Refresh()
+        else
+            ns.Data.OpenEquipmentManager()
+        end
+    end)
+    row.warn:Hide()
 
     -- O botão e o ✓ dividem o mesmo slot: a linha não reflui quando o conjunto passa a
     -- estar aplicado, porque o texto reserva os 86px dos dois jeitos.
@@ -164,23 +266,7 @@ local function BuildRow(row)
     row.load:RegisterForClicks("AnyUp")
     row.load:SetAttribute("useOnKeyDown", false)
     row.load:SetScript("PostClick", function(self)
-        local preset = self:GetParent().preset
-        -- (!) O BOTÃO QUE NÃO PODE CARREGAR VIRA O QUE CONSERTA. Com peça perdida, "Carregar" é
-        -- recusado de qualquer jeito — deixar o rótulo ali seria oferecer uma ação que não
-        -- acontece. Então o botão passa a ser a única ação útil naquele estado, e o jogador
-        -- resolve sem sair da janela nem decorar onde fica o gerenciador.
-        if self.fixAction == "save" then
-            local problema = preset and preset.gear and ns.Data.GearSetProblem(preset.gear)
-            if problema and problema.consertavel and ns.Data.SaveGearSet(preset.gear) then
-                ns.Print(format(L["%s updated with what you are wearing."], problema.nome or "?"))
-            end
-            UI.Refresh()
-            return
-        elseif self.fixAction == "manager" then
-            ns.Data.OpenEquipmentManager()
-            return
-        end
-        UI.Load(preset)
+        UI.Load(self:GetParent().preset)
     end)
 
     -- BOTÃO APAGADO TEM QUE DIZER POR QUÊ, senão ele é só um botão quebrado. O motivo vem do
@@ -279,7 +365,18 @@ local function FillRow(row, preset)
     ArmOutfit(row.load, preset)
 
     row.name:SetText(preset.name ~= "" and preset.name or L["Unnamed"])
-    row.detail:SetText(Subtitle(preset))
+
+    local linhas = CardLines(preset)
+    for i, fs in ipairs(row.lines) do
+        local linha = linhas[i]
+        fs:SetShown(linha ~= nil)
+        if linha then
+            -- RÓTULO e VALOR na mesma linha, com o rótulo apagado: o olho varre os valores na
+            -- vertical e só lê o rótulo quando precisa. Dois brilhos, nenhuma cor nova.
+            fs:SetText("|cff9a9a9e" .. linha[1] .. ":|r  " .. (linha[2] or "?"))
+        end
+    end
+    row:SetHeight(CardHeight(preset))
 
     local _, icon = ns.Data.GearSetName(preset.gear)
     row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -290,16 +387,19 @@ local function FillRow(row, preset)
     -- O conjunto quebrado se anuncia NA LINHA, antes de qualquer clique: é o mesmo sinal que o
     -- gerenciador de equipamento do jogo dá (nome em vermelho), e é o aviso que o usuário pediu
     -- — *"a gente consegue antes de trocar, avisar isso"*.
+    -- A FAIXA DO AVISO, ancorada abaixo da última linha que apareceu.
     local problema = preset.gear and ns.Data.GearSetProblem(preset.gear)
+    row.warn:SetShown(problema ~= nil)
     if problema then
-        -- Na LINHA cabe pouco — nome do conjunto e contagem, que já é o suficiente para o olho
-        -- parar. A explicação inteira (o espaço ficar com a peça errada) vai na dica, que tem
-        -- largura e quebra de linha.
-        row.detail:SetText(format(L["%s: %d item(s) missing"],
+        row.warn:ClearAllPoints()
+        row.warn:SetPoint("LEFT", CARD_LEFT - 4, 0)
+        row.warn:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+        row.warn:SetPoint("TOP", row, "TOP",
+            0, -(CARD_PAD + CARD_NAME_INK + CARD_LINE * #linhas + 2))
+        row.warn.text:SetText("|cffff5a52!|r  " .. format(L["%s: %d item(s) missing"],
             problema.nome or "?", problema.perdidas))
-        row.detail:SetTextColor(1, 0.35, 0.35)
-    else
-        row.detail:SetTextColor(0.62, 0.62, 0.66)
+        row.fix.action = ns.Data.GearFixAction(preset)
+        row.fix:SetText(row.fix.action == "save" and L["Save set"] or L["Equipment Manager"])
     end
 
     local loaded = ns.Data.IsLoaded(preset)
@@ -313,32 +413,14 @@ local function FillRow(row, preset)
     -- SÓ VALE PARA CONJUNTO QUE TROCA DE SPEC. Um conjunto que só mexe em itens não tem por que
     -- ficar bloqueado por uma restrição de especialização, e desabilitar todos seria punir o
     -- inocente — a regra é a MESMA que o passo aplica, e por isso as duas não podem divergir.
-    -- COM PEÇA PERDIDA, CARREGAR NÃO É A AÇÃO: a corrente recusa. O botão assume a ação que
-    -- resolve — salvar o conjunto, quando isso é seguro, ou abrir o Gerenciador de Equipamento,
-    -- quando não é. Levar é melhor que explicar onde fica.
-    if problema then
-        row.load.fixAction = ns.Data.GearFixAction(preset)
-        row.load:SetText(problema.consertavel and L["Save set"] or L["Equipment Manager"])
-        row.load:SetEnabled(true)
-        row.load.blockedReason = nil
-        row.load:SetShown(true)
-        row.selected:SetShown(selection ~= nil and selection:IsElementDataSelected(preset))
-        return
-    end
-    row.load.fixAction = nil
-    row.load:SetText(L["Load"])
-
-    local precisaTrocarSpec = preset.spec ~= nil
-        and preset.spec ~= ns.Data.GetCurrentSpecIndex()
-
-    if precisaTrocarSpec then
-        local pode, motivo = ns.Data.CanChangeSpec()
-        row.load:SetEnabled(pode)
-        row.load.blockedReason = (not pode) and motivo or nil
-    else
-        row.load:SetEnabled(true)
-        row.load.blockedReason = nil
-    end
+    -- COM PEÇA PERDIDA, CARREGAR FICA APAGADO. A corrente recusa de qualquer jeito, e a regra
+    -- é a mesma que já vale para a restrição de especialização: botão que aceita clique e depois
+    -- responde "não deu" é pior que botão apagado. Quem age é o botão da faixa vermelha.
+    -- Os dois motivos de apagar o botão saem da MESMA função (`Data.LoadBlockedReason`), que
+    -- é onde o harness alcança. Aqui sobra o desenho: apagar e guardar a frase da dica.
+    local motivo = ns.Data.LoadBlockedReason(preset)
+    row.load:SetEnabled(motivo == nil)
+    row.load.blockedReason = motivo
 
     row.selected:SetShown(selection ~= nil and selection:IsElementDataSelected(preset))
 end
@@ -940,7 +1022,10 @@ local function Create()
 
     local view = CreateScrollBoxListLinearView(0, 0, 0, 0, ROW_SPACING)
     view:SetVirtualized(false)          -- 2 a 5 itens: cria todos, não recicla
-    view:SetElementExtent(ROW_HEIGHT)   -- obrigatório com o tipo nativo "Button"
+    -- ALTURA POR ELEMENTO, e não uma para todos: cada card mede o que os campos dele pedem.
+    view:SetElementExtentCalculator(function(_, preset)
+        return CardHeight(preset)
+    end)
     view:SetElementInitializer("Button", FillRow)
     ScrollUtil.InitScrollBoxListWithScrollBar(frame.list, frame.listBar, view)
 
@@ -1033,6 +1118,17 @@ function UI.DebugMetrics()
         hold = PROGRESS_HOLD,
         states = PROGRESS_STATE,
     }
+end
+
+---Quanto mede o card de um conjunto. Geometria é aritmética e se confere em disco — duas
+---rodadas de teste in-game já foram gastas neste projeto com posição e largura, e as duas eram
+---conferveis daqui.
+function UI.DebugCardHeight(preset)
+    return CardHeight(preset)
+end
+
+function UI.DebugCardMetrics()
+    return { pad = CARD_PAD, name = CARD_NAME_INK, line = CARD_LINE, warn = CARD_WARN }
 end
 
 function UI.DebugToggles()

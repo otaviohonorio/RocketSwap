@@ -16,10 +16,15 @@ L["Specialization"] = "Especialização"
 -- ARMADILHA DE NOME: a janela de talentos do jogo, em pt-BR, chama um loadout de talentos de
 -- "equipamento" ("+ Novo equipamento"), enquanto a ficha do personagem chama um conjunto de
 -- itens de "conjunto" ("+ Novo Conjunto"). A mesma palavra para as duas coisas, em telas
--- diferentes. Aqui as duas palavras são evitadas: "Talentos" e "Itens", sem ambiguidade —
--- justamente para quem já se confunde entre as duas.
+-- diferentes. Por isso, enquanto os campos apareciam SOLTOS numa linha só separada por pontos,
+-- as duas palavras eram evitadas e o rótulo de itens era "Itens".
+--
+-- ⛑ EM 22/09 ISSO MUDOU, e a mudança de tela é que permitiu: no card os quatro rótulos ficam
+-- EMPILHADOS E VÍSIVEIS AO MESMO TEMPO. "Talentos:" e "Equipamento:" um embaixo do outro não
+-- têm como ser confundidos entre si — a ambiguidade vinha de a palavra aparecer sozinha, sem o
+-- irmão ao lado para contrastar. Pedido do usuário, e o contexto novo o sustenta.
 L["Talents"] = "Talentos"
-L["Gear"] = "Itens"
+L["Gear"] = "Equipamento"
 L["Appearance"] = "Aparência"
 
 -- "Resumo ..." nos dois, e sem "setup": os rótulos são irmãos (mesma informação, gatilho
