@@ -35,18 +35,18 @@ ns.UI = UI
 -- dentro dela (142 de altura), e o rodapé que o `ButtonFrameTemplate` reserva come 26 px do fundo
 -- ⇒ 304 + 142 + 26 = 472, mais os mesmos 4 px de folga que a janela de 420 já tinha.
 -- (Era 118/452 com três caixas; a do convite de fila, 18/09, trouxe a quarta.)
--- ⛑ A LARGURA SUBIU DE 520 PARA 620, e os 100 px vão INTEIROS para a lista. A coluna da
--- direita fica pixel a pixel como estava: `FIELD_W` e `NAME_W` são medidas absolutas alinhadas
--- com a borda (a arte terminava em 500 com janela de 520, e termina em 600 com janela de 620).
--- Dividir o ganho entre as duas colunas obrigaria a recalcular as duas, e a da direita não
--- estava apertada — quem estava era a lista, que agora mostra um card e não uma linha.
--- A altura é CALCULADA mais abaixo, quando `LIST_BOTTOM` existe: janela e lista deixaram de ser
--- dois números escolhidos à parte, e passou a ser a lista que manda no tamanho da janela.
-local WIDTH = 620
+-- (!) A LARGURA SUBIU DE 520 PARA 620 e depois para 680 (22/09), e o ganho vai INTEIRO para a
+-- lista nas duas vezes. A coluna da direita fica pixel a pixel como estava: `FIELD_W` e `NAME_W`
+-- sao medidas absolutas alinhadas com a borda, e como `COL_X` anda junto com `WIDTH`, a arte
+-- continua terminando a 20 px da direita (500 com janela de 520, 660 com janela de 680).
+--
+-- Dividir o ganho entre as duas colunas obrigaria a recalcular as duas, e a da direita nunca
+-- esteve apertada -- quem esta e a lista, que virou card e carrega um rotulo em cada linha.
+local WIDTH = 680
 local HEIGHT
-local LIST_W = 360            -- largura externa do inset da lista: x 4..364
+local LIST_W = 420            -- largura externa do inset da lista: x 4..424
 local GUTTER = 20             -- calha entre colunas (MountJournal)
-local COL_X = 384             -- borda esquerda da ARTE da coluna direita
+local COL_X = 444             -- borda esquerda da ARTE da coluna direita
 local ROW_SPACING = 2
 
 -- ⛑ A LINHA VIROU CARD, e por isso a altura dela deixou de ser constante.
@@ -1304,7 +1304,7 @@ function UI.DebugCardMetrics()
         cardMax = CARD_MAX, visiveis = CARDS_VISIVEIS, spacing = ROW_SPACING,
         listH = LIST_H, listTop = LIST_TOP, listBottom = LIST_BOTTOM,
         stripY = WARN_STRIP_Y, stripH = WARN_STRIP_H, footer = TEMPLATE_FOOTER,
-        height = HEIGHT, width = WIDTH,
+        height = HEIGHT, width = WIDTH, colX = COL_X, fieldW = FIELD_W,
     }
 end
 

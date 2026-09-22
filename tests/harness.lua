@@ -4126,6 +4126,18 @@ do
     -- jogo, mede 638.
     check("  e a janela nao passa do teto de tela pequena", m.height <= 640, true)
 
+    -- (!) E UM TETO DE LARGURA TAMBEM. A altura ja tinha o dela desde 0.34.1; a largura nao, e
+    -- ela ja subiu duas vezes num dia (520 -> 620 -> 680). O criterio e o mesmo: caber em quem
+    -- joga em 1280x720 com escala padrao, onde sobram cerca de 1024 de largura util. 760 deixa
+    -- margem para a janela nao nascer colada nas bordas.
+    check("  nem do teto de largura", m.width <= 760, true)
+
+    -- E A COLUNA DA DIREITA NAO PODE SER ESPREMIDA pelo crescimento da lista: o ganho de largura
+    -- vai todo para a lista, mas se `COL_X` nao andar junto com `WIDTH` a coluna do editor
+    -- encolhe em silencio e os combos de 200 px comecam a vazar pela borda.
+    check("  e a coluna do editor continua cabendo os combos",
+        m.width - m.colX - 20 >= 200, true)
+
     state.lostItems = 0
     state.wornPieces = nil
 end
