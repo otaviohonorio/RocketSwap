@@ -4025,6 +4025,21 @@ do
     -- campo, senao o titulo e a primeira linha se sobrepoem.
     check("os campos comecam abaixo do titulo", m.top >= m.pad + m.name, true)
 
+    -- E O ICONE ENCOSTA NO TITULO: ancorado no TOPO do bloco de campos, nao no meio dele. Ja
+    -- esteve centralizado, e com quatro campos isso o empurrava 14 px para baixo, boiando ao
+    -- lado da segunda linha.
+    if not ns.UI.IsShown() then ns.UI.Toggle() end
+    ns.UI.Refresh()
+    TickUI(0.2)
+    local linha = ns.UI.DebugLastRow()
+    check("o harness alcanca uma linha de verdade", linha ~= nil, true)
+    if linha then
+        local _, yIcone = linha.icon:PointOffset("TOPLEFT")
+        local _, yNome = linha.name:PointOffset("TOPLEFT")
+        check("o icone encosta no titulo", -yIcone, m.top)
+        check("  ou seja, logo abaixo dele", -yIcone > -yNome, true)
+    end
+
     -- COM UM CAMPO SO, QUEM MANDA E O ICONE: uma linha mede 15 e o icone 32, e sem esse piso
     -- ele vazaria o card por baixo.
     check("um campo: o icone e o piso da altura", ns.UI.DebugCardHeight(soItens), base + m.icon)
