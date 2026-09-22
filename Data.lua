@@ -1652,14 +1652,20 @@ function Data.Apply(preset, report, byClick)
     --
     -- Relato de 22/09: o jogador trocou uma peça e vendeu a anterior sem salvar o conjunto. O
     -- jogo põe o nome do conjunto em vermelho; o addon trocava assim mesmo, mas o passo nunca
-    -- fechava com o "V", porque com peça perdida o `isEquipped` do jogo nunca fica `true`. O
-    -- resultado é o pior dos dois mundos: a roupa muda e a tela diz que não mudou.
+    -- fechava com o "V", porque com peça perdida o `isEquipped` do jogo nunca fica `true`.
     --
-    -- Trocar assim não serve para nada: o conjunto **não tem como** ficar em uso enquanto pedir
-    -- uma peça que não existe mais. Então a corrente nem começa, e a mensagem diz o que fazer.
+    -- ⚠️ E O "V" QUE FALTA É O MENOR DOS PROBLEMAS. O jogo não deixa o slot vazio: ele **mantém
+    -- equipado o que já estava lá**. Ou seja, a troca "dá certo" e você sai com a peça do papel
+    -- ANTERIOR num conjunto do papel novo — o berloque de dano no conjunto de tanque — sem nada
+    -- na tela dizendo isso. Palavras do usuário: *"na troca ele mantém a atual equipada e pode
+    -- estar errado porque o usuário não salvou ainda a certa"*.
+    --
+    -- Um "V" que não aparece é confusão; uma peça errada em combate é prejuízo. Por isso a
+    -- corrente nem começa: o bloqueio existe para o jogador **confirmar e salvar** o conjunto
+    -- certo antes de trocar, e aí a troca sair de fato correta.
     local problema = preset.gear and Data.GearSetProblem(preset.gear)
     if problema then
-        local msg = format(L["%s is missing %d item(s): update the set before switching."],
+        local msg = format(L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."],
             problema.nome or "?", problema.perdidas)
         if problema.slots then
             msg = msg .. "  (" .. table.concat(problema.slots, ", ") .. ")"

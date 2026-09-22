@@ -23,7 +23,7 @@ commands["fix"] = function()
                     ns.Print(format(L["%s updated with what you are wearing."], problema.nome or "?"))
                 end
             elseif problema then
-                ns.Print(format(L["%s is missing %d item(s): update the set before switching."],
+                ns.Print(format(L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."],
                     problema.nome or "?", problema.perdidas))
                 ns.Print(L["Open the equipment manager, fix the set and save it, then switch."])
             end

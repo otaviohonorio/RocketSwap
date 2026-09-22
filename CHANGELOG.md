@@ -1,13 +1,11 @@
-# Rocket Swap 0.30.2
+# Rocket Swap 0.31.0
 
-- **Fixed the double cast when loading a preset.** Changing the appearance casts a spell, and the
-  game refuses to start a specialization change while another cast is in flight — so the first
-  attempt was always refused and the addon retried four seconds later. You saw two cast bars with
-  a dead gap between them. The specialization step now waits for the cast to clear before asking,
-  which also removes those four seconds from every swap.
-- **New floating progress panel.** It appears on its own when a swap starts, so you can see what
-  is happening without keeping the window open: which steps the preset asks for, which one is
-  running, and which have closed. The bar advances per finished step, never against a clock.
-- When everything finishes cleanly the panel turns green and says so for three seconds. If a step
-  failed it keeps the list on screen until you close it.
-- Turn the panel off with `/rs progress`.
+- **A gear set missing an item no longer switches.** The game does not leave the empty slot alone
+  — it keeps whatever you are wearing, so the swap "works" and you end up with the previous
+  role's piece in a set built for another one, with nothing saying so. And a set with a missing
+  piece can never report itself as in use, so the step never got its check mark.
+- The preset is now marked in red **before you click**, the tooltip names the missing slots and
+  explains what would go wrong.
+- `/rs fix` updates a broken set with what you are wearing — offered only when you are already
+  wearing the whole set except the missing pieces, which is the only case where saving over it
+  fixes rather than destroys.

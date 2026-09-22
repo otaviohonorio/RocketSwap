@@ -106,9 +106,10 @@ L["swap progress panel on."] = "swap progress panel on."
 L["swap progress panel off."] = "swap progress panel off."
 
 -- Conjunto de itens com peça perdida (0.31.0)
-L["%s is missing %d item(s): update the set before switching."] = "%s is missing %d item(s): update the set before switching."
+L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."] = "%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."
 L["You are already wearing the rest of it — use /rs fix to update the set."] = "You are already wearing the rest of it — use /rs fix to update the set."
 L["Open the equipment manager, fix the set and save it, then switch."] = "Open the equipment manager, fix the set and save it, then switch."
 L["%s updated with what you are wearing."] = "%s updated with what you are wearing."
 L["nothing to fix: no gear set is missing items you are wearing."] = "nothing to fix: no gear set is missing items you are wearing."
 L["updates a broken gear set with what you are wearing"] = "updates a broken gear set with what you are wearing"
+L["%s: %d item(s) missing"] = "%s: %d item(s) missing"

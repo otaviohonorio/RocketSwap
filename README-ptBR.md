@@ -30,6 +30,15 @@ barras de conjuração com um vão morto entre elas. Agora o passo de especializ
 conjuração sair do caminho antes de pedir. Diagnosticado pelo diário do próprio addon, não por
 suposição.
 
+**Conjunto de itens com peça faltando não troca.** Quando um conjunto salvo pede uma peça que
+você não tem mais, o jogo não deixa o espaço vazio — ele **mantém o que você está vestindo**.
+A troca "dá certo" e você sai com o berloque do papel anterior num conjunto feito para outro,
+sem nada na tela dizendo isso. Somando a isso, conjunto com peça perdida nunca consegue se
+declarar em uso, então o passo nunca fecha. O Rocket Swap recusa a troca, marca o conjunto em
+vermelho antes do clique, nomeia as peças que sumiram e oferece `/rs fix` quando é seguro — ou
+seja, quando você já está vestindo o conjunto inteiro menos o que sumiu, que é o único caso em
+que salvar por cima significa consertar, e não destruir.
+
 ## Como se usa
 
 | Comando | O quê |

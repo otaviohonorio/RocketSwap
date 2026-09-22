@@ -200,6 +200,24 @@ local function BuildRow(row)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(self.preset.name ~= "" and self.preset.name or L["Unnamed"], 1, 1, 1)
         GameTooltip:AddLine(Subtitle(self.preset), 0.7, 0.7, 0.7, true)
+
+        -- O PORQUÊ DO VERMELHO. Sem esta linha a pessoa vê "falta 1 item" e conclui a coisa
+        -- errada — que a troca vai ficar incompleta. O estrago real é outro: o espaço fica com
+        -- a peça que já estava, que pode ser a do papel anterior.
+        local problema = self.preset.gear and ns.Data.GearSetProblem(self.preset.gear)
+        if problema then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(format(L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."],
+                problema.nome or "?", problema.perdidas), 1, 0.35, 0.35, true)
+            if problema.slots then
+                GameTooltip:AddLine(table.concat(problema.slots, ", "), 0.8, 0.6, 0.6, true)
+            end
+            GameTooltip:AddLine(problema.consertavel
+                and L["You are already wearing the rest of it — use /rs fix to update the set."]
+                or L["Open the equipment manager, fix the set and save it, then switch."],
+                0.7, 0.7, 0.7, true)
+        end
+
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", GameTooltip_Hide)
@@ -258,7 +276,10 @@ local function FillRow(row, preset)
     -- — *"a gente consegue antes de trocar, avisar isso"*.
     local problema = preset.gear and ns.Data.GearSetProblem(preset.gear)
     if problema then
-        row.detail:SetText(format(L["%s is missing %d item(s): update the set before switching."],
+        -- Na LINHA cabe pouco — nome do conjunto e contagem, que já é o suficiente para o olho
+        -- parar. A explicação inteira (o espaço ficar com a peça errada) vai na dica, que tem
+        -- largura e quebra de linha.
+        row.detail:SetText(format(L["%s: %d item(s) missing"],
             problema.nome or "?", problema.perdidas))
         row.detail:SetTextColor(1, 0.35, 0.35)
     else
