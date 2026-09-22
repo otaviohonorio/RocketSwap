@@ -472,6 +472,8 @@ local PROGRESS_HOLD = 5
 --
 -- `skipped` NÃO É FALHA e não pode parecer uma: nada de ✗, nada de vermelho. Ele ganha o mesmo
 -- ponto neutro de quem ainda não começou, mais a razão escrita no próprio rótulo.
+-- Exportado em `ns.ProgressVisuals` logo abaixo: o painel flutuante (`Progress.lua`) desenha
+-- os MESMOS estados, e duas tabelas de arte divergiriam na primeira mudança.
 local PROGRESS_STATE = {
     pending = {                                     alpha = 0.40 },
     doing   = { atlas = "common-icon-forwardarrow", alpha = 1.00 },
@@ -479,6 +481,13 @@ local PROGRESS_STATE = {
     skipped = {                                     alpha = 0.45 },
     failed  = { atlas = "common-icon-redx",         alpha = 0.90 },
 }
+
+-- O painel flutuante (`Progress.lua`) desenha os MESMOS estados. Duas tabelas de arte
+-- divergiriam na primeira mudança, então existe uma só e ela mora aqui.
+ns.ProgressVisuals = PROGRESS_STATE
+ns.PROGRESS_ROW = PROGRESS_ROW
+ns.PROGRESS_ICON = PROGRESS_ICON
+ns.PROGRESS_ICON_GAP = PROGRESS_ICON_GAP
 
 ---Fecha o painel e devolve a coluna ao editor.
 local function ConcludeProgress(panel)

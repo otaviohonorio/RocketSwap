@@ -870,6 +870,72 @@ local function RetryTalent(preset)
     return "wait"
 end
 
+---O que o personagem está conjurando agora, se algo.
+---
+---⛑ EXISTE POR CAUSA DE UM DEFEITO NOSSO, achado no diário em 21/09. Em **10 de 10** trocas
+---gravadas que mexem em especialização, a primeira `SetSpecialization` era recusada e a segunda,
+---quatro segundos depois, era aceita. A causa não era o jogo estar ocupado por conta própria: o
+---botão Carregar troca a aparência por **ação segura no próprio clique** (`UI.lua`, atributo
+---`"outfit"`), e isso **conjura** a magia 1247613 no mesmo instante. O jogo não deixa começar uma
+---conjuração com outra em voo, então a recusa era **causada por nós**, sempre, e custava ao
+---jogador uma barra de conjuração perdida mais quatro segundos de nada.
+---
+---O relato foi *"às vezes ele cast mais de uma vez"*. Era sempre; o "às vezes" é porque conjunto
+---sem aparência, ou sem troca de spec, não passa por aqui.
+local function CastInFlight()
+    if UnitCastingInfo then
+        local name, _, _, _, _, _, _, _, spellID = UnitCastingInfo("player")
+        if name then return name, spellID end
+    end
+    if UnitChannelInfo then
+        local name, _, _, _, _, _, _, spellID = UnitChannelInfo("player")
+        if name then return name, spellID end
+    end
+end
+
+-- Espera curta e repetida: a conjuração de aparência dura cerca de um segundo, então o passo
+-- costuma sair na primeira ou segunda olhada. O teto existe para o caso de o jogador estar
+-- conjurando outra coisa qualquer — aí a insistência normal assume, como sempre assumiu.
+local CAST_WAIT_STEP = 0.25
+local CAST_WAIT_MAX = 3
+
+---Espera a conjuração em voo terminar e só então pede a troca de spec.
+---
+---**NÃO consome tentativa de `RetrySpec`**: isto não é o jogo recusando, é a gente esperando a
+---nossa própria conjuração sair do caminho. Gastar tentativa aqui encurtaria o orçamento de
+---insistência de quem realmente precisa dele.
+local function WaitForCast(preset, elapsed)
+    elapsed = elapsed or 0
+    Arm()
+
+    local token = running
+    C_Timer.After(CAST_WAIT_STEP, function()
+        if not running or running ~= token then return end
+        if running.steps[running.at] ~= "spec" then return end
+
+        if CastInFlight() and elapsed + CAST_WAIT_STEP < CAST_WAIT_MAX then
+            WaitForCast(preset, elapsed + CAST_WAIT_STEP)
+            return
+        end
+
+        local outcome, message = Steps.spec(preset)
+        if ns.Log then ns.Log.Step("spec", outcome or "wait", message) end
+        NoteOutcome("spec", outcome)
+
+        if outcome == "skip" then
+            RunNext()
+        elseif outcome == "abort" then
+            Finish(false, message)
+        elseif outcome == "fail" then
+            running.failures = running.failures or {}
+            running.failures[#running.failures + 1] = message
+            RunNext()
+        end
+    end)
+
+    return "wait"
+end
+
 ---Insiste na troca de especialização até o jogo aceitar.
 ---
 ---A recusa não é um erro do jogador nem do addon: é o jogo dizendo "agora não". Devolver isso
@@ -939,6 +1005,20 @@ function Steps.spec(preset)
             or L["the game refused to change specialization now; wait a few seconds."]
     end
 
+    -- ⛑ NÃO PEÇA COM CONJURAÇÃO EM VOO. Ver `CastInFlight`: a recusa que o addon vinha tratando
+    -- como "o jogo está ocupado" era provocada pela nossa própria troca de aparência. Esperar
+    -- aqui é mais barato que insistir depois — e some a segunda barra de conjuração.
+    local conjurando, conjurandoID = CastInFlight()
+    if conjurando then
+        if ns.Log then
+            ns.Log.Add("esperando cast", {
+                passo = "spec", magia = conjurando, id = conjurandoID or 0,
+            })
+        end
+        Report(L["Switching specialization..."], false)
+        return WaitForCast(preset)
+    end
+
     Report(L["Switching specialization..."], false)
 
     -- `C_SpecializationInfo.SetSpecialization` é o caminho atual; a global antiga fica como
@@ -1002,6 +1082,16 @@ function Steps.spec(preset)
     -- Então o addon para de adivinhar e faz o que o jogador faria: espera e clica de novo. Ele
     -- disse que *"não tem problema demorar um pouco"*, e o prazo do passo (45 s) é o teto.
     if not ok or aceito == false then
+        -- GRAVA O QUE ESTAVA CONJURANDO NA HORA DA RECUSA. É a prova, ou a refutação, da causa
+        -- diagnosticada em 21/09: se a guarda acima estiver certa, este campo passa a vir
+        -- `nenhum` e a recusa some do diário. Se continuar aparecendo com magia, a causa é outra
+        -- e o próximo diário diz qual — em vez de eu chutar de novo.
+        if ns.Log then
+            local emVoo, emVooID = CastInFlight()
+            ns.Log.Add("recusa", {
+                passo = "spec", conjurando = emVoo or "nenhum", id = emVooID or 0,
+            })
+        end
         return RetrySpec(preset, wanted)
     end
 
@@ -1546,6 +1636,9 @@ function Data.Apply(preset, report, byClick)
     if report then report(format(L["Loading %s..."], preset.name or "?"), false) end
 
     Data.EnsureListener()
+    -- O painel flutuante abre aqui, e não dentro do `RunNext`: se abrisse lá, uma troca em que
+    -- todos os passos fecham no mesmo quadro piscaria na tela sem chegar a ser lida.
+    if ns.Progress then ns.Progress.Start() end
     RunNext()
     return true
 end

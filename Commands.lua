@@ -4,6 +4,22 @@ local L = ns.L
 
 local commands = {}
 
+-- O painel flutuante da troca. Existe desligamento porque quem joga com a janela do addon
+-- aberta o tempo todo já tem a mesma informação na coluna da direita, e aí ele é repetição.
+commands["progress"] = function()
+    ns.db.hideProgress = not ns.db.hideProgress
+    if ns.db.hideProgress and ns.Progress and ns.Progress.Frame() then
+        ns.Progress.Frame():Hide()
+    end
+    ns.Print(ns.db.hideProgress
+        and L["swap progress panel off."]
+        or L["swap progress panel on."])
+end
+
+-- O comando é em inglês como todos os outros (`warn`, `ready`, `queue`), mas quem joga em
+-- português vai digitar "progresso" — e recusar por causa de uma letra seria implicância.
+commands["progresso"] = function() commands["progress"]() end
+
 commands[""] = function()
     ns.UI.Toggle()
 end
@@ -528,6 +544,7 @@ commands["help"] = function()
     print("  /rs ready           " .. L["turns the ready check summary on or off"])
     print("  /rs queue           " .. L["turns the queue pop summary on or off"])
     print("  /rs unmute          " .. L["re-enables warnings you silenced"])
+    print("  /rs progress        " .. L["turns the swap progress panel on or off"])
     print("  /rs log [clear]     " .. L["shows the log of the last swaps"])
 end
 

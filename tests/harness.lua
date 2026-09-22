@@ -3700,4 +3700,110 @@ do
     end
 end
 
+--------------------------------------------------------------------------------
+-- (!) O CAST DUPLO (defeito relatado em 21/09, diagnosticado no diario do usuario)
+--
+-- O botao Carregar troca a aparencia por acao segura NO CLIQUE, e isso conjura a magia
+-- 1247613. O jogo nao deixa comecar outra conjuracao com uma em voo, entao a primeira
+-- `SetSpecialization` era recusada em 10 de 10 trocas gravadas -- e o jogador via duas barras
+-- de conjuracao com quatro segundos de nada entre elas.
+--
+-- O passo de spec agora ESPERA a conjuracao sair do caminho antes de pedir. Este teste trava
+-- as duas metades: nao pedir enquanto conjura, e pedir UMA vez quando ela para.
+--------------------------------------------------------------------------------
+do
+    print("")
+    print("-- cast em voo: o passo de spec espera em vez de pedir e ser recusado")
+
+    local pedidos = 0
+    local realSet = C_SpecializationInfo.SetSpecialization
+    C_SpecializationInfo.SetSpecialization = function(i)
+        pedidos = pedidos + 1
+        return realSet(i)
+    end
+
+    state.specIndex = 1
+    state.refuseSpec = false
+    state.casting = 1247613          -- a conjuracao de aparencia, como no clique real
+
+    ns.Data.Apply({ name = "Frost PvP", spec = 2 }, function() end, true)
+    check("com conjuracao em voo, nao pede a troca", pedidos, 0)
+
+    AdvanceClock(0.25); RunTimers(0.25)
+    check("enquanto conjura, continua sem pedir", pedidos, 0)
+
+    state.casting = nil
+    AdvanceClock(0.25); RunTimers(0.25)
+    check("quando a conjuracao acaba, pede uma vez", pedidos, 1)
+
+    -- Esperar conjuracao NAO pode consumir tentativa de insistencia: sao coisas diferentes,
+    -- e gastar tentativa aqui encurtaria o orcamento de quem realmente precisa dele.
+    local _, info = ns.Data.GetProgress()
+    check("esperar conjuracao nao gasta tentativa", info and info.tries or 0, 0)
+
+    C_SpecializationInfo.SetSpecialization = realSet
+    state.casting = nil
+end
+
+--------------------------------------------------------------------------------
+-- O PAINEL FLUTUANTE DA TROCA
+--
+-- Ele nao tem dado proprio: le `Data.GetProgress()`, o mesmo da janela. O que este teste trava
+-- e o que so existe nele -- a barra, que anda POR PASSO e nao por tempo, e o sumico automatico.
+--------------------------------------------------------------------------------
+do
+    print("")
+    print("-- painel flutuante de progresso")
+
+    -- ENCERRA O QUE FICOU DE PE. O `Apply` recusa comecar com troca em curso, e sem esta
+    -- limpeza o teste abaixo leria o progresso da troca ANTERIOR achando que era a dele.
+    for _ = 1, 40 do
+        if not ns.Data.IsApplying() then break end
+        AdvanceClock(60); RunTimers(999)
+    end
+    check("a troca anterior encerrou antes deste teste", ns.Data.IsApplying(), false)
+
+    state.specIndex = 1
+    state.refuseSpec = false
+    state.casting = nil
+
+    ns.Data.Apply({ name = "Frost PvP", spec = 2, talent = 10, gear = 3, transmog = 71 },
+        function() end, true)
+
+    local painel = ns.Progress.Frame()
+    check("o painel abre quando a troca comeca", painel ~= nil and painel:IsShown(), true)
+
+    -- A barra com tudo pendente nao pode ja estar cheia -- nem vazia de largura zero, que some
+    -- a textura e o jogo reclama.
+    local largura = painel.trilho.fill:GetWidth()
+    check("a barra comeca praticamente vazia", largura <= 2, true)
+
+    -- Quatro passos: cada um fechado vale um quarto. Isto e o que torna a barra honesta -- ela
+    -- afirma quantos passos fecharam, nao quanto tempo falta, que ninguem sabe.
+    local passos = ns.Data.GetProgress()
+    check("o conjunto pede quatro passos", #passos, 4)
+
+    -- A CONTA DA BARRA. Ela anda por PASSO FECHADO, nunca por tempo: a corrente nao sabe
+    -- quanto vai demorar (o diario real mostrou a mesma troca aceita ora em 4, ora em 14
+    -- segundos), e barra que corre contra um relogio inventado trava no meio e mente.
+    local function lista(...)
+        local out = {}
+        for i, estado in ipairs({ ... }) do out[i] = { key = "k" .. i, state = estado } end
+        return out
+    end
+
+    check("tudo pendente: barra vazia",
+        ns.Progress.DebugBarFill(lista("pending", "pending", "pending", "pending")), 0)
+    check("dois de quatro fechados: metade",
+        ns.Progress.DebugBarFill(lista("done", "done", "doing", "pending")), 0.5)
+    -- Pulado NAO e falha, mas e passo FECHADO: ele nao pode segurar a barra.
+    check("pulado conta como fechado",
+        ns.Progress.DebugBarFill(lista("skipped", "skipped", "pending", "pending")), 0.5)
+    check("falhado tambem fecha a fatia",
+        ns.Progress.DebugBarFill(lista("failed", "done", "done", "done")), 1)
+    check("nenhum passo: barra vazia, sem dividir por zero",
+        ns.Progress.DebugBarFill(lista()), 0)
+end
+
+
 print("\nTudo carregou e rodou sem erro de Lua.")
