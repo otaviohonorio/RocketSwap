@@ -53,6 +53,12 @@ local HOLD = 3
 -- Não é chave de tradução de propósito: é nome próprio, e o mesmo em qualquer idioma.
 local SHOUT = "Leroy Jeeeeeennkiiinnss!"
 
+-- A cor da barra em cada momento. Dourado é "andando" — é a cor de progresso do jogo inteiro.
+-- Verde só aparece quando **fechou tudo e deu certo**, e por isso ele não precisa de legenda:
+-- ninguém confunde barra cheia e verde com troca pela metade.
+local BAR_RUNNING = { 1, 0.82, 0, 0.85 }
+local BAR_DONE    = { 0.25, 0.78, 0.35, 0.90 }
+
 local frame
 
 --------------------------------------------------------------------------------
@@ -166,6 +172,9 @@ local function Build()
 
     -- Os cortes entre as fatias: sem eles a barra vira um bloco e o jogador perde a noção de
     -- quantas etapas existem, que é a informação que esta barra carrega.
+    -- Visível desde o começo e até o fim: ela é a única parte da tela de progresso que continua
+    -- dizendo algo depois que a troca acaba.
+    trilho:Show()
     trilho.ticks = {}
     trilho:SetScript("OnShow", function() end)
     frame.trilho = trilho
@@ -196,11 +205,16 @@ local function Build()
     end
 
     -- O grito ocupa o painel inteiro quando aparece, entáo nasce centralizado e escondido.
+    -- O grito ocupa o espaço das linhas de passo, ABAIXO da barra — que não sai da tela. Duas
+    -- linhas são permitidas: numa janela de 240 a frase não cabe inteira, e encolher a fonte
+    -- para forçar uma linha só tiraria dela justamente o tamanho, que é o recado.
     frame.shout = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    frame.shout:SetPoint("CENTER", frame, "CENTER", 0, 4)
-    frame.shout:SetWidth(WIDTH - PAD * 2)
+    frame.shout:SetPoint("TOPLEFT", frame.trilho, "BOTTOMLEFT", 0, -6)
+    frame.shout:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, PAD)
     frame.shout:SetJustifyH("CENTER")
-    frame.shout:SetTextColor(1, 0.82, 0)
+    frame.shout:SetJustifyV("MIDDLE")
+    frame.shout:SetWordWrap(true)
+    frame.shout:SetTextColor(0.35, 0.90, 0.45)
     frame.shout:Hide()
 
     frame.close = CreateFrame("Button", nil, frame)
@@ -255,14 +269,19 @@ end
 ---cima das linhas de passo.
 local function ShowShout(frame_, mostrar)
     frame_.shout:SetShown(mostrar)
-    frame_.trilho:SetShown(not mostrar)
+    -- A BARRA NÃO SAI. Ela é a única coisa da tela de progresso que ainda diz algo depois do
+    -- fim — cheia e verde, é o "tudo fechado" em forma, e some junto com o painel.
     frame_.clock:SetShown(not mostrar)
     frame_.title:SetShown(not mostrar)
     for _, row in ipairs(frame_.rows) do
         if mostrar then row:Hide() end
     end
+
+    local cor = mostrar and BAR_DONE or BAR_RUNNING
+    frame_.trilho.fill:SetColorTexture(cor[1], cor[2], cor[3], cor[4])
     if mostrar then
         frame_.shout:SetText(SHOUT)
+        frame_.trilho.fill:SetWidth(frame_.trilho:GetWidth())
     end
 end
 
@@ -297,16 +316,18 @@ function Progress.Refresh()
         return
     end
 
+    -- A ALTURA É A MESMA DO COMEÇO AO FIM. Encolher no desfecho faz o painel pular na tela
+    -- bem no instante em que o olho volta para ele, e um salto de layout se lê como defeito.
+    frame:SetHeight(PAD * 2 + TITLE_INK + BAR_GAP + BAR_H + TITLE_GAP + ROW * #passos)
+
     -- TERMINOU E DEU CERTO: o painel troca de conteúdo pelos três segundos que lhe restam.
     if frame.shouting then
         ShowShout(frame, true)
-        frame:SetHeight(PAD * 2 + 26)
         if not frame:IsShown() then frame:Show() end
         return
     end
 
     ShowShout(frame, false)
-    frame:SetHeight(PAD * 2 + TITLE_INK + BAR_GAP + BAR_H + TITLE_GAP + ROW * #passos)
     frame.title:SetText(format(L["Switching to %s"], info.preset and info.preset.name or "?"))
 
     if info.live then
