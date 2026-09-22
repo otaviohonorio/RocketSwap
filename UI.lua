@@ -73,8 +73,22 @@ local CARD_WARN = 24          -- a placa do aviso: altura de botão (22) mais 2 
 -- A 0.34.1 tinha posto o icone no alto como distintivo e o titulo abaixo dele. Reprovado na
 -- hora: *"ficou ruim o titulo, eu gostei do icone ao lado no comeco"*. O icone volta para o
 -- lado -- so que ao lado dos CAMPOS, nao do titulo, que e o que libera a linha do titulo.
-local CARD_ICON = 32          -- o icone, a esquerda do bloco de campos
-local CARD_LEFT = 44          -- onde os campos comecam: depois do icone, com a margem dele
+-- (!) O ICONE PREENCHE O BLOCO DE CAMPOS. Pedido: *"aumentar o icone para preencher o espaco
+-- que falta das 4 linhas escritas"*. Com 32 fixos ele ocupava metade da altura ao lado de quatro
+-- linhas, e sobrava um vazio embaixo dele -- vazio ao lado de conteudo e o que faz a lista
+-- parecer meio montada.
+--
+-- Ele vira o tamanho do bloco: 60 com quatro campos, e o PISO de 32 com um so, porque uma linha
+-- mede 15 e um icone de 15 nao se enxerga.
+--
+-- (!) MAS O RECUO DO TEXTO NAO ACOMPANHA, e essa e a decisao que segura o desenho. Se ele
+-- acompanhasse, um card de quatro campos e outro de um comecariam o texto em X diferentes, e o
+-- alinhamento ENTRE cards e o que faz uma lista parecer uma lista. Entao o recuo e fixo, no
+-- tamanho do maior icone, e o icone menor se centraliza nessa coluna.
+local CARD_ICON_MIN = 32
+local CARD_ICON_MAX = CARD_LINE * 4       -- 60: a altura de quatro campos
+local CARD_ICON_X = 6                     -- margem esquerda da coluna do icone
+local CARD_LEFT = CARD_ICON_X + CARD_ICON_MAX + 8
 local CARD_NAME_GAP = 4       -- entre o titulo e a primeira linha de campo
 
 -- TETO DE LARGURA DO TEXTO. A outra reclamacao da 0.34.1 foi *"ficou muito comprido as linhas"*:
@@ -97,8 +111,10 @@ local CARDS_VISIVEIS = 3
 -- três conjuntos, a lista rola um pouco; e o certo é o jogador consertar, não a janela crescer.
 -- A altura do bloco de campos e o MAIOR entre as linhas e o icone: com um campo so, as linhas
 -- medem 15 e o icone 32, e sem este maximo ele vazaria o card.
+-- A altura do bloco de campos, que e tambem o TAMANHO do icone: os dois sao a mesma medida
+-- desde que o icone passou a preencher o bloco.
 local function FieldsHeight(n)
-    return math.max(CARD_LINE * n, CARD_ICON)
+    return math.max(CARD_LINE * n, CARD_ICON_MIN)
 end
 local CARD_TOP = CARD_PAD + CARD_NAME_INK + CARD_NAME_GAP   -- onde o bloco de campos comeca
 local CARD_MAX = CARD_TOP + FieldsHeight(4) + CARD_PAD
@@ -238,8 +254,10 @@ local function BuildRow(row)
     end
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetSize(CARD_ICON, CARD_ICON)
-    row.icon:SetPoint("TOPLEFT", 6, -CARD_TOP)   -- no topo do bloco de campos, colado no titulo
+    -- Tamanho e posicao sao reacertados em `FillRow`: os dois dependem de quantos campos o
+    -- conjunto define.
+    row.icon:SetSize(CARD_ICON_MIN, CARD_ICON_MIN)
+    row.icon:SetPoint("TOPLEFT", CARD_ICON_X, -CARD_TOP)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -434,13 +452,19 @@ local function FillRow(row, preset)
             fs:SetText("|cff9a9a9e" .. linha[1] .. ":|r  " .. (linha[2] or "?"))
         end
     end
-    -- O ICONE ENCOSTA NO TITULO, e nao no meio do bloco de campos.
+    -- O ICONE TOMA A ALTURA DO BLOCO DE CAMPOS, e encosta no titulo. Ele ja esteve centralizado
+    -- na vertical, o que com quatro campos o empurrava 14 px para baixo e o deixava boiando ao
+    -- lado da segunda linha; ancorado no topo, fica colado no titulo com qualquer numero de
+    -- campos.
     --
-    -- Ele ja esteve centralizado no bloco, o que com quatro campos o empurrava 14 px para baixo
-    -- e o deixava boiando ao lado da segunda linha. Pedido: *"aproximar o icone do titulo, logo
-    -- abaixo dele"*. Ancorado no TOPO do bloco, ele fica colado no titulo em qualquer numero de
-    -- campos -- e com um campo so o resultado e o mesmo de antes, porque ali o bloco tem a
-    -- altura do proprio icone.
+    -- Na HORIZONTAL ele se centraliza na coluna, que tem largura fixa: e isso que mantem o texto
+    -- de todos os cards comecando no mesmo X, independente de quantos campos cada um tem.
+    local blocoH = FieldsHeight(#linhas)
+    row.icon:SetSize(blocoH, blocoH)
+    row.icon:ClearAllPoints()
+    row.icon:SetPoint("TOPLEFT",
+        CARD_ICON_X + math.floor((CARD_ICON_MAX - blocoH) / 2), -CARD_TOP)
+
     row:SetHeight(CardHeight(preset))
     lastFilledRow = row
 
@@ -1274,7 +1298,8 @@ end
 function UI.DebugCardMetrics()
     return {
         pad = CARD_PAD, name = CARD_NAME_INK, line = CARD_LINE, warn = CARD_WARN,
-        icon = CARD_ICON, nameGap = CARD_NAME_GAP, left = CARD_LEFT,
+        icon = CARD_ICON_MIN, iconMax = CARD_ICON_MAX, iconX = CARD_ICON_X,
+        nameGap = CARD_NAME_GAP, left = CARD_LEFT,
         top = CARD_TOP, textW = CARD_TEXT_W, listW = LIST_W,
         cardMax = CARD_MAX, visiveis = CARDS_VISIVEIS, spacing = ROW_SPACING,
         listH = LIST_H, listTop = LIST_TOP, listBottom = LIST_BOTTOM,
