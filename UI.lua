@@ -85,7 +85,7 @@ local WARN_STRIP_Y = LIST_BOTTOM - 4
 -- A conta fechada da janela, herdada da versão anterior e agora ancorada na lista:
 -- faixa de Avisos (142 de conteúdo) + o rodapé de 26 que o `ButtonFrameTemplate` reserva,
 -- mais os 4 de folga que a janela sempre teve.
-local WARN_STRIP_H = 142
+local WARN_STRIP_H = 106
 local TEMPLATE_FOOTER = 26
 HEIGHT = -WARN_STRIP_Y + WARN_STRIP_H + TEMPLATE_FOOTER + 4
 local FIELD_W = 200           -- combos (o dropdown de loadout de talentos usa 200)
@@ -896,7 +896,11 @@ local function BuildToggles()
     -- 142 = a última caixa termina em −136, mais 6 de respiro. Era 86 com duas caixas, 118 com
     -- a sub-opção de modo guerra (12/09) e 142 com a do convite de fila (18/09). Altura fixa que
     -- não acompanha o conteúdo é o defeito que a faixa transbordando teria produzido em silêncio.
-    strip:SetHeight(142)
+    -- A faixa encolheu de 142 para 106 quando as quatro caixas viraram duas colunas de duas:
+    -- titulo (-10, 16 de tinta) + titulo de coluna (-34, 14) + duas caixas de 24 a partir de
+    -- -52 => a ultima termina em -100, mais 6 de respiro. O numero vive em `WARN_STRIP_H`,
+    -- porque a altura da janela sai dele.
+    strip:SetHeight(WARN_STRIP_H)
 
     strip.divider = strip:CreateTexture(nil, "ARTWORK")
     strip.divider:SetPoint("TOPLEFT", 0, 0)
@@ -975,34 +979,93 @@ local function BuildToggles()
 
         box:SetScript("OnClick", function(self)
             ns.db[key] = self:GetChecked() and true or false
+            if UI.RefreshToggles then UI.RefreshToggles() end
         end)
+
+        -- A DICA DIZ POR QUE ESTA APAGADA. Sem isso a caixa cinza e so uma caixa quebrada.
+        box:SetScript("OnEnter", function(self)
+            if self:IsEnabled() then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(label, 1, 1, 1)
+            GameTooltip:AddLine(L["Turn on the wrong gear warning first."], 1, 0.5, 0.4, true)
+            GameTooltip:Show()
+        end)
+        box:SetScript("OnLeave", GameTooltip_Hide)
+
         box.key = key
+        box.label = text
         return box
     end
 
-    strip.warn = Toggle(-30, L["Warn about wrong gear"], "warn")
-
-    -- ⚑ SUB-OPÇÃO, e por isso RECUADA 15 — o número é o da Blizzard para opção filha
-    -- (`Blizzard_SettingControls.lua:1`). Ela só faz sentido com a de cima ligada, e o recuo diz
-    -- isso de graça: a alternativa era um rótulo mais comprido explicando a dependência.
+    -- (!) DUAS COLUNAS, E OS TITULOS DIZEM A VERDADE SOBRE O QUE CADA UMA E (22/09).
     --
-    -- O passo vertical segue o desta faixa (24), e não os 35 do formulário nativo: as três caixas
-    -- são um grupo só, e misturar dois ritmos na mesma pilha é o que faz uma tela parecer remendada.
-    strip.warMode = Toggle(-54, L["Warn with War Mode on too"], "warnWarMode", CHILD_INDENT)
+    -- O pedido foi *"de um lado avisos de PVE e do outro lado avisos de PVP"*. Ao conferir no
+    -- `Alert.lua` o que cada caixa faz, a divisao PvE/PvP nao existe:
+    --
+    --   `warn`        dispara nos DOIS contextos (equipamento de PvP em masmorra, e o inverso)
+    --   `readyCheck`  vale em qualquer grupo
+    --   `warnWarMode` estende o de cima ao mundo aberto com Modo Guerra -- PvP
+    --   `queuePop`    so campo de batalha e arena -- PvP
+    --
+    -- Ou seja: dois sao universais, dois sao de PvP, e **nenhum e so de PvE**. Uma coluna "PvE"
+    -- nasceria vazia ou mentindo, e rotulo que mente e pior que coluna nenhuma. Entao os titulos
+    -- sao os que o codigo sustenta, e a intencao do pedido -- ver de relance o que e especifico
+    -- de PvP -- fica atendida do mesmo jeito.
+    local COL2 = math.floor((WIDTH - 28) / 2)
 
-    -- ⚑ E A DE BAIXO FICA MAIS LONGE, de propósito: 34 contra os 24 de dentro do par acima. É a
-    -- lei da proximidade — o vão que SEPARA tem de ser maior que o que ASSOCIA, senão o olho não
-    -- sabe a quem a sub-opção pertence. 34 é o passo de linha do formulário nativo
-    -- (`Blizzard_SettingControls.xml:108-164` + `Blizzard_SettingsList.lua:46`), e aqui ele marca
-    -- justamente a troca de assunto: sai o aviso de equipamento, entra o do ready check.
-    strip.ready = Toggle(-88, L["Show my setup on ready check"], "readyCheck")
+    local function ColumnTitle(x, texto)
+        local fs = strip:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        fs:SetPoint("TOPLEFT", x, -34)
+        fs:SetText(texto)
+        fs:SetTextColor(0.75, 0.75, 0.78)
+        return fs
+    end
 
-    -- ⚑ 24, o vão de DENTRO do grupo, e não os 34 da troca de assunto: as duas caixas dizem a
-    -- mesma coisa ("mostra o meu setup"), mudando só o gatilho. Pôr 34 aqui sugeriria que o
-    -- convite de fila é outro assunto, e o olho agruparia errado.
-    strip.queue = Toggle(-112, L["Show my setup when a PvP queue pops"], "queuePop")
+    strip.colAny = ColumnTitle(0, L["In any content"])
+    strip.colPvP = ColumnTitle(COL2, L["PvP only"])
+
+    strip.warn = Toggle(-52, L["Warn about wrong gear"], "warn")
+    strip.ready = Toggle(-76, L["Show my setup on ready check"], "readyCheck")
+
+    -- (!) A SUB-OPCAO PERDEU O RECUO E GANHOU OUTRA COISA. O recuo de 15 dizia "esta depende da
+    -- de cima" de graca -- mas so funciona com as duas na mesma pilha, e agora elas estao em
+    -- colunas diferentes. A dependencia passa a ser dita do jeito mais forte que existe: a caixa
+    -- fica **apagada** enquanto a de equipamento estiver desligada, com o motivo na dica. E a
+    -- mesma regra do botao Carregar -- controle que aceita clique e nao faz nada e pior que
+    -- controle apagado.
+    strip.warMode = Toggle(-52, L["Warn with War Mode on too"], "warnWarMode", COL2)
+    strip.queue = Toggle(-76, L["Show my setup when a PvP queue pops"], "queuePop", COL2)
 
     frame.toggles = strip
+end
+
+---Acerta o estado das caixas: marcada/desmarcada e, no caso da filha, apagada ou nao.
+---
+---(!) A DEPENDENCIA DEIXOU DE SER DESENHO E VIROU COMPORTAMENTO. Enquanto as duas moravam na
+---mesma pilha, o recuo de 15 px dizia "esta depende da de cima". Em colunas diferentes o recuo
+---nao diz mais nada, entao quem diz e o estado: com o aviso de equipamento desligado, a de Modo
+---Guerra fica apagada, e a dica explica.
+function UI.RefreshToggles()
+    local strip = frame and frame.toggles
+    if not strip then return end
+
+    strip.warn:SetChecked(ns.db.warn ~= false)
+    strip.ready:SetChecked(ns.db.readyCheck ~= false)
+    strip.queue:SetChecked(ns.db.queuePop ~= false)
+
+    -- `== true`, e nao `~= false`: esta nasce DESMARCADA, entao a ausencia de valor e "nao".
+    -- Copiar o `~= false` das vizinhas a deixaria marcada em quem nunca a viu -- o oposto do
+    -- que foi pedido em 12/09.
+    strip.warMode:SetChecked(ns.db.warnWarMode == true)
+
+    local ligado = ns.db.warn ~= false
+    if strip.warMode then
+        strip.warMode:SetEnabled(ligado)
+        if strip.warMode.label then
+            strip.warMode.label:SetTextColor(ligado and 1 or 0.5, ligado and 1 or 0.5,
+                ligado and 1 or 0.5)
+        end
+    end
 end
 
 local function Create()
@@ -1159,7 +1222,8 @@ function UI.DebugCardMetrics()
         pad = CARD_PAD, name = CARD_NAME_INK, line = CARD_LINE, warn = CARD_WARN,
         cardMax = CARD_MAX, visiveis = CARDS_VISIVEIS, spacing = ROW_SPACING,
         listH = LIST_H, listTop = LIST_TOP, listBottom = LIST_BOTTOM,
-        stripY = WARN_STRIP_Y, height = HEIGHT, width = WIDTH,
+        stripY = WARN_STRIP_Y, stripH = WARN_STRIP_H, footer = TEMPLATE_FOOTER,
+        height = HEIGHT, width = WIDTH,
     }
 end
 
@@ -1242,15 +1306,11 @@ function UI.Refresh()
 
     -- As caixas ficam fora do jogo de esconder/mostrar de propósito: elas valem nos dois
     -- estados, e o estado vazio é justamente onde elas mais importam.
-    frame.toggles.warn:SetChecked(ns.db.warn ~= false)
-    -- `== true`, e não `~= false`: esta nasce DESMARCADA, então a ausência de valor é "não".
-    -- Copiar o `~= false` das vizinhas a deixaria marcada em quem nunca a viu — o oposto do pedido.
-    frame.toggles.warMode:SetChecked(ns.db.warnWarMode == true)
-    -- E APAGADA QUANDO A MÃE ESTÁ DESMARCADA: sem o aviso de equipamento, esta não tem efeito
-    -- nenhum, e caixa clicável que não faz nada é a versão pior de não ter a caixa.
-    frame.toggles.warMode:SetEnabled(ns.db.warn ~= false)
-    frame.toggles.ready:SetChecked(ns.db.readyCheck ~= false)
-    frame.toggles.queue:SetChecked(ns.db.queuePop ~= false)
+    -- UM LUGAR SÓ acerta o estado das caixas (`UI.RefreshToggles`). Este bloco repetia a mesma
+    -- regra que a função dela já tinha, e a sabotagem denunciou: desligar o `SetEnabled` de lá
+    -- não reprovava nada, porque a cópia daqui continuava acertando o estado. Duas partes do
+    -- addon sabendo a mesma coisa é a divergencia da próxima mudança com data marcada.
+    UI.RefreshToggles()
 
     frame.emptyState:SetShown(empty)
     if frame.Inset then frame.Inset:SetShown(not empty) end

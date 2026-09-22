@@ -2506,17 +2506,26 @@ do
     local _, yReady = caixas.ready:PointOffset("TOPLEFT")
     local _, yQueue = caixas.queue:PointOffset("TOPLEFT")
 
-    -- RECUO DE FILHA: e ele que diz, sem palavra nenhuma, que a caixa depende da de cima.
-    check("a sub-opcao e recuada como opcao filha", xFilha - xMae, 15)
+    -- (!) O RECUO DE FILHA SAIU, e a checagem dele com ele (22/09). Enquanto as duas caixas
+    -- moravam na mesma pilha, o recuo de 15 px dizia "esta depende da de cima" sem palavra
+    -- nenhuma. Em COLUNAS SEPARADAS ele nao diz mais nada -- quem diz e o estado apagado, que os
+    -- dois checks acima ja trancam, e que e um sinal mais forte do que o recuo era.
+    --
+    -- O que entra no lugar: as colunas sao mesmo DUAS, e cada caixa esta na sua.
+    check("a sub-opcao mudou de coluna", xFilha > xMae + 100, true)
+    check("e o convite de fila esta na mesma coluna dela",
+        select(1, caixas.queue:PointOffset("TOPLEFT")), xFilha)
+    check("enquanto equipamento e ready check ficam na primeira",
+        select(1, caixas.ready:PointOffset("TOPLEFT")), xMae)
 
-    -- LEI DA PROXIMIDADE: o vao que SEPARA tem de ser maior que o que ASSOCIA.
-    local interno, externo = yMae - yFilha, yFilha - yReady
-    check("e o vao que separa e maior que o que associa", externo > interno, true)
+    -- LINHAS ALINHADAS ENTRE AS COLUNAS: a primeira caixa de cada uma na mesma altura, e a
+    -- segunda idem. Sem isso as duas colunas viram duas listas soltas lado a lado.
+    check("a primeira linha das duas colunas se alinha", yFilha, yMae)
+    check("e a segunda tambem", yQueue, yReady)
 
-    -- O CONVITE DE FILA ANDA COM O READY CHECK: as duas dizem "mostra o meu setup", mudando so o
-    -- gatilho. Entao o vao entre elas e o de DENTRO do grupo (o mesmo `interno`), e nao o de
-    -- trocar de assunto -- com 34 aqui o olho leria o convite como outro tema.
-    check("o convite de fila anda junto do ready check", yReady - yQueue, interno)
+    -- E O PASSO VERTICAL E O MESMO NAS DUAS: ritmo diferente por coluna e o que faz uma tela
+    -- parecer remendada.
+    check("o passo vertical e igual nas duas colunas", yMae - yReady, yFilha - yQueue)
 
     -- E A FAIXA TEM DE CABER TODAS: altura fixa que nao acompanha o conteudo transborda em
     -- silencio -- foi o defeito que a terceira caixa criou e que este check tranca; a quarta
@@ -4038,7 +4047,10 @@ do
     check("  o card com aviso e maior, e por isso rola",
         ns.UI.DebugCardHeight(tudo) > m.cardMax, true)
     check("  e a faixa de avisos comeca ABAIXO do inset", m.stripY < m.listBottom, true)
-    check("  e a janela cabe tudo isso", m.height >= -m.stripY + 142 + 26, true)
+    -- (!) A CONTA USA AS CONSTANTES, e nao os numeros que elas valiam quando o teste nasceu.
+    -- A faixa de avisos ja mediu 86, 118, 142 e agora 106; um literal aqui viraria falso a cada
+    -- vez que ela mudasse, e o teste passaria a reprovar a verdade em vez do defeito.
+    check("  e a janela cabe tudo isso", m.height >= -m.stripY + m.stripH + m.footer, true)
 
     state.lostItems = 0
     state.wornPieces = nil
