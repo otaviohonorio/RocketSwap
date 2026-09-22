@@ -3803,6 +3803,59 @@ do
         ns.Progress.DebugBarFill(lista("failed", "done", "done", "done")), 1)
     check("nenhum passo: barra vazia, sem dividir por zero",
         ns.Progress.DebugBarFill(lista()), 0)
+
+    -- O GRITO DE VITORIA nos tres segundos finais. Troca o conteudo do painel inteiro: naquele
+    -- ponto a lista de passos ja cumpriu o papel dela, e o que falta dizer e uma coisa so.
+    for _ = 1, 40 do
+        if not ns.Data.IsApplying() then break end
+        AdvanceClock(60); RunTimers(999)
+    end
+    TickUI(0.2)
+
+    -- Uma troca que TERMINA BEM, para o grito ter caminho. So itens: o jogo confirma com o
+    -- evento, a corrente fecha, e a comemoracao e o desfecho correto.
+    state.equippedSet = 9
+    ns.Data.Apply({ name = "So itens", gear = 4 }, function() end, true)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+    TickUI(0.2)
+
+    check("troca bem-sucedida: o grito aparece", painel.shout:IsShown(), true)
+    check("e diz o que o usuario pediu", painel.shout:GetText(), ns.Progress.DebugShout())
+    -- UMA CARA DE CADA VEZ: sobrepor o grito as linhas de passo deixaria os dois ilegiveis.
+    check("a barra sai da frente", painel.trilho:IsShown(), false)
+    check("o titulo sai da frente", painel.title:IsShown(), false)
+
+    -- E ele nao fica para sempre: os tres segundos passam e o painel some.
+    AdvanceClock(4)
+    TickUI(0.2)
+    check("passados os tres segundos, o painel some", painel:IsShown(), false)
+
+    local venceu = true
+    for _, p in ipairs(ns.Data.GetProgress() or {}) do
+        if p.state == "failed" then venceu = false end
+    end
+
+    -- E A OUTRA METADE, que importa mais: falha NAO comemora. O painel tem que continuar
+    -- mostrando qual passo nao deu, e sem prazo para sumir.
+    ns.Data.Apply({ name = "Vai falhar", spec = 2, talent = 10, gear = 3, transmog = 71 },
+        function() end, true)
+    for _ = 1, 40 do
+        if not ns.Data.IsApplying() then break end
+        AdvanceClock(60); RunTimers(999)
+    end
+    TickUI(0.2)
+
+    local falhou = false
+    for _, p in ipairs(ns.Data.GetProgress() or {}) do
+        if p.state == "failed" then falhou = true end
+    end
+    check("o cenario de falha realmente falhou", falhou, true)
+    check("falhou: nao comemora", painel.shout:IsShown(), false)
+    check("e a lista continua a vista", painel.trilho:IsShown(), true)
+
+    AdvanceClock(10)
+    TickUI(0.2)
+    check("e falha nao tem prazo para sumir", painel:IsShown(), true)
 end
 
 

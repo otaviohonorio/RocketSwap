@@ -36,6 +36,19 @@ local BAR_GAP = 8
 -- que ele tem algo a dizer.
 local HOLD = 3
 
+-- O GRITO DE VITÓRIA. Pedido do usuário: nos três segundos que sobram depois de a troca
+-- terminar, o painel deixa de ser relatório e vira comemoração.
+--
+-- E faz sentido além da piada: naquele ponto a lista de passos já cumpriu o papel dela — quem
+-- estava acompanhando já viu cada um fechar. O que ainda falta comunicar é uma coisa só, e de
+-- longe: **acabou, e deu certo**. Uma linha grande diz isso melhor que quatro linhas de detalhe.
+--
+-- SÓ NO SUCESSO. Se algum passo falhou, o painel continua mostrando a lista e fica até o
+-- jogador fechar: comemorar por cima de um passo que não deu seria o pior desfecho possível.
+--
+-- Não é chave de tradução de propósito: é nome próprio, e o mesmo em qualquer idioma.
+local SHOUT = "Leroy Jeeeeeennkiiinnss!"
+
 local frame
 
 --------------------------------------------------------------------------------
@@ -178,6 +191,20 @@ local function Build()
         frame.rows[i] = row
     end
 
+    -- O grito ocupa o painel inteiro quando aparece, entáo nasce centralizado e escondido.
+    frame.shout = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    frame.shout:SetPoint("CENTER", frame, "CENTER", 0, 4)
+    frame.shout:SetWidth(WIDTH - PAD * 2)
+    frame.shout:SetJustifyH("CENTER")
+    frame.shout:SetTextColor(1, 0.82, 0)
+    frame.shout:Hide()
+
+    frame.done = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    frame.done:SetPoint("TOP", frame.shout, "BOTTOM", 0, -4)
+    frame.done:SetWidth(WIDTH - PAD * 2)
+    frame.done:SetJustifyH("CENTER")
+    frame.done:Hide()
+
     frame.close = CreateFrame("Button", nil, frame)
     frame.close:SetSize(14, 14)
     frame.close:SetPoint("TOPRIGHT", -4, -4)
@@ -225,6 +252,24 @@ local function LayoutTicks(trilho, n)
     end
 end
 
+---As duas caras do painel: o relatório (enquanto troca, e quando falha) e o grito (quando
+---termina bem). Uma esconde a outra inteira — sobrepor as duas deixaria o grito ilegiível por
+---cima das linhas de passo.
+local function ShowShout(frame_, mostrar, nome)
+    frame_.shout:SetShown(mostrar)
+    frame_.done:SetShown(mostrar)
+    frame_.trilho:SetShown(not mostrar)
+    frame_.clock:SetShown(not mostrar)
+    frame_.title:SetShown(not mostrar)
+    for _, row in ipairs(frame_.rows) do
+        if mostrar then row:Hide() end
+    end
+    if mostrar then
+        frame_.shout:SetText(SHOUT)
+        frame_.done:SetText(format(L["Switching to %s"], nome or "?"))
+    end
+end
+
 function Progress.Refresh()
     if not frame then return end
 
@@ -247,6 +292,7 @@ function Progress.Refresh()
         -- Falha não tem prazo: fica até o jogador fechar.
         frame.holdUntil = falhou and math.huge or (GetTime() + HOLD)
         frame.close:SetShown(falhou)
+        frame.shouting = not falhou
     end
 
     if not info.live and frame.holdUntil and GetTime() >= frame.holdUntil then
@@ -255,6 +301,15 @@ function Progress.Refresh()
         return
     end
 
+    -- TERMINOU E DEU CERTO: o painel troca de conteúdo pelos três segundos que lhe restam.
+    if frame.shouting then
+        ShowShout(frame, true, info.preset and info.preset.name)
+        frame:SetHeight(PAD * 2 + 44)
+        if not frame:IsShown() then frame:Show() end
+        return
+    end
+
+    ShowShout(frame, false)
     frame:SetHeight(PAD * 2 + TITLE_INK + BAR_GAP + BAR_H + TITLE_GAP + ROW * #passos)
     frame.title:SetText(format(L["Switching to %s"], info.preset and info.preset.name or "?"))
 
@@ -292,8 +347,9 @@ end
 function Progress.Start()
     if ns.db and ns.db.hideProgress then return end
     if not frame then Build() end
-    frame.live, frame.holdUntil = nil, nil
+    frame.live, frame.holdUntil, frame.shouting = nil, nil, nil
     frame.close:Hide()
+    ShowShout(frame, false)
     Progress.Refresh()
 end
 
@@ -305,6 +361,10 @@ end
 ---
 ---A arte da barra só se vê no jogo, mas a CONTA é aritmética e se confere em disco — e é ela
 ---que carrega a promessa: a barra afirma quantos passos fecharam, e nada sobre tempo.
+function Progress.DebugShout()
+    return SHOUT
+end
+
 function Progress.DebugBarFill(passos)
     return BarFill(passos)
 end
