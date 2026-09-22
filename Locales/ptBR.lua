@@ -233,3 +233,8 @@ L["errors are NOT being captured on this client."] =
     "os erros NAO estao sendo capturados neste cliente."
 L["no error captured (capture: %s)."] = "nenhum erro capturado (captura: %s)."
 L["%d error(s) captured, %d occurrence(s):"] = "%d erro(s) capturado(s), %d ocorrencia(s):"
+
+-- Painel flutuante de progresso da troca (0.29.0)
+L["turns the swap progress panel on or off"] = "liga ou desliga o painel de progresso da troca"
+L["swap progress panel on."] = "painel de progresso da troca ligado."
+L["swap progress panel off."] = "painel de progresso da troca desligado."

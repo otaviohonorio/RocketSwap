@@ -99,3 +99,8 @@ function ns.CheckGameStrings()
 end
 
 ns.ApplyGameStrings()
+
+-- Painel flutuante de progresso da troca (0.29.0)
+L["turns the swap progress panel on or off"] = "turns the swap progress panel on or off"
+L["swap progress panel on."] = "swap progress panel on."
+L["swap progress panel off."] = "swap progress panel off."
