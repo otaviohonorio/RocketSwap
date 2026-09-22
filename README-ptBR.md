@@ -84,6 +84,14 @@ luajit tests/harness.lua
 python tests/sabotar.py
 ```
 
+## Apoio
+
+Estes addons são gratuitos e vão continuar sendo. Se eles te poupam tempo toda sessão, dá para
+apoiar o trabalho em [github.com/sponsors/otaviohonorio](https://github.com/sponsors/otaviohonorio)
+— é o que paga as horas de manter tudo em dia a cada patch.
+
+Não apoiar não te custa nada aqui. Um bom relato de defeito vale o mesmo.
+
 ## Licença
 
 MIT — ver `LICENSE`.
