@@ -57,6 +57,8 @@ local function widget(kind)
             return text, ...
         end
         function fs.HasFocus() return false end
+        -- Quebra de linha e decisao de layout, e o painel de progresso depende dela.
+        function fs.SetWordWrap(_, v) fs.__wordWrap = v end
         return fs
     end
     -- A TEXTURA GUARDA O ATLAS QUE RECEBEU. Sem isto o `__index` generico respondia `GetAtlas`
@@ -67,6 +69,13 @@ local function widget(kind)
         local t = widget("Texture")
         function t.SetAtlas(_, atlas) t.__atlas = atlas end
         function t.GetAtlas() return t.__atlas end
+        -- GUARDA A COR. Sem isto "a barra ficou verde no fim" nao era conferivel em disco, e
+        -- cor e justamente o tipo de coisa que ninguem percebe ter quebrado.
+        function t.SetColorTexture(_, r, g, b, a) t.__color = { r, g, b, a } end
+        function t.GetVertexColor()
+            local c = t.__color or {}
+            return c[1], c[2], c[3], c[4]
+        end
         return t
     end
     function self.GetName() return ADDON .. kind end
@@ -3816,18 +3825,32 @@ do
     -- evento, a corrente fecha, e a comemoracao e o desfecho correto.
     state.equippedSet = 9
     ns.Data.Apply({ name = "So itens", gear = 4 }, function() end, true)
+    TickUI(0.2)
+    local alturaDurante = painel:GetHeight()
     fire("EQUIPMENT_SWAP_FINISHED", true, 4)
     TickUI(0.2)
+
+    -- A ALTURA NAO MUDA NO DESFECHO. Encolher faz o painel pular na tela bem no instante em que
+    -- o olho volta para ele, e salto de layout se le como defeito, nao como fim.
+    check("a janela nao muda de tamanho no fim", painel:GetHeight(), alturaDurante)
 
     check("troca bem-sucedida: o grito aparece", painel.shout:IsShown(), true)
     check("e diz o que o usuario pediu", painel.shout:GetText(), ns.Progress.DebugShout())
     -- UMA CARA DE CADA VEZ: sobrepor o grito as linhas de passo deixaria os dois ilegiveis.
-    check("a barra sai da frente", painel.trilho:IsShown(), false)
+    -- A BARRA FICA. Ela e a unica coisa da tela de progresso que ainda diz algo depois do fim.
+    check("a barra continua na tela", painel.trilho:IsShown(), true)
+    check("e cheia", painel.trilho.fill:GetWidth(), painel.trilho:GetWidth())
+    local r, g, b = painel.trilho.fill:GetVertexColor()
+    check("e verde, nao mais dourada", g > r and g > b, true)
+
     check("o titulo sai da frente", painel.title:IsShown(), false)
     -- SO A FRASE. "Trocando para X" ao lado dela estaria no tempo errado: nessa altura ja
     -- trocou, e o painel anunciaria como presente o que acabou de virar passado.
     check("e nada mais sobra na tela", painel.done, nil)
     check("nem o relogio", painel.clock:IsShown(), false)
+    -- A frase pode ocupar duas linhas: na largura do painel ela nao cabe inteira, e encolher a
+    -- fonte para forcar uma linha so tiraria dela o tamanho, que e o recado.
+    check("a frase pode quebrar em duas linhas", painel.shout.__wordWrap, true)
 
     -- E ele nao fica para sempre: os tres segundos passam e o painel some.
     AdvanceClock(4)
@@ -3855,7 +3878,8 @@ do
     end
     check("o cenario de falha realmente falhou", falhou, true)
     check("falhou: nao comemora", painel.shout:IsShown(), false)
-    check("e a lista continua a vista", painel.trilho:IsShown(), true)
+    -- A lista de passos, e nao a barra: a barra fica na tela nos dois desfechos agora.
+    check("e a lista de passos continua a vista", painel.rows[1]:IsShown(), true)
 
     AdvanceClock(10)
     TickUI(0.2)
