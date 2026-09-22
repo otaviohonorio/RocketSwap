@@ -95,7 +95,7 @@ local WARN_STRIP_Y = LIST_BOTTOM - 4
 -- A conta fechada da janela, herdada da versão anterior e agora ancorada na lista:
 -- faixa de Avisos (142 de conteúdo) + o rodapé de 26 que o `ButtonFrameTemplate` reserva,
 -- mais os 4 de folga que a janela sempre teve.
-local WARN_STRIP_H = 106
+local WARN_STRIP_H = 130
 local TEMPLATE_FOOTER = 26
 HEIGHT = -WARN_STRIP_Y + WARN_STRIP_H + TEMPLATE_FOOTER + 4
 local FIELD_W = 200           -- combos (o dropdown de loadout de talentos usa 200)
@@ -1035,20 +1035,23 @@ local function BuildToggles()
         return fs
     end
 
-    strip.colAny = ColumnTitle(0, L["In any content"])
-    strip.colPvP = ColumnTitle(COL2, L["PvP only"])
+    strip.colPvE = ColumnTitle(0, L["PvE"])
+    strip.colPvP = ColumnTitle(COL2, L["PvP"])
 
-    strip.warn = Toggle(-52, L["Warn about wrong gear"], "warn")
-    strip.ready = Toggle(-76, L["Show my setup on ready check"], "readyCheck")
+    -- AS DUAS COLUNAS SAO REAIS DESDE 0.35.0. Antes o aviso de equipamento era uma chave so para
+    -- os dois conteudos, entao os titulos tinham que ser "Em qualquer conteudo" e "So em PvP" --
+    -- honestos, mas nao era o que o usuario queria. Com a chave separada por contexto, PvE e PvP
+    -- passam a ser colunas de verdade, cada uma com o seu aviso de equipamento.
+    strip.warnPvE = Toggle(-52, L["Warn about wrong gear"], "warnPvE")
+    strip.ready = Toggle(-76, L["Show my setup on Ready Check"], "readyCheck")
 
-    -- (!) A SUB-OPCAO PERDEU O RECUO E GANHOU OUTRA COISA. O recuo de 15 dizia "esta depende da
-    -- de cima" de graca -- mas so funciona com as duas na mesma pilha, e agora elas estao em
-    -- colunas diferentes. A dependencia passa a ser dita do jeito mais forte que existe: a caixa
-    -- fica **apagada** enquanto a de equipamento estiver desligada, com o motivo na dica. E a
-    -- mesma regra do botao Carregar -- controle que aceita clique e nao faz nada e pior que
-    -- controle apagado.
-    strip.warMode = Toggle(-52, L["Warn with War Mode on too"], "warnWarMode", COL2)
-    strip.queue = Toggle(-76, L["Show my setup when a PvP queue pops"], "queuePop", COL2)
+    strip.warnPvP = Toggle(-52, L["Warn about wrong gear"], "warnPvP", COL2)
+    -- (!) A SUB-OPCAO VOLTOU A SER FILHA, e agora com a mae na MESMA coluna: o Modo Guerra e
+    -- mundo aberto com PvP ligado, entao ele pertence a esta coluna e a este aviso. O recuo de
+    -- 15 px volta a dizer a dependencia, e o estado apagado continua dizendo tambem -- os dois
+    -- sinais somados, que e o que a skill deste projeto manda fazer.
+    strip.warMode = Toggle(-76, L["Warn with War Mode on too"], "warnWarMode", COL2 + CHILD_INDENT)
+    strip.queue = Toggle(-100, L["Show my setup when a PvP queue pops"], "queuePop", COL2)
 
     frame.toggles = strip
 end
@@ -1063,7 +1066,8 @@ function UI.RefreshToggles()
     local strip = frame and frame.toggles
     if not strip then return end
 
-    strip.warn:SetChecked(ns.db.warn ~= false)
+    strip.warnPvE:SetChecked(ns.db.warnPvE ~= false)
+    strip.warnPvP:SetChecked(ns.db.warnPvP ~= false)
     strip.ready:SetChecked(ns.db.readyCheck ~= false)
     strip.queue:SetChecked(ns.db.queuePop ~= false)
 
@@ -1072,7 +1076,8 @@ function UI.RefreshToggles()
     -- que foi pedido em 12/09.
     strip.warMode:SetChecked(ns.db.warnWarMode == true)
 
-    local ligado = ns.db.warn ~= false
+    -- A filha depende do aviso de PvP, que e a mae dela agora (Modo Guerra e mundo com PvP).
+    local ligado = ns.db.warnPvP ~= false
     if strip.warMode then
         strip.warMode:SetEnabled(ligado)
         if strip.warMode.label then

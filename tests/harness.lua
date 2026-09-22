@@ -2490,19 +2490,21 @@ do
     check("a caixa do modo guerra nasce desmarcada", caixas.warMode:GetChecked(), false)
 
     -- E APAGADA SEM A MAE: caixa clicavel que nao faz nada e pior que caixa nenhuma.
-    ns.db.warn = false
+    -- A mae agora e o aviso de PvP: Modo Guerra e mundo aberto com PvP ligado, entao os dois
+    -- moram na mesma coluna e a dependencia e entre eles.
+    ns.db.warnPvP = false
     ns.UI.Refresh()
-    check("sem o aviso de equipamento, a sub-opcao fica apagada",
+    check("sem o aviso de equipamento de PvP, a sub-opcao fica apagada",
         caixas.warMode:IsEnabled(), false)
 
-    ns.db.warn = true
+    ns.db.warnPvP = true
     ns.UI.Refresh()
     check("  e volta quando a mae e religada", caixas.warMode:IsEnabled(), true)
 
     -- ⚑ A GEOMETRIA, que e aritmetica e se confere aqui (skill `wow-ui-design`).
-    local xMae = caixas.warn:PointOffset("TOPLEFT")
+    local xMae = caixas.warnPvE:PointOffset("TOPLEFT")
     local xFilha, yFilha = caixas.warMode:PointOffset("TOPLEFT")
-    local _, yMae = caixas.warn:PointOffset("TOPLEFT")
+    local _, yMae = caixas.warnPvE:PointOffset("TOPLEFT")
     local _, yReady = caixas.ready:PointOffset("TOPLEFT")
     local _, yQueue = caixas.queue:PointOffset("TOPLEFT")
 
@@ -2512,20 +2514,25 @@ do
     -- dois checks acima ja trancam, e que e um sinal mais forte do que o recuo era.
     --
     -- O que entra no lugar: as colunas sao mesmo DUAS, e cada caixa esta na sua.
-    check("a sub-opcao mudou de coluna", xFilha > xMae + 100, true)
-    check("e o convite de fila esta na mesma coluna dela",
-        select(1, caixas.queue:PointOffset("TOPLEFT")), xFilha)
-    check("enquanto equipamento e ready check ficam na primeira",
+    -- DUAS COLUNAS DE VERDADE (0.35.0): PvE de um lado, PvP do outro, cada uma com o SEU aviso
+    -- de equipamento. Antes era uma chave so para os dois conteudos, e por isso os titulos
+    -- tinham que ser "Em qualquer conteudo" / "So em PvP".
+    local xPvP = caixas.warnPvP:PointOffset("TOPLEFT")
+    check("o aviso de PvP fica na segunda coluna", xPvP > xMae + 100, true)
+    check("e o de PvE na primeira, junto do Ready Check",
         select(1, caixas.ready:PointOffset("TOPLEFT")), xMae)
 
-    -- LINHAS ALINHADAS ENTRE AS COLUNAS: a primeira caixa de cada uma na mesma altura, e a
-    -- segunda idem. Sem isso as duas colunas viram duas listas soltas lado a lado.
-    check("a primeira linha das duas colunas se alinha", yFilha, yMae)
-    check("e a segunda tambem", yQueue, yReady)
+    -- A PRIMEIRA LINHA DAS DUAS COLUNAS SE ALINHA: sem isso viram duas listas soltas lado a lado.
+    local _, yPvP = caixas.warnPvP:PointOffset("TOPLEFT")
+    check("a primeira linha das duas colunas se alinha", yPvP, yMae)
 
-    -- E O PASSO VERTICAL E O MESMO NAS DUAS: ritmo diferente por coluna e o que faz uma tela
-    -- parecer remendada.
-    check("o passo vertical e igual nas duas colunas", yMae - yReady, yFilha - yQueue)
+    -- E A SUB-OPCAO VOLTOU A SER FILHA, com a mae na MESMA coluna -- entao o recuo de 15 px
+    -- volta a fazer sentido e volta a ser conferido.
+    check("a sub-opcao e recuada como opcao filha", xFilha - xPvP, 15)
+    check("e fica logo abaixo da mae dela", yMae - yFilha, yMae - yReady)
+
+    -- LEI DA PROXIMIDADE dentro da coluna de PvP: o convite de fila vem depois da sub-opcao.
+    check("o convite de fila fica abaixo da sub-opcao", yQueue < yFilha, true)
 
     -- E A FAIXA TEM DE CABER TODAS: altura fixa que nao acompanha o conteudo transborda em
     -- silencio -- foi o defeito que a terceira caixa criou e que este check tranca; a quarta
@@ -2890,16 +2897,18 @@ print("== as caixas de aviso ficam visiveis SEM conjunto nenhum ==")
 -- O motivo de existirem: os dois avisos sao o que o addon faz por quem nunca cria conjunto.
 -- Se eles so existissem em /rs warn e /rs ready, ninguem descobriria. E se sumissem junto com
 -- a lista na tela vazia, sumiriam exatamente no caso que os justifica.
-check("ligados por padrao", ns.db.warn ~= false and ns.db.readyCheck ~= false, true)
+check("ligados por padrao",
+    ns.db.warnPvE ~= false and ns.db.warnPvP ~= false and ns.db.readyCheck ~= false, true)
 check("a faixa existe", ns.UI.DebugToggles() ~= nil, true)
 check("e nao e escondida com a lista vazia",
     ns.UI.DebugToggles().__shown ~= false, true)
 
--- Desmarcar escreve no banco, e o aviso obedece.
-local caixa = ns.UI.DebugToggles().warn
+-- Desmarcar escreve no banco, e o aviso obedece. A caixa e a de PvP porque o cenario abaixo e
+-- uma arena: desde 0.35.0 cada conteudo tem a sua, e desligar a de PvE nao calaria esta.
+local caixa = ns.UI.DebugToggles().warnPvP
 caixa.__checked = false
 caixa.__scripts.OnClick(caixa)
-check("desmarcar desliga o aviso", ns.db.warn, false)
+check("desmarcar desliga o aviso de PvP", ns.db.warnPvP, false)
 
 state.instance = "arena"
 VestirTudo(false)
@@ -2909,7 +2918,7 @@ check("e com ele desligado o addon nao avisa", ns.Alert.__Shown(), false)
 
 caixa.__checked = true
 caixa.__scripts.OnClick(caixa)
-check("remarcar religa", ns.db.warn, true)
+check("remarcar religa", ns.db.warnPvP, true)
 state.instance = nil
 
 print("== janela: selecao automatica ==")
@@ -4065,6 +4074,56 @@ do
 
     state.lostItems = 0
     state.wornPieces = nil
+end
+
+
+--------------------------------------------------------------------------------
+-- AVISO DE EQUIPAMENTO: UMA CHAVE POR CONTEUDO (0.35.0)
+--
+-- Era uma chave so para PvE e PvP. Quem faz mitica+ toda noite e PvP de vez em quando queria o
+-- aviso ligado num e calado no outro, e tinha que escolher os dois juntos.
+--------------------------------------------------------------------------------
+do
+    print("")
+    print("-- aviso de equipamento por conteudo")
+
+    ns.db.warnPvE, ns.db.warnPvP = true, false
+    ns.Gear.ClearCache()
+
+    state.instance = "arena"
+    VestirTudo(false)
+    ns.Alert.Check("teste")
+    check("PvP desligado cala em arena", ns.Alert.__Shown(), false)
+
+    state.instance = "party"
+    ns.Gear.ClearCache()
+    VestirTudo(true)
+    ns.Alert.Check("teste")
+    check("e PvE ligado continua avisando em masmorra", ns.Alert.__Shown(), true)
+
+    -- E O INVERSO, que e o que prova que as duas chaves sao mesmo independentes.
+    ns.Alert.Hide()
+    ns.db.warnPvE, ns.db.warnPvP = false, true
+    ns.Gear.ClearCache()
+    ns.Alert.Check("teste")
+    check("PvE desligado cala em masmorra", ns.Alert.__Shown(), false)
+
+    state.instance = "arena"
+    ns.Gear.ClearCache()
+    VestirTudo(false)
+    ns.Alert.Check("teste")
+    check("e PvP ligado continua avisando em arena", ns.Alert.__Shown(), true)
+
+    -- A MIGRACAO: quem tinha DESLIGADO o aviso antigo nao pode ver ele voltar sozinho.
+    RocketSwapDB.warn = false
+    RocketSwapDB.warnPvE, RocketSwapDB.warnPvP = nil, nil
+    ns.frame.__scripts.OnEvent(ns.frame, "ADDON_LOADED", "RocketSwap")
+    check("a migracao herda o desligado das duas", RocketSwapDB.warnPvE, false)
+    check("  nas duas mesmo", RocketSwapDB.warnPvP, false)
+    check("  e a chave velha some", RocketSwapDB.warn, nil)
+
+    ns.db.warnPvE, ns.db.warnPvP = true, true
+    ns.Alert.Hide()
 end
 
 

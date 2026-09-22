@@ -1,4 +1,4 @@
-# Rocket Swap 0.34.1
+# Rocket Swap 0.35.0
 
 - **The preset list is now a card.** Each field gets its own labelled line — Specialization,
   Talents, Gear, Appearance — instead of one run-on line with dots between values. The card is
@@ -15,6 +15,7 @@
 - Every label for the queue-pop summary now says **PvP queue**, because that is all it watches:
   battlegrounds and arenas. The dungeon and raid finders are a different system and never
   triggered it, and the old wording did not say so.
-- The warning checkboxes are now two columns: **In any content** and **PvP only**. There is no
-  PvE-only warning — the wrong-gear warning and the ready check summary both work in either —
-  so a "PvE" column would have been empty or misleading.
+- **The wrong-gear warning is now one switch per content: PvE and PvP.** They used to share a
+  single switch, so anyone who runs Mythic+ every night and PvP now and then had to choose one
+  setting for both. If you had it turned off, it stays off for both.
+- The checkboxes are laid out in two columns, PvE and PvP, each with its own gear warning.
