@@ -121,6 +121,7 @@ local ATTIC_Y = -30           -- faixa entre o título e o inset
 local CHILD_INDENT = 15       -- recuo de opção filha (`Blizzard_SettingControls.lua:1`)
 
 local frame, editor, selection
+local lastFilledRow      -- so para o harness: ver `UI.DebugLastRow`
 
 -- O conjunto em edição, guardado AQUI e não perguntado ao ScrollBox.
 --
@@ -238,7 +239,7 @@ local function BuildRow(row)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(CARD_ICON, CARD_ICON)
-    row.icon:SetPoint("TOPLEFT", 6, -CARD_TOP)   -- reancorado em `FillRow`, com o n de campos
+    row.icon:SetPoint("TOPLEFT", 6, -CARD_TOP)   -- no topo do bloco de campos, colado no titulo
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -433,12 +434,15 @@ local function FillRow(row, preset)
             fs:SetText("|cff9a9a9e" .. linha[1] .. ":|r  " .. (linha[2] or "?"))
         end
     end
-    -- O ICONE CENTRALIZADO NO BLOCO DE CAMPOS: com um campo so ele ficaria pendurado no topo.
-    local blocoH = FieldsHeight(#linhas)
-    row.icon:ClearAllPoints()
-    row.icon:SetPoint("TOPLEFT", 6, -(CARD_TOP + math.floor((blocoH - CARD_ICON) / 2)))
-
+    -- O ICONE ENCOSTA NO TITULO, e nao no meio do bloco de campos.
+    --
+    -- Ele ja esteve centralizado no bloco, o que com quatro campos o empurrava 14 px para baixo
+    -- e o deixava boiando ao lado da segunda linha. Pedido: *"aproximar o icone do titulo, logo
+    -- abaixo dele"*. Ancorado no TOPO do bloco, ele fica colado no titulo em qualquer numero de
+    -- campos -- e com um campo so o resultado e o mesmo de antes, porque ali o bloco tem a
+    -- altura do proprio icone.
     row:SetHeight(CardHeight(preset))
+    lastFilledRow = row
 
     local _, icon = ns.Data.GearSetName(preset.gear)
     row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -1254,6 +1258,17 @@ end
 ---conferveis daqui.
 function UI.DebugCardHeight(preset)
     return CardHeight(preset)
+end
+
+---A ULTIMA LINHA QUE O `FillRow` preencheu, para o harness perguntar POSICAO a um widget de
+---verdade.
+---
+---(!) A primeira versao disto devolvia a constante `CARD_TOP` em vez de ler o frame. O teste
+---entao comparava a constante com ela mesma e passava sempre -- exatamente o defeito que ja
+---tinha aparecido tres vezes nesta sessao. Um "debug" que responde de cabeca nao serve de
+---testemunha: ele tem que olhar a coisa.
+function UI.DebugLastRow()
+    return lastFilledRow
 end
 
 function UI.DebugCardMetrics()
