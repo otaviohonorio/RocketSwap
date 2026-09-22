@@ -1,4 +1,4 @@
-# Rocket Swap 0.32.1
+# Rocket Swap 0.33.0
 
 - **The preset list is now a card.** Each field gets its own labelled line — Specialization,
   Talents, Gear, Appearance — instead of one run-on line with dots between values. The card is
@@ -11,3 +11,6 @@
 - The Load button is disabled for those presets, and a red strip on the card says what is missing
   and offers the fix: **Save set** when you are already wearing the rest of it, or **Equipment
   Manager**, which opens the game's own manager on the right tab. Same from chat with `/rs fix`.
+- Every label for the queue-pop summary now says **PvP queue**, because that is all it watches:
+  battlegrounds and arenas. The dungeon and raid finders are a different system and never
+  triggered it, and the old wording did not say so.

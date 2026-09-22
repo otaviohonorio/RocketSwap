@@ -31,15 +31,15 @@ L["Appearance"] = "Aparência"
 -- diferente), e rótulo irmão com forma diferente obriga a ler os dois para notar que dizem a
 -- mesma coisa. "Verificação de prontidão" é o nome da coisa em português — o cliente traduz
 -- READY_CHECK como a pergunta "Todos prontos?", que não serve de rótulo.
-L["Show my setup when the queue pops"] = "Resumo quando a fila chamar"
-L["Queue is up — check before you enter"] = "A fila chamou — confira antes de entrar"
-L["queue is up:"] = "fila chamou:"
-L["queue pop summary on."] = "resumo no convite da fila ligado."
-L["queue pop summary off."] = "resumo no convite da fila desligado."
-L["turns the queue pop summary on or off"] = "liga/desliga o resumo no convite da fila"
+L["Show my setup when a PvP queue pops"] = "Resumo quando a fila de PvP chamar"
+L["PvP queue is up — check before you enter"] = "A fila de PvP chamou — confira antes de entrar"
+L["PvP queue is up:"] = "fila de PvP chamou:"
+L["PvP queue pop summary on."] = "resumo no convite da fila de PvP ligado."
+L["PvP queue pop summary off."] = "resumo no convite da fila de PvP desligado."
+L["turns the PvP queue pop summary on or off"] = "liga/desliga o resumo no convite da fila de PvP"
 -- O CONVITE DA FILA É O ÚLTIMO MOMENTO ÚTIL: dentro da arena a restrição de addon fecha a troca
 -- do começo ao fim da partida. Daí o resumo aparecer aqui e não só no ready check.
-L["Queue pop:"] = "Convite da fila:"
+L["PvP queue pop:"] = "Convite da fila de PvP:"
 L["When the arena or battleground invite shows up, it prints the same summary — the last moment when you can still fix the build."] =
     "Quando aparece o convite da arena ou do campo de batalha, ele mostra o mesmo resumo — é o último momento em que ainda dá para ajustar talentos e itens."
 

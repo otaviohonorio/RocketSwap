@@ -113,7 +113,7 @@ end
 -- um argumento de `/rs ready`, porque sao dois gatilhos independentes -- ha quem queira so um.
 commands["queue"] = function()
     ns.db.queuePop = ns.db.queuePop == false
-    ns.Print(ns.db.queuePop and L["queue pop summary on."] or L["queue pop summary off."])
+    ns.Print(ns.db.queuePop and L["PvP queue pop summary on."] or L["PvP queue pop summary off."])
     if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
 end
 
@@ -574,7 +574,7 @@ commands["help"] = function()
     print("  /rs i18n            " .. L["checks the labels taken from the game"])
     print("  /rs warn            " .. L["turns the gear warning on or off"])
     print("  /rs ready           " .. L["turns the ready check summary on or off"])
-    print("  /rs queue           " .. L["turns the queue pop summary on or off"])
+    print("  /rs queue           " .. L["turns the PvP queue pop summary on or off"])
     print("  /rs unmute          " .. L["re-enables warnings you silenced"])
     print("  /rs fix             " .. L["updates a broken gear set with what you are wearing"])
     print("  /rs progress        " .. L["turns the swap progress panel on or off"])
