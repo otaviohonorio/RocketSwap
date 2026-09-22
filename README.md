@@ -1,61 +1,78 @@
 # Rocket Swap
 
-Conjuntos que relacionam **especialização + talentos + itens + aparência**, trocados com um
-clique. Para World of Warcraft: Midnight (12.x).
+Presets that tie **specialization + talents + gear + appearance** together, switched with one
+click. For World of Warcraft: Midnight (12.x).
 
-## Por que existe
+> 🇧🇷 [Leia em português](README-ptBR.md)
 
-Trocar de função no WoW não é uma ação, são quatro — e elas estão em quatro janelas diferentes.
-Quem alterna entre tanque e dano faz isso várias vezes por sessão, na ordem certa, sem esquecer
-nenhuma. O addon guarda o conjunto e faz as quatro.
+## Why it exists
 
-## O que ele resolve, e que não é óbvio
+Changing role in WoW is not one action, it is four — and they live in four different windows.
+Anyone who alternates between tank and damage does this several times a session, in the right
+order, without forgetting any of them. The addon stores the preset and performs all four.
 
-**A troca é uma corrente, não um comando.** Cada passo depende do anterior e é confirmado por um
-evento do jogo, não por uma leitura de estado logo depois da chamada — o servidor demora, e
-conferir na hora acusa falha numa troca que está a caminho.
+## What it solves, and what is not obvious
 
-**O jogo recusa trocar de especialização por alguns segundos depois de uma troca.** A recusa é
-transitória e não tem como ser prevista: o diário real mostrou a mesma troca sendo aceita ora em
-4, ora em 14 segundos, com todos os preditores possíveis respondendo "pode trocar". Então o addon
-não adivinha — ele espera e insiste, e o jogador clica uma vez só.
+**A swap is a chain, not a command.** Every step depends on the previous one and is confirmed by
+a game event, never by reading state right after the call — the server takes its time, and
+checking immediately reports failure on a swap that is already on its way.
 
-**A troca de aparência é API protegida.** `ChangeToOutfit` devolve sucesso e não faz nada quando
-chamada de código de addon. Desde o patch 12.0.5 existe uma ação segura `outfit`, e é por isso
-que a aparência só troca pelo botão **Carregar** — ela acontece dentro do clique, antes de todo o
-resto. O passo final apenas confere se pegou.
+**The appearance change is a protected API.** `ChangeToOutfit` returns success and does nothing
+when called from addon code. Since patch 12.0.5 there is a secure `outfit` action, which is why
+the appearance only changes through the **Load** button — it happens inside the click, before
+everything else. The final step only verifies that it took effect.
 
-## Como se usa
+**And that secure click was causing a second cast.** Because the appearance change *casts*, and
+the game refuses to start a specialization change while another cast is in flight, the first
+`SetSpecialization` was refused on every single swap that touched both. The addon read that as
+"the game is busy" and retried four seconds later — so the player saw two cast bars with a dead
+gap between them. The specialization step now waits for the in-flight cast to clear before
+asking. Diagnosed from the addon's own diary, not from a guess.
 
-| Comando | O quê |
+## How to use it
+
+| Command | What it does |
 |---|---|
-| `/rs` | abre a janela |
-| `/rs log` | o diário das últimas trocas (é ele que responde "por que não trocou?") |
-| `/rs warn` | liga/desliga o aviso de conjunto errado |
-| `/rs ready` | liga/desliga o resumo no *ready check* |
+| `/rs` | opens the window |
+| `/rs load <name>` | loads a preset by name |
+| `/rs list` | lists the presets |
+| `/rs gear` | shows what each slot is reading as |
+| `/rs progress` | turns the floating progress panel on or off |
+| `/rs log` | the diary of the last swaps (this is what answers "why didn't it switch?") |
+| `/rs warn` | turns the wrong-gear warning on or off |
+| `/rs ready` | turns the ready check summary on or off |
+| `/rs queue` | turns the PvP queue pop summary on or off |
 
-O botão do minimapa abre a janela; o botão direito carrega o último conjunto.
+The minimap button opens the window; right-click loads the last preset.
 
-## Arquitetura
+While a swap runs, a floating panel shows which steps the preset asks for, which one is running
+and which have closed. The bar advances **per closed step**, never against a clock: the chain
+cannot know how long the server will take, and a bar racing an invented estimate stalls halfway
+and lies. When the swap finishes cleanly the panel turns green and says so for three seconds; if
+a step failed it keeps the list on screen until you close it.
 
-| Arquivo | Responsabilidade |
+## Architecture
+
+| File | Responsibility |
 |---|---|
-| `Core.lua` | ciclo de vida, SavedVariables, eventos |
-| `Log.lua` | o diário em SavedVariables — lido de fora do jogo quando algo dá errado |
-| `Data.lua` | a corrente de passos e as APIs do jogo; trata Secret Values |
-| `UI.lua` | a janela: lista, editor e o progresso da troca |
-| `Gear.lua` | leitura do conjunto de itens e o aviso de equipamento errado |
-| `Alert.lua` | o resumo do *ready check* |
-| `Minimap.lua` | o botão do minimapa |
+| `Core.lua` | lifecycle, SavedVariables, events |
+| `Log.lua` | the diary in SavedVariables — read from outside the game when something goes wrong |
+| `Data.lua` | the step chain and the game APIs; handles Secret Values |
+| `UI.lua` | the window: list, editor and in-window progress |
+| `Progress.lua` | the floating progress panel |
+| `Gear.lua` | reading the equipment set and the wrong-gear warning |
+| `Alert.lua` | the ready check and queue pop summaries |
+| `Minimap.lua` | the minimap button |
 
-`tests/harness.lua` roda o addon fora do jogo com LuaJIT, e `tests/sabotar.py` quebra o código de
-propósito para conferir que os testes pegam — contar linhas `ok` não é critério de aprovação.
+`tests/harness.lua` runs the addon outside the game with LuaJIT, and `tests/sabotar.py` breaks
+the code on purpose to confirm the tests catch it — counting `ok` lines is not an acceptance
+criterion.
 
 ```
 luajit tests/harness.lua
 python tests/sabotar.py
 ```
 
-## Licença
+## License
 
-MIT — ver `LICENSE`.
+MIT — see `LICENSE`.
