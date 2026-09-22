@@ -4,8 +4,7 @@
   — it keeps whatever you are wearing, so the swap "works" and you end up with the previous
   role's piece in a set built for another one, with nothing saying so. And a set with a missing
   piece can never report itself as in use, so the step never got its check mark.
-- The preset is now marked in red **before you click**, the tooltip names the missing slots and
-  explains what would go wrong.
-- `/rs fix` updates a broken set with what you are wearing — offered only when you are already
-  wearing the whole set except the missing pieces, which is the only case where saving over it
-  fixes rather than destroys.
+- The preset is marked in red **before you click**, and the tooltip names the missing slots.
+- The Load button becomes the action that helps: **Save set** when you are already wearing the
+  rest of it, or **Equipment Manager**, which opens the game's own manager on the right tab.
+  Same from chat with `/rs fix`.

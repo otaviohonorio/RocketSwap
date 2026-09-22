@@ -247,3 +247,5 @@ L["%s updated with what you are wearing."] = "%s salvo com o que você está ves
 L["nothing to fix: no gear set is missing items you are wearing."] = "nada a consertar: nenhum conjunto está com peça faltando que você esteja vestindo."
 L["updates a broken gear set with what you are wearing"] = "salva o conjunto quebrado com o que você está vestindo"
 L["%s: %d item(s) missing"] = "%s: falta %d item(ns)"
+L["Save set"] = "Salvar conjunto"
+L["Equipment Manager"] = "Gerenciador"

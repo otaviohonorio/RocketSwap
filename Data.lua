@@ -586,6 +586,48 @@ function Data.SaveGearSet(setID)
     return ok
 end
 
+---Que ação o botão da linha deve oferecer: nenhuma mudança, salvar, ou abrir o gerenciador.
+---
+---Vive aqui, e não na UI, por duas razões: a decisão é sobre **dado do jogo**, não sobre pixel;
+---e assim o harness consegue afirmar sobre ela. A versão anterior dela morava dentro do desenho
+---da linha, onde só um teste de widget alcançaria — e teste que não roda parece aprovado.
+---@return string|nil `nil` (carregar normal), `"save"` ou `"manager"`
+function Data.GearFixAction(preset)
+    local problema = preset and preset.gear and Data.GearSetProblem(preset.gear)
+    if not problema then return nil end
+    return problema.consertavel and "save" or "manager"
+end
+
+---Abre o Gerenciador de Equipamento do jogo, na aba certa.
+---
+---Explicar onde fica é pior que levar: "abra a ficha do personagem, clique na terceira aba da
+---lateral" é uma instrução que o jogador tem que executar, e ele está no meio de outra coisa.
+---
+---`ToggleCharacter` **alterna** — chamada com a ficha já aberta, ela FECHA. Por isso a guarda do
+---`IsShown`, que é o mesmo cuidado que o EnhanceQoL toma (`EnhanceQoL.lua:7551`).
+---
+---A aba da lateral tem dois caminhos porque nem todo cliente expõe os dois; se nenhum existir, a
+---ficha abre mesmo assim, que já é quase todo o caminho.
+function Data.OpenEquipmentManager()
+    if InCombatLockdown() then
+        ns.Print(L["in combat: will apply when the fight ends."])
+        return false
+    end
+
+    if CharacterFrame and CharacterFrame.IsShown and not CharacterFrame:IsShown() then
+        if ToggleCharacter then pcall(ToggleCharacter, "PaperDollFrame") end
+    elseif ToggleCharacter and not CharacterFrame then
+        pcall(ToggleCharacter, "PaperDollFrame")
+    end
+
+    if PaperDollFrame_SetSidebar then
+        pcall(PaperDollFrame_SetSidebar, nil, 3)
+    elseif _G and _G.PaperDollSidebarTab3 and _G.PaperDollSidebarTab3.Click then
+        pcall(_G.PaperDollSidebarTab3.Click, _G.PaperDollSidebarTab3)
+    end
+    return true
+end
+
 ---Nome de um loadout/conjunto por id, para a lista mostrar texto em vez de número.
 function Data.LoadoutName(specID, configID)
     if not configID then return nil end

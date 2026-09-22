@@ -3936,6 +3936,23 @@ do
     local outro = ns.Data.GearSetProblem(3)
     check("vestindo outra coisa, NAO se oferece para salvar", outro.consertavel, false)
 
+    -- O BOTAO MUDA DE PAPEL. Com peca perdida, "Carregar" e recusado de qualquer jeito, entao
+    -- deixar esse rotulo ali seria oferecer uma acao que nao acontece.
+    state.wornPieces = { [3] = 12 }     -- de volta ao caso consertavel
+    local quebrado = { name = "Tank", gear = 3 }
+    check("com peca perdida o botao vira 'salvar'", ns.Data.GearFixAction(quebrado), "save")
+
+    -- Sem poder salvar com seguranca, ele leva ao Gerenciador em vez de agir sozinho: salvar
+    -- vestindo outra coisa gravaria a roupa errada por cima do conjunto.
+    state.wornPieces = { [3] = 1 }
+    check("vestindo outra coisa, leva ao gerenciador", ns.Data.GearFixAction(quebrado), "manager")
+    state.wornPieces = { [3] = 12 }
+
+    -- Conjunto sao: o botao continua sendo o de carregar.
+    state.lostItems = 0
+    check("conjunto inteiro nao muda o botao", ns.Data.GearFixAction(quebrado), nil)
+    state.lostItems = 2
+
     -- Conjunto inteiro: nenhum problema, nenhuma recusa.
     state.lostItems = 0
     state.wornPieces = nil
