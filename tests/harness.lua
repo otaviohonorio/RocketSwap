@@ -3824,6 +3824,10 @@ do
     -- UMA CARA DE CADA VEZ: sobrepor o grito as linhas de passo deixaria os dois ilegiveis.
     check("a barra sai da frente", painel.trilho:IsShown(), false)
     check("o titulo sai da frente", painel.title:IsShown(), false)
+    -- SO A FRASE. "Trocando para X" ao lado dela estaria no tempo errado: nessa altura ja
+    -- trocou, e o painel anunciaria como presente o que acabou de virar passado.
+    check("e nada mais sobra na tela", painel.done, nil)
+    check("nem o relogio", painel.clock:IsShown(), false)
 
     -- E ele nao fica para sempre: os tres segundos passam e o painel some.
     AdvanceClock(4)
