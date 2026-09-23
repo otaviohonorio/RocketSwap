@@ -38,6 +38,28 @@ local function Reposition()
         math.cos(angle) * RADIUS, math.sin(angle) * RADIUS)
 end
 
+---O menu do botao direito: os conjuntos, pelo titulo, para trocar sem abrir a janela.
+---
+---Sem conjunto nenhum, ou num cliente sem o menu novo, o direito faz o que o esquerdo faz --
+---abre a janela. NUNCA uma troca: e a troca sem pedir que este menu existe para eliminar.
+function Minimap_.Menu(owner)
+    local presets = ns.db and ns.db.presets or {}
+    if #presets == 0 or not _G.MenuUtil then
+        ns.UI.Toggle()
+        return false
+    end
+
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle(L["Switch to"])
+        for _, preset in ipairs(presets) do
+            root:CreateButton(preset.name or "?", function()
+                ns.LoadPreset(preset)
+            end)
+        end
+    end)
+    return true
+end
+
 function Minimap_.Create()
     if button then return button end
 
@@ -68,9 +90,27 @@ function Minimap_.Create()
 
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
-    button:SetScript("OnClick", function(_, mouseButton)
+    -- (!) O BOTAO DIREITO LISTA OS CONJUNTOS. ELE NAO TROCA NADA SOZINHO.
+    --
+    -- Ele chamava `ns.LoadLast()`, e um usuario reportou em video que o clique direito "trocava
+    -- a spec sozinha". Estava certo, e o codigo fazia exatamente isso.
+    --
+    -- Dois motivos para tirar:
+    --
+    --   * BOTAO DIREITO EM ICONE DE MINIMAPA ABRE MENU. E a convencao do jogo inteiro, e e o
+    --     que os outros dois addons Rocket fazem (nos dois, o direito abre as opcoes). Este era
+    --     o unico que divergia -- e o unico em que a acao divergente era destrutiva. Quem clica
+    --     esperando um menu leva uma troca de spec, talentos e itens.
+    --   * A DICA NAO SALVA NINGUEM. Ela dizia "Right click: load the last preset", mas dica
+    --     exige passar o mouse e ler, e ninguem le dica antes de clicar com o direito.
+    --
+    -- POR QUE ISSO NAO APARECIA AQUI: todos os conjuntos deste desenvolvedor tem aparencia, e
+    -- conjunto com aparencia cai no ramo do `LoadPreset` que ABRE A JANELA em vez de aplicar.
+    -- O dado dele impedia o defeito de acontecer. Os conjuntos do usuario que reportou nao tem
+    -- aparencia, entao caiam direto no `Data.Apply`. Confirmado nos dois SavedVariables.
+    button:SetScript("OnClick", function(self, mouseButton)
         if mouseButton == "RightButton" then
-            ns.LoadLast()
+            Minimap_.Menu(self)
         else
             ns.UI.Toggle()
         end
@@ -79,7 +119,7 @@ function Minimap_.Create()
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText(ADDON, 1, 1, 1)
-        GameTooltip:AddLine(L["Left click: open. Right click: load the last preset."],
+        GameTooltip:AddLine(L["Left click: open. Right click: pick a preset."],
             0.7, 0.7, 0.7, true)
         GameTooltip:Show()
     end)

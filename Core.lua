@@ -121,42 +121,62 @@ function ns.SetAtlasSafe(texture, atlas)
 end
 
 --------------------------------------------------------------------------------
----Carrega o conjunto usado por ultimo. E o que o botao direito do minimapa faz: o caso
----comum e alternar entre dois conjuntos, e para isso nao vale abrir janela.
+---A janela, sem fechar a que ja esta aberta.
+---
+---`UI.Toggle` alterna, entao chamar ela com a janela aberta FECHA -- e o atalho que deveria
+---mostrar um conjunto acabava escondendo tudo.
+local function Abrir()
+    if ns.UI.IsShown and ns.UI.IsShown() then return end
+    ns.UI.Toggle()
+end
+
+---Carrega um conjunto pelo caminho do ATALHO: menu do minimapa ou `/rs load`.
+---
+---(!) ATALHO NAO E CLIQUE SEGURO, e essa diferenca decide o que da para fazer aqui.
+---
+---CONJUNTO COM APARENCIA NAO SE APLICA POR ESTE CAMINHO. A troca de aparencia so acontece no
+---clique do BOTAO SEGURO, e o que acontecia era pior que nao funcionar:
+---
+---  1. a aparencia nunca entrava, entao `IsLoaded` nunca dava verdadeiro;
+---  2. com `IsLoaded` falso, o atalho REAPLICAVA tudo a cada uso -- e o jogador via "do nada ele
+---     seta o item que ja deveria estar setado", que foi o relato;
+---  3. e ainda era uma troca parcial, que e o pior dos dois mundos.
+---
+---Entao o atalho abre a janela com esse conjunto selecionado. Um clique a mais, e o clique
+---certo -- o que faz a troca INTEIRA.
+---@return boolean trocou de verdade
+function ns.LoadPreset(preset)
+    if not preset then return false end
+
+    if preset.transmog then
+        Abrir()
+        ns.UI.Select(preset)
+        ns.Print(format(L["click Load to switch to %s completely."], preset.name or "?"))
+        return false
+    end
+
+    ns.Data.Apply(preset, function(text, isError)
+        ns.UI.SetStatus(text, isError)
+        if isError then ns.Print(text) end
+    end)
+    return true
+end
+
+---O conjunto usado por ultimo, por nome. Sobrou para o `/rs load` sem argumento e para quem
+---chamava de fora; o minimapa NAO usa mais isto -- ver o comentario em `Minimap.lua`.
 function ns.LoadLast()
     local wanted = ns.db and ns.db.last
     if not wanted then
-        ns.UI.Toggle()
-        return
+        Abrir()
+        return false
     end
     for _, preset in ipairs(ns.db.presets) do
         if preset.name == wanted then
-            -- CONJUNTO COM APARENCIA NAO SE APLICA POR AQUI, e a razao e concreta: a troca de
-            -- aparencia so acontece no clique do BOTAO SEGURO, e este atalho nao e um. O que
-            -- acontecia era pior que nao funcionar:
-            --
-            --   1. a aparencia nunca entrava, entao `IsLoaded` nunca dava verdadeiro;
-            --   2. com `IsLoaded` falso, o atalho REAPLICAVA tudo a cada uso -- e o jogador via
-            --      "do nada ele seta o item que ja deveria estar setado", que foi o relato;
-            --   3. e ainda era uma troca parcial, que e o pior dos dois mundos.
-            --
-            -- Entao o atalho abre a janela com esse conjunto selecionado. Um clique a mais, e o
-            -- clique certo -- o que faz a troca INTEIRA.
-            if preset.transmog then
-                ns.UI.Toggle()
-                ns.UI.Select(preset)
-                ns.Print(format(L["click Load to switch to %s completely."], preset.name or "?"))
-                return
-            end
-
-            ns.Data.Apply(preset, function(text, isError)
-                ns.UI.SetStatus(text, isError)
-                if isError then ns.Print(text) end
-            end)
-            return
+            return ns.LoadPreset(preset)
         end
     end
-    ns.UI.Toggle()
+    Abrir()
+    return false
 end
 
 --------------------------------------------------------------------------------

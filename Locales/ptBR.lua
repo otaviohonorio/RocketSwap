@@ -97,8 +97,11 @@ L["lists the presets"] = "lista os conjuntos"
 L["no preset with that name."] = "nenhum conjunto com esse nome."
 L["commands:"] = "comandos:"
 L["loaded. %d preset(s). Type /rs."] = "carregado. %d conjunto(s). Digite /rs."
-L["Left click: open. Right click: load the last preset."] =
-    "Clique: abrir. Botão direito: carregar o último conjunto."
+-- ⛑ O CLIQUE DIREITO MUDOU (23/09): antes ele TROCAVA de conjunto, e um usuário reportou
+-- em vídeo que "trocava a spec sozinha". Agora ele lista os conjuntos, como manda a
+-- convenção de ícone de minimapa.
+L["Left click: open. Right click: pick a preset."] = "Clique esquerdo: abre. Clique direito: escolhe um conjunto."
+L["Switch to"] = "Trocar para"
 -- Transmog opcional (0.3.0)
 -- As duas chaves que sairam na 0.10.0 -- "Trocando a aparencia..." e "este cliente nao sabe
 -- trocar" -- pressupunham que o addon TROCAVA. Ele nao troca: a API e protegida, e quem troca e
