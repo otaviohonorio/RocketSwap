@@ -161,6 +161,22 @@ end
 --------------------------------------------------------------------------------
 UIParent = widget("Frame")
 Minimap = widget("Frame")
+
+-- O MENU DE CONTEXTO FALSO. Ele guarda o que foi montado -- titulo e botoes -- para o teste
+-- poder conferir a LISTA sem desenhar nada, e poder "clicar" numa entrada chamando a funcao
+-- que ela registrou.
+MENU = nil
+MenuUtil = {
+    CreateContextMenu = function(_, montar)
+        MENU = { titulo = nil, itens = {} }
+        montar(nil, {
+            CreateTitle = function(_, texto) MENU.titulo = texto end,
+            CreateButton = function(_, texto, fn)
+                MENU.itens[#MENU.itens + 1] = { texto = texto, acao = fn }
+            end,
+        })
+    end,
+}
 GameTooltip = widget("GameTooltip")
 UISpecialFrames = {}
 SlashCmdList = {}
@@ -1700,6 +1716,79 @@ do
     ns.LoadLast()
     check("sem aparencia, o atalho aplica mesmo", state.pendingSet, 4)
     fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+end
+
+print("== o botao direito do minimapa LISTA, nao troca ==")
+-- (!) RELATO DE USUARIO, COM VIDEO (23/09): "quando ele clica com o direito no icone do minimap
+-- ta trocando a spec sozinha". Estava certo -- o direito chamava `LoadLast()`, que aplica.
+--
+-- E o desenvolvedor NAO conseguia reproduzir, por um motivo que estava no dado e nao no codigo:
+-- TODOS os conjuntos dele tem aparencia, e conjunto com aparencia cai no ramo que abre a janela
+-- em vez de aplicar. O dado dele escondia o defeito. Por isso o teste abaixo usa conjunto SEM
+-- aparencia: e a unica forma de medir o que o usuario via.
+do
+    ns.db.presets = {
+        -- Os dois na spec ATUAL de proposito: assim o passo de itens roda na hora e da para
+        -- ler `pendingSet`. Com spec diferente a troca fica esperando o evento, e o teste
+        -- mediria o relogio em vez de medir a escolha do menu.
+        { name = "Primeiro", spec = 2, gear = 3 },
+        { name = "Segundo", spec = 2, gear = 4 },
+    }
+    ns.db.last = "Primeiro"
+    state.specIndex, state.equippedSet = 2, 1
+    state.pendingSet = nil
+    if ns.UI.IsShown() then ns.UI.Toggle() end
+    MENU = nil
+
+    ns.Minimap.Menu(nil)
+    check("o direito monta um menu", MENU ~= nil, true)
+    check("  e NAO troca nada ao abrir", state.pendingSet, nil)
+    check("  listando todos os conjuntos", #MENU.itens, 2)
+    check("  pelo titulo, na ordem", MENU.itens[1].texto .. "/" .. MENU.itens[2].texto,
+        "Primeiro/Segundo")
+
+    -- (!) E A TROCA SO ACONTECE NO ITEM ESCOLHIDO. Este e o par do teste acima: sem ele,
+    -- "nao troca ao abrir" seria satisfeito por um menu que nao troca nunca.
+    MENU.itens[2].acao()
+    check("escolher um item troca para ELE", state.pendingSet, 4)
+    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+
+    -- (!) E PELO BOTAO DE VERDADE, nao chamando `Menu()` na mao.
+    --
+    -- A primeira versao destes testes chamava `ns.Minimap.Menu(nil)` direto, e a sabotagem
+    -- denunciou: religar o clique direito em `LoadLast()` passava limpo. O menu estava provado;
+    -- a LIGACAO entre o botao e ele, nao -- que e exatamente o que o usuario reportou.
+    state.pendingSet = nil
+    MENU = nil
+    local botao = ns.Minimap.Create()
+    botao.__scripts.OnClick(botao, "RightButton")
+    check("o clique direito de verdade abre o menu", MENU ~= nil, true)
+    check("  e nao troca nada", state.pendingSet, nil)
+
+    -- E o esquerdo continua abrindo a janela.
+    if ns.UI.IsShown() then ns.UI.Toggle() end
+    botao.__scripts.OnClick(botao, "LeftButton")
+    check("o esquerdo abre a janela", ns.UI.IsShown(), true)
+    if ns.UI.IsShown() then ns.UI.Toggle() end
+
+    -- Sem o menu novo do cliente, o direito abre a janela -- e nunca aplica pelas costas.
+    local salvo = MenuUtil
+    MenuUtil = nil
+    state.pendingSet = nil
+    if ns.UI.IsShown() then ns.UI.Toggle() end
+    ns.Minimap.Menu(nil)
+    check("cliente sem menu: abre a janela", ns.UI.IsShown(), true)
+    check("  e mesmo assim nao troca", state.pendingSet, nil)
+    MenuUtil = salvo
+
+    -- Sem conjunto nenhum nao ha o que listar: idem.
+    if ns.UI.IsShown() then ns.UI.Toggle() end
+    local presets = ns.db.presets
+    ns.db.presets = {}
+    ns.Minimap.Menu(nil)
+    check("sem conjuntos: abre a janela", ns.UI.IsShown(), true)
+    ns.db.presets = presets
+    if ns.UI.IsShown() then ns.UI.Toggle() end
 end
 
 print("== a recarga da magia de trocar de spec ==")
