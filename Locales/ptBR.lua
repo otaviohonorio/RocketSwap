@@ -203,6 +203,7 @@ L["%s loaded, except: %s"] = "%s carregado, menos: %s"
 
 -- O diário da troca (0.12.0)
 L["log cleared."] = "diário limpo."
+L["the log only exists in development builds."] = "o diário só existe na versão de desenvolvimento."
 L["the log is empty: load a preset and look again."] =
     "o diário está vazio: carregue um conjunto e olhe de novo."
 L["log: %d entries. The last ones:"] = "diário: %d linhas. As últimas:"

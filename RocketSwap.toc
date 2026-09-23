@@ -11,14 +11,18 @@
 ## Version: 0.37.0
 ## X-Curse-Project-ID: 1698583
 ## SavedVariablesPerCharacter: RocketSwapDB
+#@debug@
 ## SavedVariables: RocketSwapLogDB
+#@end-debug@
 ## IconTexture: Interface\Icons\INV_Misc_MissileLarge_Red
 ## AllowAddOnTableAccess: 1
 
 Locales\enUS.lua
 Locales\ptBR.lua
 Core.lua
+#@debug@
 Log.lua
+#@end-debug@
 Data.lua
 UI.lua
 Progress.lua

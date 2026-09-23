@@ -4282,4 +4282,47 @@ do
 end
 
 
+--------------------------------------------------------------------------------
+-- O PACOTE NAO LEVA O DIARIO (23/09). Regra do usuario: *"quando forem publicados nao devem gerar
+-- os logs"*. As regras do empacotador aplicadas ao .toc (README do BigWigsMods/packager, "In TOC
+-- files"): o bloco `#@debug@` sai inteiro; do `#@non-debug@` sai o "# " de cada linha.
+--------------------------------------------------------------------------------
+do
+    print("\n== o diario so existe em desenvolvimento ==")
+    check("em desenvolvimento o diario e o de verdade", ns.Log.enabled, true)
+
+    local pacote, dentroDebug, dentroNon = {}, false, false
+    for linha in io.lines(ADDON .. ".toc") do
+        linha = linha:gsub("%s+$", "")
+        if linha == "#@debug@" then dentroDebug = true
+        elseif linha == "#@end-debug@" then dentroDebug = false
+        elseif linha == "#@non-debug@" then dentroNon = true
+        elseif linha == "#@end-non-debug@" then dentroNon = false
+        elseif not dentroDebug then
+            pacote[#pacote + 1] = dentroNon and linha:gsub("^# ", "") or linha
+        end
+    end
+    local temLog, declaraLog = false, false
+    for _, linha in ipairs(pacote) do
+        if linha:match("Log%.lua$") then temLog = true end
+        if linha:match("^## SavedVariables") and linha:find("LogDB", 1, true) then declaraLog = true end
+    end
+    check("o .toc empacotado nao carrega Log.lua", temLog, false)
+    check("  nem declara o RocketSwapLogDB", declaraLog, false)
+    local pkg = io.open(".pkgmeta"):read("*a")
+    check("  e o .pkgmeta nem poe o Log.lua no zip", pkg:find("%- Log%.lua") ~= nil, true)
+
+    -- Sem o Log.lua: o substituto engole tudo e nenhum banco de diario nasce.
+    local real = ns.Log
+    ns.Log = setmetatable({ enabled = false }, { __index = function() return function() end end })
+    RocketSwapLogDB = nil
+    local ok1 = pcall(ns.Log.Add, "teste", { a = 1 })
+    local ok2 = pcall(ns.Log.Call, "passo", "chamada", true)
+    local ok3 = pcall(SlashCmdList.ROCKETSWAP, "log")
+    check("sem o diario, as chamadas a ele nao quebram", ok1 and ok2, true)
+    check("  e /rs log so explica que e de desenvolvimento", ok3, true)
+    check("  e nenhum banco de diario e criado", RocketSwapLogDB, nil)
+    ns.Log = real
+end
+
 print("\nTudo carregou e rodou sem erro de Lua.")

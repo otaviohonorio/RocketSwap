@@ -550,6 +550,11 @@ end
 -- arquivo em SavedVariables e quem responde o caso dificil, e ele so e escrito no `/reload` ou
 -- no logout: por isso a mensagem diz isso em vez de deixar o jogador procurar um arquivo vazio.
 commands["log"] = function(rest)
+    -- So existe fora do pacote (ver Core.lua).
+    if not ns.Log.enabled then
+        ns.Print(L["the log only exists in development builds."])
+        return
+    end
     local arg = rest and rest:lower():match("^%S*")
 
     if arg == "clear" then
@@ -591,7 +596,9 @@ commands["help"] = function()
     print("  /rs unmute          " .. L["re-enables warnings you silenced"])
     print("  /rs fix             " .. L["updates a broken gear set with what you are wearing"])
     print("  /rs progress        " .. L["turns the swap progress panel on or off"])
-    print("  /rs log [clear]     " .. L["shows the log of the last swaps"])
+    if ns.Log.enabled then
+        print("  /rs log [clear]     " .. L["shows the log of the last swaps"])
+    end
 end
 
 -- As globais SLASH_* precisam ser criadas em escopo de arquivo, nao dentro de evento.
