@@ -55,7 +55,7 @@ from chat with `/rs fix`.
 | `/rs ready` | turns the ready check summary on or off |
 | `/rs queue` | turns the PvP queue pop summary on or off |
 
-The minimap button opens the window; right-click loads the last preset.
+The minimap button opens the window; right-click lists your presets to pick one.
 
 While a swap runs, a floating panel shows which steps the preset asks for, which one is running
 and which have closed. The bar advances **per closed step**, never against a clock: the chain

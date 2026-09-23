@@ -55,7 +55,7 @@ que abre o gerenciador do próprio jogo na aba certa. Pelo chat, `/rs fix`.
 | `/rs ready` | liga/desliga o resumo no *ready check* |
 | `/rs queue` | liga/desliga o resumo no convite da fila de PvP |
 
-O botão do minimapa abre a janela; o botão direito carrega o último conjunto.
+O botão do minimapa abre a janela; o botão direito lista os conjuntos para você escolher um.
 
 Durante a troca, um painel flutuante mostra quais etapas o conjunto pede, em qual delas estamos e
 quais já fecharam. A barra anda **por etapa fechada**, nunca contra um relógio: a corrente não
