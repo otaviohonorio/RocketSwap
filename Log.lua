@@ -21,7 +21,7 @@ local ADDON, ns = ...
 
 local L = ns.L
 
-local Log = {}
+local Log = { enabled = true }
 ns.Log = Log
 
 -- Uma corrida gera ~12 linhas (início, 4 passos × pedido/resposta, eventos, fim). 400 guarda

@@ -40,6 +40,19 @@ ns.defaults = {
     mutedSlots = {},      -- slots que o usuario mandou calar
 }
 
+-- O DIARIO E FERRAMENTA DE DESENVOLVIMENTO, E NAO VAI NO PACOTE. Regra do usuario (23/09):
+-- *"quando forem publicados não devem gerar os logs, por que vai ficar consumindo espaço e disco
+-- do usuário, apenas aqui para desenvolvimento"*. `Log.lua` e o `RocketSwapLogDB` ficam em
+-- `#@debug@` no .toc, que o empacotador remove de TODO build (alpha inclusive), e o `.pkgmeta`
+-- tira o arquivo do zip.
+--
+-- Este substituto e o que o jogador recebe: toda chamada responde nada, entao as ~30 chamadas
+-- ao diario espalhadas pelo addon nao precisam de guarda, e esquecer uma nao quebra a versao
+-- publicada. Em desenvolvimento o `Log.lua`, carregado depois deste arquivo, troca pelo real.
+ns.Log = setmetatable({ enabled = false }, {
+    __index = function() return function() end end,
+})
+
 function ns.Print(...)
     print("|cffffd100" .. ADDON .. "|r:", ...)
 end
