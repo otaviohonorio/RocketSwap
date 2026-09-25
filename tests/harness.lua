@@ -4469,6 +4469,29 @@ do
     check("macros cheias: nenhuma criada", criou, false)
     check("  e o chat diz que estao cheias", ditos[#ditos]:find("18", 1, true) ~= nil, true)
 
+    -- (!) O JOGO ACEITA A CHAMADA E A MACRO NAO FICA (25/09, primeiro teste no jogo: *"criou a
+    -- macro, so nao jogou o icone pra barra"*). O addon confere o espaco depois; sem a macro la,
+    -- o chat nao pode dizer "colocada".
+    for slot = 61, 72 do barra[slot] = nil end
+    for i = 121, 138 do macros[i] = nil end
+    function GetActionInfo(slot)
+        if barra[slot] then return "macro", barra[slot] end
+    end
+    local realPlace = PlaceAction
+    PlaceAction = function() naMao = nil end          -- engole a macro
+    ns.UI.New()
+    local t = ns.UI.Selected()
+    t.name = "Nao ficou"
+    ns.UI.AfterEdit()
+    check("PlaceAction sem efeito: o chat NAO diz que colocou", ditos[#ditos]:find("/macro", 1, true) ~= nil, true)
+    PlaceAction = realPlace
+    GetActionInfo = nil
+
+    -- /rs macrobar responde no chat sem erro.
+    local okBar = pcall(SlashCmdList.ROCKETSWAP, "macrobar")
+    check("/rs macrobar roda", okBar, true)
+    check("  e diz quantos espacos vazios visiveis ve", ditos[#ditos]:find("empty visible slots", 1, true) ~= nil, true)
+
     ns.Print = realPrint
 end
 
