@@ -4325,4 +4325,151 @@ do
     ns.Log = real
 end
 
+--------------------------------------------------------------------------------
+-- (!) MACRO POR CONJUNTO (25/09). *"quando salvar o conjunto ja criar a macro com o icone usado
+-- ja e jogar para um espaco vazio da barra e/ou informar"*, *"nas macros especificas e nao na
+-- geral"*. A macro clica num botao seguro com nome fixo, porque `/rs <nome>` nao troca a
+-- APARENCIA (acao segura, so por clique).
+--------------------------------------------------------------------------------
+print("\n-- macro por conjunto")
+do
+    MAX_ACCOUNT_MACROS, MAX_CHARACTER_MACROS = 120, 18
+    local macros = {}              -- indice -> { name, icon, body, perChar }
+    local barra = {}               -- slot -> macro index
+    local ditos = {}
+    local function NumChar()
+        local n = 0
+        for i = 121, 138 do if macros[i] then n = n + 1 end end
+        return n
+    end
+    function GetNumMacros() return 0, NumChar() end
+    function CreateMacro(name, icon, body, perChar)
+        assert(perChar, "macro tem que ser do PERSONAGEM")
+        local i = 121 + NumChar()
+        macros[i] = { name = name, icon = icon, body = body, perChar = perChar }
+        return i
+    end
+    function EditMacro(i, name, icon, body) macros[i].name, macros[i].icon, macros[i].body = name, icon, body end
+    function DeleteMacro(i)
+        -- como no jogo: as de depois sobem uma posicao
+        local j = i
+        while macros[j + 1] do macros[j] = macros[j + 1]; j = j + 1 end
+        macros[j] = nil
+    end
+    function GetMacroBody(i) return macros[i] and macros[i].body end
+    function GetMacroInfo(i) return macros[i] and macros[i].name end
+    local naMao
+    function GetCursorInfo() return naMao and "macro" or nil end
+    function PickupMacro(i) naMao = i end
+    function PlaceAction(slot) barra[slot] = naMao; naMao = nil end
+    function ClearCursor() naMao = nil end
+    function HasAction(slot) return barra[slot] ~= nil end
+    -- Barra de baixo visivel com o slot 61 ocupado; barra 5 escondida.
+    for i = 1, 12 do
+        local b = CreateFrame("Button")
+        b.action = 60 + i
+        b.IsVisible = function() return true end
+        _G["MultiBarBottomLeftButton" .. i] = b
+        local h = CreateFrame("Button")
+        h.action = 144 + i
+        h.IsVisible = function() return false end
+        _G["MultiBar5Button" .. i] = h
+    end
+    barra[61] = 999
+    local realPrint = ns.Print
+    ns.Print = function(t) ditos[#ditos + 1] = t end
+
+    ns.db.presets = {}
+    ns.UI.Refresh()
+    ns.UI.New()
+    local p = ns.UI.Selected()
+    -- Com um conjunto de equipamento: o icone da linha na janela e o dele.
+    p.name, p.transmog, p.gear = "Mitica", 71, SETS[1].setID
+    ns.UI.AfterEdit()                         -- o que o salvar do nome chama
+
+    local idx = 121
+    local m = macros[idx]
+    check("salvar o nome cria a macro", m ~= nil, true)
+    check("  nas macros do PERSONAGEM", m and m.perChar, true)
+    check("  com o nome do conjunto", m and m.name, "Mitica")
+    local iconeJanela = select(2, ns.Data.GearSetName(p.gear))
+    check("  (o conjunto do teste tem icone)", iconeJanela ~= nil, true)
+    check("  com o icone que a janela mostra", m and m.icon, iconeJanela)
+    check("  clicando no botao seguro do conjunto", m and m.body, "/click RocketSwapPreset" .. p.uid .. " LeftButton 1")
+    check("e vai para o primeiro espaco VAZIO de uma barra VISIVEL", barra[62], idx)
+    check("  sem tocar na barra escondida", barra[145], nil)
+    check("  e o chat avisa", ditos[#ditos] and ditos[#ditos]:find("Mitica", 1, true) ~= nil, true)
+
+    -- O BOTAO que a macro clica: seguro, com nome fixo, e arma a aparencia no clique.
+    local b
+    for _, f in ipairs(frames) do if f.__name == "RocketSwapPreset" .. p.uid then b = f end end
+    check("o botao seguro existe com o nome da macro", b ~= nil, true)
+    check("  e aceita o clique ao pressionar", b and b.__clicks and b.__clicks[1], "AnyDown")
+    check("  com pressAndHoldAction (a receita do EnhanceQoL)", b and b.__attrs.pressAndHoldAction, true)
+    local carregou
+    local realLoad = ns.UI.Load
+    ns.UI.Load = function(x) carregou = x end
+    b.__scripts.PreClick(b)
+    check("  o clique arma a aparencia do conjunto", b.__attrs.type, "outfit")
+    b.__scripts.PostClick(b)
+    check("  e aplica o conjunto", carregou, p)
+    ns.UI.Load = realLoad
+
+    -- RENOMEAR: a mesma macro, nome novo. Nome longo corta em 16 LETRAS, sem partir acento.
+    p.name = "Mitica mais alta do mes"
+    ns.UI.AfterEdit()
+    check("renomear edita a mesma macro", macros[idx].name, "Mitica mais alta")
+    check("  e nao cria outra", macros[idx + 1], nil)
+    check("16 letras com acento nao partem o caractere",
+        ns.Macro.Name({ name = "Missão Ãrdua é já" }), "Missão Ãrdua é j")
+
+    -- APAGADA PELO JOGADOR: nao volta sozinha a cada edicao; `/rs macro` traz de volta.
+    DeleteMacro(idx)
+    ns.UI.AfterEdit()
+    check("macro apagada pelo jogador nao renasce sozinha", macros[idx], nil)
+    SlashCmdList.ROCKETSWAP("macro")
+    check("  e /rs macro traz de volta", macros[idx] and macros[idx].body:find("RocketSwapPreset", 1, true) ~= nil, true)
+
+    -- EM COMBATE: espera o fim.
+    state.inCombat = true
+    ns.UI.New()
+    local q = ns.UI.Selected()
+    q.name = "Arena"
+    ns.UI.AfterEdit()
+    check("em combate a macro espera", macros[idx + 1], nil)
+    state.inCombat = false
+    ns.Macro.CombatEnded()
+    check("  e nasce quando o combate acaba", macros[idx + 1] and macros[idx + 1].name, "Arena")
+
+    -- APAGAR O CONJUNTO leva a macro dele (so a nossa).
+    ns.UI.Delete()
+    local sobrou = false
+    for _, mm in pairs(macros) do if mm.name == "Arena" then sobrou = true end end
+    check("apagar o conjunto apaga a macro dele", sobrou, false)
+    check("  e a do outro conjunto continua", macros[idx] and macros[idx].name, "Mitica mais alta")
+
+    -- BARRA VISIVEL CHEIA: a macro nao vai para a barra escondida (o jogador nem a veria), e o
+    -- chat manda arrastar pelo /macro.
+    for slot = 61, 72 do barra[slot] = barra[slot] or 998 end
+    ns.UI.New()
+    local semEspaco = ns.UI.Selected()
+    semEspaco.name = "Sem espaco"
+    ns.UI.AfterEdit()
+    check("barra visivel cheia: nada na barra escondida", barra[145], nil)
+    check("  e o chat manda arrastar pelo /macro", ditos[#ditos]:find("/macro", 1, true) ~= nil, true)
+
+    -- CHEIO: 18 macros de personagem, nenhuma criada, e o chat diz.
+    for i = 121, 138 do macros[i] = macros[i] or { name = "x", body = "" } end
+    ns.UI.New()
+    local r = ns.UI.Selected()
+    r.name = "Cheio"
+    ns.UI.AfterEdit()
+    local criou = false
+    for _, mm in pairs(macros) do if mm.name == "Cheio" then criou = true end end
+    check("macros cheias: nenhuma criada", criou, false)
+    check("  e o chat diz que estao cheias", ditos[#ditos]:find("18", 1, true) ~= nil, true)
+
+    ns.Print = realPrint
+end
+
 print("\nTudo carregou e rodou sem erro de Lua.")

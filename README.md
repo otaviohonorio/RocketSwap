@@ -48,6 +48,7 @@ from chat with `/rs fix`.
 | `/rs` | opens the window |
 | `/rs load <name>` | loads a preset by name |
 | `/rs list` | lists the presets |
+| `/rs macro` | makes a macro for every named preset (in this character's macros) |
 | `/rs gear` | shows what each slot is reading as |
 | `/rs progress` | turns the floating progress panel on or off |
 | `/rs log` | the diary of the last swaps (this is what answers "why didn't it switch?") |
