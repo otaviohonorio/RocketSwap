@@ -270,3 +270,12 @@ L["Turn on the wrong gear warning first."] = "Ligue antes o aviso de equipamento
 -- Colunas dos avisos por conteudo (0.35.0)
 L["PvE"] = "PvE"
 L["PvP"] = "PvP"
+
+-- Macro por conjunto (Macro.lua, 25/09)
+L["in combat: the preset's macro will be made when the fight ends."] = "em combate: a macro do conjunto será criada quando o combate acabar."
+L["macro renamed: %s"] = "macro renomeada: %s"
+L["this character's macros are full (%d of %d): the preset has no macro."] = "as macros do personagem estão cheias (%d de %d): o conjunto ficou sem macro."
+L["macro created in this character's macros and placed on your action bar: %s"] = "macro criada nas macros do personagem e colocada na barra de ações: %s"
+L["macro created in this character's macros (no empty slot on a visible bar, drag it from /macro): %s"] = "macro criada nas macros do personagem (não há espaço vazio numa barra visível; arraste-a pelo /macro): %s"
+L["macro deleted with the preset: %s"] = "macro apagada junto com o conjunto: %s"
+L["makes a macro for each preset, on this character"] = "cria a macro de cada conjunto, neste personagem"

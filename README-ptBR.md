@@ -48,6 +48,7 @@ que abre o gerenciador do próprio jogo na aba certa. Pelo chat, `/rs fix`.
 | `/rs` | abre a janela |
 | `/rs load <nome>` | carrega um conjunto pelo nome |
 | `/rs list` | lista os conjuntos |
+| `/rs macro` | cria a macro de cada conjunto com nome (nas macros do personagem) |
 | `/rs gear` | mostra o que cada espaço está lendo |
 | `/rs progress` | liga/desliga o painel flutuante de progresso |
 | `/rs log` | o diário das últimas trocas (é ele que responde "por que não trocou?") |

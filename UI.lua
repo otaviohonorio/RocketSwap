@@ -434,6 +434,9 @@ local function ArmOutfit(button, preset)
     end
 end
 
+-- The macro's button arms the outfit the same way (Macro.lua).
+UI.ArmOutfit = ArmOutfit
+
 ---Preenche a linha com um conjunto.
 local function FillRow(row, preset)
     BuildRow(row)
@@ -1441,6 +1444,9 @@ function UI.AfterEdit()
         frame.list:ReinitializeFrames()
     end
     UI.RefreshEditor()
+    -- The preset's macro follows it: made the first time it has a name, renamed and re-iconed
+    -- after (Macro.lua).
+    if ns.Macro then ns.Macro.Sync(UI.Selected()) end
 end
 
 --------------------------------------------------------------------------------
@@ -1482,6 +1488,7 @@ function UI.Delete()
     local preset = UI.Selected()
     if not preset then return end
 
+    if ns.Macro then ns.Macro.Remove(preset) end
     local presets = Presets()
     for i = 1, #presets do
         if presets[i] == preset then

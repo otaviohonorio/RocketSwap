@@ -229,11 +229,14 @@ end
 function handlers:PLAYER_LOGIN()
     ns.Minimap.Create()
     ns.Alert.Create()
+    -- The secure buttons the presets' macros click are not saved: they are made again here.
+    if ns.Macro then ns.Macro.Restore() end
     ns.Print(format(L["loaded. %d preset(s). Type /rs."], #ns.db.presets))
 end
 
 function handlers:PLAYER_REGEN_ENABLED()
     FlushQueue()
+    if ns.Macro then ns.Macro.CombatEnded() end
 end
 
 -- Trocas feitas a mao (pela ficha ou pela janela de talentos) mudam qual conjunto esta

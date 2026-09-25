@@ -76,6 +76,11 @@ commands["load"] = function(rest)
     ns.Print(L["no preset with that name."])
 end
 
+-- `/rs macro`: a macro (in this character's macros) for every named preset.
+commands["macro"] = function()
+    ns.Macro.All()
+end
+
 commands["list"] = function()
     if #ns.db.presets == 0 then
         ns.Print(L["No presets yet"])
@@ -587,6 +592,7 @@ commands["help"] = function()
     print("  /rs                 " .. L["opens the window"])
     print("  /rs load <nome>     " .. L["loads a preset by name"])
     print("  /rs list            " .. L["lists the presets"])
+    print("  /rs macro           " .. L["makes a macro for each preset, on this character"])
     print("  /rs gear            " .. L["shows what each slot is reading as"])
     print("  /rs transmog        " .. L["shows the appearance sets and tests the switch"])
     print("  /rs i18n            " .. L["checks the labels taken from the game"])
