@@ -76,6 +76,18 @@ commands["load"] = function(rest)
     ns.Print(L["no preset with that name."])
 end
 
+-- `/rs macrobar`: what the addon sees of the action bars, in chat, right away -- for when a macro
+-- was made but did not reach the bar. Diagnostic lines stay in English (they name frames).
+commands["macrobar"] = function()
+    local s = ns.Macro.Survey()
+    ns.Print("macrobar: cursor=" .. tostring(s.cursor) .. "  empty visible slots=" .. #s.empty
+        .. (s.empty[1] and (" (first: " .. s.empty[1] .. ")") or ""))
+    for _, b in ipairs(s.bars) do
+        print(string.format("    %-26s found %2d  visible %2d  empty %2d  no .action %2d",
+            b.name, b.found, b.visible, b.empty, b.noAction))
+    end
+end
+
 -- `/rs macro`: a macro (in this character's macros) for every named preset.
 commands["macro"] = function()
     ns.Macro.All()

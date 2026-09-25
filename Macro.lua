@@ -135,22 +135,73 @@ end
 --------------------------------------------------------------------------------
 -- The action bar
 --------------------------------------------------------------------------------
----Puts the macro on the first empty slot of a visible bar. Returns true when it did.
-function Macro.PlaceOnBar(index)
-    if not (PickupMacro and PlaceAction and HasAction) then return false end
-    if GetCursorInfo and GetCursorInfo() then return false end   -- the player is holding something
+---What the addon sees of the bars: for `/rs macrobar` and the log. Written after the first test in
+---the game (25/09): *"criou a macro, só não jogou o icone pra barra"* -- and nothing saved could say
+---whether no empty slot was found or the slot was found and the game did not take the macro.
+function Macro.Survey()
+    local out = { bars = {}, empty = {} }
     for _, bar in ipairs(BARS) do
+        local info = { name = bar, found = 0, visible = 0, empty = 0, noAction = 0 }
         for i = 1, 12 do
             local b = _G[bar .. i]
-            if b and b.action and b:IsVisible() and not HasAction(b.action) then
-                PickupMacro(index)
-                PlaceAction(b.action)
-                if ClearCursor then ClearCursor() end
-                return true
+            if b then
+                info.found = info.found + 1
+                local visivel = b.IsVisible and b:IsVisible()
+                if visivel then info.visible = info.visible + 1 end
+                if not b.action then
+                    info.noAction = info.noAction + 1
+                elseif visivel and HasAction and not HasAction(b.action) then
+                    info.empty = info.empty + 1
+                    out.empty[#out.empty + 1] = b.action
+                end
             end
         end
+        out.bars[#out.bars + 1] = info
     end
-    return false
+    out.cursor = GetCursorInfo and GetCursorInfo() or nil
+    return out
+end
+
+---Is OUR macro in that slot? The only proof that `PlaceAction` took.
+local function MacroIn(slot, index)
+    if not GetActionInfo then return HasAction and HasAction(slot) end
+    local tipo, id = GetActionInfo(slot)
+    return tipo == "macro" and id == index
+end
+
+---Puts the macro on the first empty slot of a visible bar, and CHECKS that it is there. Returns
+---true only when the slot holds our macro afterwards.
+function Macro.PlaceOnBar(index)
+    if not (PickupMacro and PlaceAction and HasAction) then
+        ns.Log.Add("macro-barra", { desfecho = "sem API" })
+        return false
+    end
+    local cursor = GetCursorInfo and GetCursorInfo()
+    if cursor then           -- the player is holding something
+        ns.Log.Add("macro-barra", { desfecho = "cursor ocupado", cursor = tostring(cursor) })
+        return false
+    end
+    local survey = Macro.Survey()
+    local slot = survey.empty[1]
+    if not slot then
+        local resumo = {}
+        for _, b in ipairs(survey.bars) do
+            resumo[#resumo + 1] = string.format("%s=%d/%d/%d", b.name, b.found, b.visible, b.empty)
+        end
+        ns.Log.Add("macro-barra", { desfecho = "sem vaga", barras = table.concat(resumo, " ") })
+        return false
+    end
+    local okP, errP = pcall(PickupMacro, index)
+    local naMao = GetCursorInfo and GetCursorInfo()
+    local okA, errA = pcall(PlaceAction, slot)
+    if ClearCursor then ClearCursor() end
+    local ficou = MacroIn(slot, index)
+    ns.Log.Add("macro-barra", {
+        desfecho = ficou and "colocada" or "nao ficou", slot = slot, macro = index,
+        pegou = okP and tostring(naMao) or ("erro: " .. tostring(errP)),
+        colocou = okA and "ok" or ("erro: " .. tostring(errA)),
+    })
+    return ficou and true or false
 end
 
 --------------------------------------------------------------------------------
