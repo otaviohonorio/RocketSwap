@@ -1176,6 +1176,20 @@ do
     check("talento que o jogo nao deixa trocar barra, com o motivo dele", b4[1] and b4[1].text, "Nao pode aqui")
     C_ClassTalents.CanEditTalents = realCT
 
+    -- (!) RESTRICAO DE ADDON (26/09, a arena): *"mesmo na contagem antes de comecar a luta, nao tem
+    -- como mais trocar"*. Partida de PvP ativa: nada troca, e o aviso diz para trocar antes da fila.
+    local realRA, realEnum = C_RestrictedActions, Enum
+    Enum = setmetatable({
+        AddOnRestrictionType = { PvPMatch = 1, Encounter = 2, ChallengeMode = 3 },
+        AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 },
+    }, { __index = realEnum })
+    C_RestrictedActions = { GetAddOnRestrictionState = function(t) return t == 1 and 2 or 0 end }
+    local br = ns.Data.Preflight({ name = "Arena", gear = 4 }, true)
+    check("partida de PvP ativa barra a troca", br[1] and br[1].step, "restriction")
+    check("  dizendo para trocar antes da fila", br[1] and br[1].text:find("fila", 1, true) ~= nil, true)
+    check("  e o diario grava os tres estados", ns.Data.RestrictionStates().PvPMatch, "Active")
+    C_RestrictedActions, Enum = realRA, realEnum
+
     -- Nada impede: lista vazia.
     check("sem impedimento, o pre-voo libera", #ns.Data.Preflight({ name = "Livre", gear = 4 }, true), 0)
     -- Apagados desde que o conjunto foi salvo: cada um com o seu motivo.

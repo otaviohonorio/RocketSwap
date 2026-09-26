@@ -1736,6 +1736,48 @@ local function Com(msg, s)
     return s and (msg .. "  " .. format(L["(you can switch in %s)"], Data.TimeText(s))) or msg
 end
 
+---(!) THE ADDON RESTRICTION (26/09). The user: *"quando chama arena e entra, mesmo na contagem antes
+---de começar a luta, não tem como mais trocar, isso foi mapeado?"* -- half: Alert.lua knew it, the
+---pre-flight did not. Midnight closes windows in which addon actions are blocked, and the client's
+---API docs define them (`Enum.AddOnRestrictionType`): `PvPMatch` -- "the player is in an active and
+---incomplete PvP match" --, `Encounter`, `ChallengeMode`. The same three `Alert.lua` (`CanFix`) asks.
+---Whether the arena countdown already counts as "active" is the user's report, not yet a line in
+---the log: `Log.Apply` now writes the three states on every attempt, so the next arena answers it.
+---@return string|nil kind "PvPMatch" | "Encounter" | "ChallengeMode" when one is active
+function Data.AddonRestriction()
+    if not (C_RestrictedActions and C_RestrictedActions.GetAddOnRestrictionState and Enum
+        and Enum.AddOnRestrictionType and Enum.AddOnRestrictionState) then return nil end
+    for _, kind in ipairs({ "PvPMatch", "Encounter", "ChallengeMode" }) do
+        local t = Enum.AddOnRestrictionType[kind]
+        if t ~= nil then
+            local ok, state = pcall(C_RestrictedActions.GetAddOnRestrictionState, t)
+            if ok and state == Enum.AddOnRestrictionState.Active then return kind end
+        end
+    end
+    return nil
+end
+
+---The three states, for the log ("Inactive", "Activating", "Active", or "?").
+function Data.RestrictionStates()
+    local out = {}
+    if not (C_RestrictedActions and C_RestrictedActions.GetAddOnRestrictionState and Enum
+        and Enum.AddOnRestrictionType and Enum.AddOnRestrictionState) then return out end
+    local nomes = {}
+    for k, v in pairs(Enum.AddOnRestrictionState) do nomes[v] = k end
+    for _, kind in ipairs({ "PvPMatch", "Encounter", "ChallengeMode" }) do
+        local t = Enum.AddOnRestrictionType[kind]
+        local ok, state = pcall(C_RestrictedActions.GetAddOnRestrictionState, t)
+        out[kind] = ok and (nomes[state] or tostring(state)) or "?"
+    end
+    return out
+end
+
+local RESTRICAO_TEXTO = {
+    PvPMatch = L["in a PvP match -- the countdown included -- the game blocks switches made by addons. Switch before accepting the queue."],
+    Encounter = L["during a boss encounter the game blocks switches made by addons."],
+    ChallengeMode = L["during a Mythic+ keystone the game blocks switches made by addons."],
+}
+
 ---Everything that stops this preset from switching NOW, one line per reason; empty = go.
 ---@param byClick boolean the click on the secure button/macro (the only way the outfit changes)
 ---@return table list of { step, text, seconds }
@@ -1746,6 +1788,12 @@ function Data.Preflight(preset, byClick)
 
     if InCombatLockdown() then
         Nao("combat", L["in combat: nothing was changed. Switch after the fight."])
+        return out
+    end
+
+    local restricao = Data.AddonRestriction()
+    if restricao then
+        Nao("restriction", RESTRICAO_TEXTO[restricao])
         return out
     end
 
@@ -1907,6 +1955,7 @@ function Data.Apply(preset, report, byClick)
     -- THE REST OF THE PRE-FLIGHT (the missing piece above keeps its longer message and the way
     -- out). One "no" and nothing starts.
     local impedimentos = Data.Preflight(preset, byClick)
+    if ns.Log and ns.Log.Attempt then pcall(ns.Log.Attempt, preset, byClick, impedimentos) end
     if #impedimentos > 0 then
         Data.Warn(preset, impedimentos, report)
         return false

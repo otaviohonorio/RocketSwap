@@ -23,6 +23,8 @@ why, with the time left when the game lets it be read — in red in the middle o
 chat and in the window. No more half switches such as "loaded, except the appearance".
 
 - A click in combat no longer queues the switch for after the fight: it is refused, with a warning.
+- In a PvP match (the arena countdown included), a boss encounter or a Mythic+ key, the game
+  blocks switches made by addons: the preset says so instead of switching halfway.
 - A preset with an appearance only switches through a click on it (the window or its macro).
 - A character has 18 macro slots; when they are full, the chat says so and the preset keeps
   working from the window.
