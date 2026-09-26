@@ -4364,14 +4364,19 @@ do
     function PlaceAction(slot) barra[slot] = naMao; naMao = nil end
     function ClearCursor() naMao = nil end
     function HasAction(slot) return barra[slot] ~= nil end
-    -- Barra de baixo visivel com o slot 61 ocupado; barra 5 escondida.
+    -- Como o jogo monta (ActionBar.lua): cada botao sabe a barra (`.bar`) e a posicao (`.index`),
+    -- e o botao VAZIO fica escondido com "Sempre mostrar botoes" desligado -- a barra e que esta
+    -- visivel. Barra de baixo visivel com o slot 61 ocupado; barra 5 escondida.
+    local barraBaixo = { numButtonsShowable = 12, IsVisible = function() return true end }
+    local barra5 = { numButtonsShowable = 12, IsVisible = function() return false end }
     for i = 1, 12 do
         local b = CreateFrame("Button")
-        b.action = 60 + i
-        b.IsVisible = function() return true end
+        b.action, b.index, b.bar = 60 + i, i, barraBaixo
+        -- so o ocupado aparece, como no jogo com a grade desligada
+        b.IsVisible = function() return barra[60 + i] ~= nil end
         _G["MultiBarBottomLeftButton" .. i] = b
         local h = CreateFrame("Button")
-        h.action = 144 + i
+        h.action, h.index, h.bar = 144 + i, i, barra5
         h.IsVisible = function() return false end
         _G["MultiBar5Button" .. i] = h
     end
@@ -4399,6 +4404,18 @@ do
     check("e vai para o primeiro espaco VAZIO de uma barra VISIVEL", barra[62], idx)
     check("  sem tocar na barra escondida", barra[145], nil)
     check("  e o chat avisa", ditos[#ditos] and ditos[#ditos]:find("Mitica", 1, true) ~= nil, true)
+    -- (!) O CASO DO DIARIO (26/09): o espaco 62 estava vazio e ESCONDIDO (grade desligada), e a
+    -- versao anterior dizia "sem vaga". Ele e usado porque a BARRA esta visivel.
+    check("  num espaco vazio escondido de uma barra visivel", barra[62] ~= nil, true)
+
+    -- Alem dos icones que o jogador deixou na barra (Modo de Edicao), nao: a macro sumiria.
+    barraBaixo.numButtonsShowable = 1
+    local s0 = ns.Macro.Survey()
+    check("espaco alem dos icones da barra nao conta", #s0.empty, 0)
+    barraBaixo.numButtonsShowable = 12
+    local daEscondida = false
+    for _, slot in ipairs(ns.Macro.Survey().empty) do if slot > 144 then daEscondida = true end end
+    check("barra escondida nao oferece vaga", daEscondida, false)
 
     -- O BOTAO que a macro clica: seguro, com nome fixo, e arma a aparencia no clique.
     local b

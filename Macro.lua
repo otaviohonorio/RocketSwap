@@ -138,6 +138,27 @@ end
 ---What the addon sees of the bars: for `/rs macrobar` and the log. Written after the first test in
 ---the game (25/09): *"criou a macro, só não jogou o icone pra barra"* -- and nothing saved could say
 ---whether no empty slot was found or the slot was found and the game did not take the macro.
+---
+---(!) AN EMPTY SLOT IS NOT A VISIBLE BUTTON (found 25-26/09 from the log). The first version
+---asked each BUTTON `IsVisible()`, and the log answered "no empty slot" on a character with empty
+---slots on four visible bars. Blizzard's own rule (`Blizzard_ActionBar/Shared/ActionBar.lua`,
+---`UpdateShownButtons`, wow-ui-source) shows a button only when
+---    index <= bar.numButtonsShowable and not statehidden and (grid shown or HasAction)
+----- so with "Always Show Buttons" off EVERY empty slot is hidden. A slot is usable when its BAR is
+---visible, its index is within the icons the player set for that bar in Edit Mode, and it is not
+---hidden by state. Once the macro is in, the game shows the button itself (it now has an action).
+local function Utilizavel(b)
+    local bar = b.bar
+    if bar then
+        if not (bar.IsVisible and bar:IsVisible()) then return false end
+        if b.index and bar.numButtonsShowable and b.index > bar.numButtonsShowable then return false end
+    elseif not (b.IsVisible and b:IsVisible()) then
+        return false               -- no bar to ask: fall back to the button itself
+    end
+    if b.GetAttribute and b:GetAttribute("statehidden") then return false end
+    return true
+end
+
 function Macro.Survey()
     local out = { bars = {}, empty = {} }
     for _, bar in ipairs(BARS) do
@@ -146,11 +167,11 @@ function Macro.Survey()
             local b = _G[bar .. i]
             if b then
                 info.found = info.found + 1
-                local visivel = b.IsVisible and b:IsVisible()
-                if visivel then info.visible = info.visible + 1 end
+                local usavel = Utilizavel(b)
+                if usavel then info.visible = info.visible + 1 end
                 if not b.action then
                     info.noAction = info.noAction + 1
-                elseif visivel and HasAction and not HasAction(b.action) then
+                elseif usavel and HasAction and not HasAction(b.action) then
                     info.empty = info.empty + 1
                     out.empty[#out.empty + 1] = b.action
                 end
