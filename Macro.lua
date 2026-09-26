@@ -130,6 +130,10 @@ function Macro.Button(preset)
     -- found by index, and the index moves when the player adds or deletes one.
     b:SetScript("PreClick", function(self)
         local p = PresetByUid(self.uid)
+        -- The click reached us: the log of 26/09 had no swap at all after the macros were made,
+        -- and nothing could say whether the macro's click arrived.
+        ns.Log.Add("macro-clique", { uid = self.uid, preset = p and p.name or "?",
+            combate = InCombatLockdown() and true or false })
         if p and not InCombatLockdown() then ns.UI.ArmOutfit(self, p) end
     end)
     b:SetScript("PostClick", function(self)

@@ -372,12 +372,16 @@ local function BuildRow(row)
             selection:Select(self)
         end
     end)
+    -- Dragged, the card becomes its macro on the cursor (UI.DragPreset).
+    row:RegisterForDrag("LeftButton")
+    row:SetScript("OnDragStart", function(self) UI.DragPreset(self.preset) end)
 
     row:SetScript("OnEnter", function(self)
         if not self.preset then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(self.preset.name ~= "" and self.preset.name or L["Unnamed"], 1, 1, 1)
         GameTooltip:AddLine(Subtitle(self.preset), 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine(L["Drag to an action bar to make it a button."], 0.5, 0.8, 1, true)
 
         -- O PORQUÊ DO VERMELHO. Sem esta linha a pessoa vê "falta 1 item" e conclui a coisa
         -- errada — que a troca vai ficar incompleta. O estrago real é outro: o espaço fica com
@@ -669,36 +673,18 @@ local function BuildEditor()
         function() local p = Current(); return p and p.transmog end,
         function(v) local p = Current(); if p then p.transmog = v end end)
 
-    -- "PUT ON THE BAR" (26/09): the preset's macro on the cursor, the player clicks the slot.
-    -- Under the last field, on the fields' left edge, the game's button (22 high, text + 40 wide:
-    -- `SecureUIPanelButtonTemplates.xml:42,44`, the wow-ui-design table).
-    editor.toBar = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    editor.toBar:SetText(L["Put on the bar"])
-    -- By TYPE: the harness's simulator answers unknown methods with a table.
-    local textoW = editor.toBar.GetTextWidth and editor.toBar:GetTextWidth()
-    if type(textoW) ~= "number" or textoW <= 0 then textoW = 80 end
-    editor.toBar:SetSize(textoW + 40, 22)
-    editor.toBar:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X + 8, -108 - GROUP_STEP * 4 + 1)
-    editor.toBar:SetScript("OnClick", function() UI.PutOnBar() end)
-    editor.toBar:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(L["Put on the bar"], 1, 1, 1)
-        GameTooltip:AddLine(L["The preset's macro goes to your cursor: click an action bar slot to place it."], 0.9, 0.9, 0.9, true)
-        GameTooltip:Show()
-    end)
-    editor.toBar:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
-function UI.PutOnBar()
-    local preset = UI.Selected()
+---DRAG A PRESET TO THE ACTION BAR (26/09). The user: *"ao invés do botão, seria possível arrastar o
+---icone dele para a barra?"* -- the preset's card is dragged like a spell from the spellbook: its
+---macro goes to the cursor (`PickupMacro`, made or remade first) and the player drops it on the
+---slot they want. The click on the card still selects it: a drag only starts when the mouse moves.
+function UI.DragPreset(preset)
     if not preset then return end
     local ok, why
-    ns.Macro.WithoutAutoPlace(function()
-        UI.SaveName()
-        ok, why = ns.Macro.PickUp(preset)
-    end)
+    ns.Macro.WithoutAutoPlace(function() ok, why = ns.Macro.PickUp(preset) end)
     if ok then
-        UI.SetStatus(L["The macro is on your cursor: click a slot on your action bar."], false)
+        UI.SetStatus(L["Drop the macro on an action bar slot."], false)
     elseif why == "noname" then
         UI.SetStatus(L["Give the preset a name first."], true)
     elseif why == "combat" then

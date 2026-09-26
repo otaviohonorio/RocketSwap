@@ -4504,25 +4504,25 @@ do
     PlaceAction = realPlace
     GetActionInfo = nil
 
-    -- (!) O BOTAO "POR NA BARRA" (26/09): a macro vai para o CURSOR e o jogador escolhe o espaco.
+    -- (!) ARRASTAR O CARD PARA A BARRA (26/09): *"ao inves do botao, seria possivel arrastar o icone
+    -- dele para a barra?"*. O card vira a macro no cursor; o jogador solta onde quiser.
     local _, ed = ns.UI.DebugProgress()
-    check("o editor tem o botao Por na barra", ed and ed.toBar ~= nil, true)
-    -- Abaixo do ultimo campo e ACIMA dos Avisos, com o respiro de linha da skill (9).
-    local _, botaoY = ed.toBar:PointOffset("TOPLEFT")
-    local _, avisosY = ns.UI.DebugToggles():PointOffset("TOPLEFT")
-    check("  e nao encosta na faixa de Avisos", -botaoY + 22 + 9 <= -avisosY, true)
-    check("  e fica abaixo da Aparencia", -botaoY >= -select(2, ed.transmog:PointOffset("TOPLEFT")) + 40, true)
+    check("o botao Por na barra saiu do editor", ed and rawget(ed, "toBar"), nil)
     for i = 121, 138 do macros[i] = nil end
     for slot in pairs(barra) do barra[slot] = nil end
     ns.UI.New()
     local u = ns.UI.Selected()
-    -- Pela caixa de nome, como o jogador: o botao salva o nome digitado antes de criar a macro.
-    ed.name:SetText("Botao")
+    u.name = "Arrasto"
+    ns.UI.Refresh()
+    local card
+    local lista = ns.UI.DebugList and ns.UI.DebugList()
+    for _, r in ipairs(lista and lista.__rows or {}) do if r.preset == u then card = r end end
+    check("o card do conjunto aceita arrasto", card and card.__scripts.OnDragStart ~= nil, true)
     naMao = nil
-    ns.UI.PutOnBar()
+    card.__scripts.OnDragStart(card)
     local criada
-    for i, mm in pairs(macros) do if mm.name == "Botao" then criada = i end end
-    check("clicar cria a macro que faltava", criada ~= nil, true)
+    for i, mm in pairs(macros) do if mm.name == "Arrasto" then criada = i end end
+    check("arrastar cria a macro que faltava", criada ~= nil, true)
     check("  e a poe no CURSOR", naMao, criada)
     local algumaNaBarra = false
     for _, v in pairs(barra) do if v == criada then algumaNaBarra = true end end
