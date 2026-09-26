@@ -1113,7 +1113,10 @@ end)
 check("aviso de peca travada", erro ~= nil, true)
 state.locked = false
 
-print("== combate: enfileira em vez de tentar ==")
+print("== combate: NAO troca nada, nem depois, e avisa (26/09) ==")
+-- (!) REGRA NOVA do usuario: *"nao fazer nada se tiver que esperar (...) ou troca tudo ou nao troca
+-- nada e avisa"*. Ate 26/09 o clique em combate era ENFILEIRADO e a troca acontecia sozinha ao fim
+-- da luta -- que e justamente "fazer algo" sem o jogador pedir de novo.
 state.inCombat = true
 state.pendingSet = nil
 local avisou
@@ -1121,12 +1124,66 @@ ns.Data.Apply({ name = "Arena", spec = 2, talent = nil, gear = 4 }, function(_, 
     if isError then avisou = true end
 end)
 check("nao aplicou em combate", state.pendingSet, nil)
-check("avisou que vai esperar", avisou, true)
-
+check("avisou", avisou, true)
 state.inCombat = false
 fire("PLAYER_REGEN_ENABLED")
-check("aplicou ao sair do combate", state.pendingSet, 4)
-fire("EQUIPMENT_SWAP_FINISHED", true, 4)
+check("e NAO aplica sozinho ao sair do combate", state.pendingSet, nil)
+
+print("== pre-voo: um 'nao' e nada muda (26/09) ==")
+do
+    -- Andando, com troca de spec: recusa tudo, inclusive os itens, que por si iriam.
+    local realSpeed = GetUnitSpeed
+    GetUnitSpeed = function() return 7 end
+    state.pendingSet = nil
+    local texto
+    local realErr = UIErrorsFrame
+    local vermelho
+    UIErrorsFrame = { AddMessage = function(_, t) vermelho = t end }
+    -- Uma spec DIFERENTE da atual: e so a troca de spec que o movimento interrompe.
+    local outraSpec = (state.specIndex == 1) and 2 or 1
+    ns.Data.Apply({ name = "Andando", spec = outraSpec, gear = 4 }, function(t, e) if e then texto = t end end)
+    check("andando com troca de spec: nada troca", state.pendingSet, nil)
+    check("  nem o passo dos itens, que sozinho iria", ns.Data.IsApplying(), false)
+    check("  e o aviso vermelho no meio da tela diz por que", vermelho ~= nil and vermelho:find("Andando", 1, true) ~= nil, true)
+    GetUnitSpeed = realSpeed
+
+    -- Aparencia em recarga, pelo clique: recusa tudo e diz quanto falta (fora de M+ o tempo e legivel).
+    local realCD = C_Spell.GetSpellCooldown
+    local realTime = GetTime
+    GetTime = function() return 1000 end
+    C_Spell.GetSpellCooldown = function() return { isActive = true, startTime = 990, duration = 55 } end
+    local b = ns.Data.Preflight({ name = "Roupa", transmog = 88 }, true)
+    check("aparencia em recarga barra a troca", #b, 1)
+    check("  e diz o tempo que falta (45 s)", b[1] and b[1].seconds, 45)
+    -- Em M+ os campos sao SECRETOS: barra do mesmo jeito, sem inventar tempo.
+    local realSecret = issecretvalue
+    issecretvalue = function(v) return v == 990 or v == 55 end
+    local b2 = ns.Data.Preflight({ name = "Roupa", transmog = 88 }, true)
+    check("  em M+ barra sem tempo (campos secretos)", b2[1] and b2[1].seconds, nil)
+    issecretvalue = realSecret
+    C_Spell.GetSpellCooldown, GetTime = realCD, realTime
+
+    -- Aparencia fora do clique (minimapa, /rs): barra, porque so o clique seguro troca a roupa.
+    local b3 = ns.Data.Preflight({ name = "Roupa", transmog = 88 }, false)
+    check("aparencia sem o clique barra a troca", b3[1] and b3[1].step, "transmog")
+
+    -- Talentos: o motivo do proprio jogo.
+    local realCT = C_ClassTalents.CanEditTalents
+    C_ClassTalents.CanEditTalents = function() return false, "Nao pode aqui" end
+    -- Uma configuracao que EXISTE (10) e que nao e a ativa: so resta o motivo do jogo.
+    state.specIndex, state.activeLoadout[251] = 2, 11
+    local b4 = ns.Data.Preflight({ name = "Tal", spec = 2, talent = 10 }, true)
+    check("talento que o jogo nao deixa trocar barra, com o motivo dele", b4[1] and b4[1].text, "Nao pode aqui")
+    C_ClassTalents.CanEditTalents = realCT
+
+    -- Nada impede: lista vazia.
+    check("sem impedimento, o pre-voo libera", #ns.Data.Preflight({ name = "Livre", gear = 4 }, true), 0)
+    -- Apagados desde que o conjunto foi salvo: cada um com o seu motivo.
+    check("talento apagado tem o seu motivo", (ns.Data.Preflight({ name = "X", spec = 2, talent = 999 }, true)[1] or {}).step, "talent")
+    check("aparencia apagada tem o seu motivo, mesmo fora do clique",
+        ((ns.Data.Preflight({ name = "X", transmog = 999 }, false)[1] or {}).text or ""):find("existe", 1, true) ~= nil, true)
+    UIErrorsFrame = realErr
+end
 
 print("== nada a fazer nao vira trabalho ==")
 state.equippedSet, state.specIndex, state.activeLoadout[251] = 4, 2, 10
@@ -1247,8 +1304,9 @@ do
     -- COM A RECARGA DE PE: o passo tem que falhar DIZENDO a recarga, e nao "nao deu".
     state.transmogCooldown = 9
     local texto, houveErro
+    -- PELO CLIQUE (`true`): fora dele, o pre-voo (26/09) barra antes com "so pelo clique".
     ns.Data.Apply({ name = "So aparencia", transmog = 71 },
-        function(t, isError) texto, houveErro = t, isError end)
+        function(t, isError) texto, houveErro = t, isError end, true)
 
     check("a troca bloqueada e reportada como erro", houveErro, true)
     check("e o texto traz o motivo, nao um 'nao deu' generico",
@@ -1267,13 +1325,14 @@ do
 
     check("sem o clique, a aparencia NAO troca", state.outfit, 70)
     check("e o addon diz isso em vez de se dar por pronto", houveErro2, true)
-    check("explicando que so o botao troca",
-        texto2 and texto2:lower():find("bot\195\163o carregar") ~= nil, true)
+    -- A frase do pre-voo (26/09) vale para o botao E para a macro da barra: "so troca clicando".
+    check("explicando que so o clique troca",
+        texto2 and texto2:lower():find("clicando") ~= nil, true)
 
     state.outfit = 70
 end
 
-print("== um passo que falha NAO derruba os seguintes ==")
+print("== um passo barrado ANTES nao deixa os outros trocarem (tudo ou nada, 26/09) ==")
 -- Relato: "as vezes da erro pra trocar o preset" e "o transmog nao ta funcionando". As duas
 -- coisas eram A MESMA: a ordem e spec -> talentos -> itens -> aparencia, e uma falha nos
 -- talentos chamava `Finish` na hora. A aparencia e o ULTIMO passo, entao quase nunca chegava a
@@ -1295,17 +1354,25 @@ do
     -- `gear = 3` e nao `1`: o personagem ja esta com o 1, e passo que nao tem o que fazer PULA --
     -- o teste mediria o proprio estado inicial em vez de medir a corrente.
     local texto, houveErro
+    local vermelhoTP
+    local realErrTP = UIErrorsFrame
+    UIErrorsFrame = { AddMessage = function(_, t) vermelhoTP = t end }
     ns.Data.Apply({ name = "Frost PvP", spec = 2, talent = 10, gear = 3 },
         function(t, isError) texto, houveErro = t, isError end)
+    UIErrorsFrame = realErrTP
+    check("o aviso vermelho nomeia o conjunto", vermelhoTP ~= nil and vermelhoTP:find("Frost PvP", 1, true) ~= nil, true)
 
-    check("os itens foram aplicados mesmo com os talentos falhando", state.pendingSet, 3)
-    fire("EQUIPMENT_SWAP_FINISHED", true, 3)
+    -- (!) REGRA NOVA (26/09), do usuario: *"ou troca tudo ou nao troca nada e avisa"*. Ate aqui
+    -- os itens eram aplicados mesmo com os talentos barrados -- troca pela metade de proposito.
+    -- Quando o jogo diz ANTES que um passo nao vai, nada comeca.
+    check("talentos barrados pelo jogo: os itens NAO sao aplicados", state.pendingSet, nil)
+    check("  e nenhuma corrente comeca", ns.Data.IsApplying(), false)
 
     check("e o addon avisou que algo falhou", houveErro, true)
     check("a mensagem diz o motivo que o JOGO deu",
         texto and texto:find("Voce nao pode fazer isso agora.", 1, true) ~= nil, true)
-    check("e diz que o resto foi aplicado",
-        texto and texto:find("Frost PvP", 1, true) ~= nil, true)
+    -- O nome vai no aviso vermelho do meio da tela (a macro e clicada sem a janela aberta); na
+    -- linha de status da janela o conjunto ja esta selecionado.
 
     C_ClassTalents.CanEditTalents = realCanEdit
 end
@@ -1447,7 +1514,7 @@ do
         function(t, isError) texto, houveErro = t, isError end)
     check("aparencia que ficou para tras e reportada", houveErro, true)
     check("dizendo que so o botao troca",
-        texto and texto:lower():find("bot\195\163o carregar") ~= nil, true)
+        texto and texto:lower():find("clicando") ~= nil, true)
 
     -- VINDO DO CLIQUE, ELE ESPERA em vez de acusar na hora. A acao segura roda no clique e o
     -- servidor responde depois; com os tres passos anteriores sem nada a fazer, a corrente chega
@@ -1480,8 +1547,9 @@ do
     state.outfit = 70
     state.transmogCooldown = 9
     local texto2
+    -- Pelo clique: e nele que a recarga importa (fora dele o pre-voo ja barra por "so pelo clique").
     ns.Data.Apply({ name = "So aparencia", transmog = 71 },
-        function(t) texto2 = t end)
+        function(t) texto2 = t end, true)
     check("porta fechada explica melhor que a frase geral",
         texto2 and texto2:lower():find("recarga") ~= nil, true)
     state.transmogCooldown = 0
@@ -1980,8 +2048,9 @@ do
 
     state.pendingSet = nil
     local texto, houveErro
+    -- Pelo clique: o conjunto tem aparencia, e so o clique a troca (pre-voo de 26/09).
     ns.Data.Apply({ name = "Tank", spec = 1, talent = 12, gear = 3, transmog = 71 },
-        function(t, isError) texto, houveErro = t, isError end)
+        function(t, isError) texto, houveErro = t, isError end, true)
 
     --    A RECUSA NAO VIRA ERRO: vira espera. Tentar de novo SEMPRE funcionou no diario --
     --    02:42:28 recusado, 02:42:37 aceito; 02:42:48 recusado, 02:42:52 aceito -- e as tres
@@ -3345,30 +3414,28 @@ do
         texto ~= nil and texto:find("existe mais", 1, true) ~= nil, true)
 end
 
-print("== recarga da magia de spec espera, nao aborta ==")
--- A recarga acaba em segundos e a insistencia ja existe; abortar era devolver erro ao jogador por
--- algo que se resolve esperando. Motivo EM TEXTO continua abortando -- ai o jogo explicou.
+print("== recarga da magia de spec: NAO troca nada e avisa (26/09) ==")
+-- (!) REGRA NOVA do usuario: *"esses erros temos que avisar ao usuario e nao fazer nada se tiver que
+-- esperar, pode ate avisar o tempo que falta"*. Ate 26/09 a corrente COMECAVA e ficava insistindo
+-- ate a recarga passar -- troca que acontecia sozinha, segundos depois, com o jogador ja em outra.
 do
     state.specIndex, state.equippedSet = 1, 9
     state.pendingSpec, state.pendingSet = nil, nil
     RocketSwapLogDB.specSpellID = state.specSpellID     -- o addon ja aprendeu a magia
     state.specSpellOnCooldown = true
 
-    local houveErro
+    local texto, houveErro
     ns.Data.Apply({ name = "Frost PvP", spec = 2, gear = 4 },
-        function(_, isError) houveErro = isError end)
-    check("na recarga o passo nao aborta", ns.Data.IsApplying(), true)
-    check("e nada foi pedido ao jogo", state.pendingSpec, nil)
+        function(t, isError) texto, houveErro = t, isError end)
+    check("na recarga NADA comeca", ns.Data.IsApplying(), false)
+    check("  nem a spec", state.pendingSpec, nil)
+    check("  nem os itens", state.pendingSet, nil)
+    check("  e avisa, como erro", houveErro, true)
+    check("  dizendo que e a recarga", texto and texto:lower():find("recarga", 1, true) ~= nil, true)
 
     state.specSpellOnCooldown = false
-    RunTimers(5)                  -- a insistencia tenta de novo
-    check("passada a recarga, a troca vai", state.pendingSpec, 2)
-
-    state.specIndex = 2
-    fire("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
-    state.equippedSet = 4
-    fire("EQUIPMENT_SWAP_FINISHED", true, 4)
-    check("e termina sem erro depois da recarga", houveErro, false)
+    RunTimers(5)
+    check("passada a recarga, NAO troca sozinho", state.pendingSpec, nil)
 end
 
 print("== cast de troca de spec cortado tenta de novo ==")
@@ -4430,6 +4497,16 @@ do
     check("  o clique arma a aparencia do conjunto", b.__attrs.type, "outfit")
     b.__scripts.PostClick(b)
     check("  e aplica o conjunto", carregou, p)
+
+    -- (!) PRE-VOO RECUSANDO DESARMA A APARENCIA (26/09): a acao segura roda DENTRO do clique, antes
+    -- de qualquer Lua nosso, e trocaria a roupa sozinha -- a troca pela metade que o usuario proibiu.
+    local realPre = ns.Data.Preflight
+    ns.Data.Preflight = function() return { { step = "spec", text = "em recarga" } } end
+    b.__scripts.PreClick(b)
+    check("pre-voo recusando: o clique da macro NAO arma a aparencia", b.__attrs.type, nil)
+    ns.Data.Preflight = realPre
+    b.__scripts.PreClick(b)
+    check("  e liberado, arma de novo", b.__attrs.type, "outfit")
     ns.UI.Load = realLoad
 
     -- RENOMEAR: a mesma macro, nome novo. Nome longo corta em 16 LETRAS, sem partir acento.

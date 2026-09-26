@@ -1691,13 +1691,156 @@ end
 ---Aplica um conjunto. Devolve false quando nem começou (combate, ou já está tudo aplicado).
 ---@param report function|nil recebe (texto, éErro) a cada passo, para a UI mostrar
 ---@param byClick boolean|nil a chamada veio do clique no botão seguro, que JÁ pediu a aparência
+--------------------------------------------------------------------------------
+-- (!) ALL OR NOTHING: EVERY STEP IS CHECKED BEFORE ANY IS TAKEN (26/09)
+--
+-- The user: *"temos que mapear os possíveis erros e avisar ao usuário e adicionar algumas
+-- seguranças para evitar de dar erro ao trocar e ficar coisa pelo meio do caminho, ou troca tudo
+-- ou não troca nada e avisa"* -- and the macro on the bar makes the click fast. The log had it:
+-- of 18 swaps, the 4 that went wrong all ended "loaded, except the appearance" (on cooldown twice,
+-- not confirmed in time, not by the click) -- spec, talents and gear changed, the outfit did not.
+--
+-- So before the chain starts, each step the preset needs is asked of the game, and ONE "no"
+-- stops everything, with the reason and, where the game lets us read it, the time left:
+--   combat                 InCombatLockdown
+--   specialization         CanPlayerUseTalentSpecUI + the spec spell's cooldown (`CanChangeSpec`),
+--                          and standing still: the change is a cast, and moving cuts it
+--   talents                C_ClassTalents.CanEditTalents -- "true if the player could switch
+--                          talents if they staged a proper loadout", with the game's reason
+--   gear                   a missing piece (`GearSetProblem`), locked items
+--   appearance             `TransmogBlockedBy` (cooldown, style event, locked set) -- and it only
+--                          changes through a click on the preset's secure button or macro
+-- Cooldown SECONDS only where they are not secret: `startTime`/`duration` are secret in combat,
+-- encounters, M+ and PvP (`SpellSharedDocumentation.lua`); there the warning has no time.
+--------------------------------------------------------------------------------
+local function SegundosDeRecarga(spellID)
+    local getCD = spellID and C_Spell and C_Spell.GetSpellCooldown
+    if not getCD then return nil end
+    local ok, cd = pcall(getCD, spellID)
+    if not (ok and type(cd) == "table" and cd.isActive == true) then return nil end
+    local ini, dur = cd.startTime, cd.duration
+    if issecretvalue and (issecretvalue(ini) or issecretvalue(dur)) then return nil end
+    if type(ini) ~= "number" or type(dur) ~= "number" or not GetTime then return nil end
+    local falta = ini + dur - GetTime()
+    return falta > 0 and math.ceil(falta) or nil
+end
+
+---"45 s", "1 min 5 s".
+function Data.TimeText(s)
+    if not s then return nil end
+    if s >= 60 then return format(L["%d min %d s"], math.floor(s / 60), s % 60) end
+    return format(L["%d s"], s)
+end
+
+local function Com(msg, s)
+    return s and (msg .. "  " .. format(L["(you can switch in %s)"], Data.TimeText(s))) or msg
+end
+
+---Everything that stops this preset from switching NOW, one line per reason; empty = go.
+---@param byClick boolean the click on the secure button/macro (the only way the outfit changes)
+---@return table list of { step, text, seconds }
+function Data.Preflight(preset, byClick)
+    local out = {}
+    local function Nao(step, text, s) out[#out + 1] = { step = step, text = Com(text, s), seconds = s } end
+    if not preset then return out end
+
+    if InCombatLockdown() then
+        Nao("combat", L["in combat: nothing was changed. Switch after the fight."])
+        return out
+    end
+
+    local specAtual = Data.GetCurrentSpecIndex()
+    local trocaSpec = preset.spec ~= nil and preset.spec ~= specAtual
+    if trocaSpec then
+        local pode, motivo, recarga = Data.CanChangeSpec()
+        if not pode then
+            if recarga then
+                Nao("spec", L["changing specialization is on cooldown."], SegundosDeRecarga(SpecSpellID()))
+            else
+                Nao("spec", motivo or L["the game refused to change specialization now; wait a few seconds."])
+            end
+        elseif GetUnitSpeed and (GetUnitSpeed("player") or 0) > 0 then
+            Nao("spec", L["stand still: changing specialization is a cast, and moving cuts it."])
+        end
+    end
+
+    if preset.talent then
+        local specAlvo = Data.GetSpecByIndex(preset.spec or specAtual)
+        -- DELETED since the preset was saved: its own reason, before anything else.
+        if specAlvo then
+            local loadouts = Data.GetLoadouts(specAlvo.id)
+            if #loadouts > 0 then
+                local existe = false
+                for _, l in ipairs(loadouts) do if l.configID == preset.talent then existe = true end end
+                if not existe then Nao("talent", L["that talent loadout no longer exists."]) end
+            end
+        end
+        local jaTem = not trocaSpec and specAlvo and Data.GetActiveLoadoutID(specAlvo.id) == preset.talent
+        if not jaTem and C_ClassTalents and C_ClassTalents.CanEditTalents then
+            local ok, pode, erro = pcall(C_ClassTalents.CanEditTalents)
+            if ok and pode == false then
+                Nao("talent", (type(erro) == "string" and erro ~= "") and erro or L["talents cannot be changed here."])
+            end
+        end
+    end
+
+    if preset.gear and Data.GetEquippedSetID() ~= preset.gear then
+        local problema = Data.GearSetProblem(preset.gear)
+        if C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo and not Data.GearSetCounts(preset.gear) then
+            Nao("gear", L["that gear set no longer exists."])
+        elseif problema then
+            Nao("gear", format(L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."],
+                problema.nome or "?", problema.perdidas))
+        elseif C_EquipmentSet and C_EquipmentSet.EquipmentSetContainsLockedItems then
+            local ok, travado = pcall(C_EquipmentSet.EquipmentSetContainsLockedItems, preset.gear)
+            if ok and travado then Nao("gear", L["some items of the set are locked (a trade, the bank, a repair)."]) end
+        end
+    end
+
+    if preset.transmog and Data.GetActiveOutfitID() ~= preset.transmog then
+        if not Data.OutfitIndex(preset.transmog) then
+            Nao("transmog", L["that transmog outfit no longer exists."])
+        elseif not byClick then
+            Nao("transmog", L["the appearance only changes by clicking the preset (window, or its macro on the bar)."])
+        else
+            local motivo = Data.TransmogBlockedBy(preset.transmog)
+            if motivo then
+                local s = (motivo == L["changing appearance is on cooldown."]) and SegundosDeRecarga(TransmogSpellID()) or nil
+                Nao("transmog", motivo, s)
+            end
+        end
+    end
+    return out
+end
+
+---The warning, where the player is looking: the red line in the middle of the screen (the game's
+---own error line -- the macro on the bar is clicked with the eyes on the fight), chat, and the
+---window's status.
+function Data.Warn(preset, blockers, report)
+    local nome = preset and preset.name or "?"
+    local cab = format(L["%s was NOT loaded — nothing was changed:"], nome)
+    local primeiro = blockers[1] and blockers[1].text or ""
+    if UIErrorsFrame and UIErrorsFrame.AddMessage then
+        pcall(UIErrorsFrame.AddMessage, UIErrorsFrame, nome .. ": " .. primeiro, 1, 0.1, 0.1)
+    end
+    ns.Print(cab)
+    for _, b in ipairs(blockers) do print("    - " .. b.text) end
+    -- In the window the preset is already selected: the reason alone, the game's own words.
+    if report then report(primeiro, true) end
+    if ns.Log then
+        local passos = {}
+        for _, b in ipairs(blockers) do passos[#passos + 1] = b.step end
+        ns.Log.Add("recusado", { motivo = "pre-voo", conjunto = nome, passos = table.concat(passos, ","),
+            texto = primeiro, segundos = blockers[1] and blockers[1].seconds })
+    end
+end
+
 function Data.Apply(preset, report, byClick)
     if not preset then return false end
 
+    -- In combat nothing is queued any more: the user asked for "nothing, and a warning".
     if InCombatLockdown() then
-        ns.Print(L["in combat: will apply when the fight ends."])
-        if report then report(L["in combat: will apply when the fight ends."], true) end
-        ns.RunWhenSafe(function() Data.Apply(preset, report) end)
+        Data.Warn(preset, Data.Preflight(preset, byClick), report)
         return false
     end
 
@@ -1758,6 +1901,14 @@ function Data.Apply(preset, report, byClick)
                 consertavel = problema.consertavel and "sim" or "nao",
             })
         end
+        return false
+    end
+
+    -- THE REST OF THE PRE-FLIGHT (the missing piece above keeps its longer message and the way
+    -- out). One "no" and nothing starts.
+    local impedimentos = Data.Preflight(preset, byClick)
+    if #impedimentos > 0 then
+        Data.Warn(preset, impedimentos, report)
         return false
     end
 
