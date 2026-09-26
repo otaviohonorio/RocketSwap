@@ -134,7 +134,12 @@ function Macro.Button(preset)
         -- and nothing could say whether the macro's click arrived.
         ns.Log.Add("macro-clique", { uid = self.uid, preset = p and p.name or "?",
             combate = InCombatLockdown() and true or false })
-        if p and not InCombatLockdown() then ns.UI.ArmOutfit(self, p) end
+        -- A pre-flight "no" DISARMS the outfit: the secure action runs inside this click, before
+        -- any Lua of ours, and would change the appearance alone -- the half-swap the user forbade.
+        if p and not InCombatLockdown() then
+            local barrado = #ns.Data.Preflight(p, true) > 0
+            ns.UI.ArmOutfit(self, (not barrado) and p or nil)
+        end
     end)
     b:SetScript("PostClick", function(self)
         local p = PresetByUid(self.uid)

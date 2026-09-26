@@ -14,5 +14,15 @@ transmog outfit**.
   deletes its macro. A macro you delete yourself is not made again, unless you type `/rs macro`.
 - `/rs macro` makes the macros for presets you saved before this version.
 - In combat nothing changes: the macro is made when the fight ends.
+
+**All or nothing.** Before a preset switches, every step it needs is checked with the game —
+specialization (including its cooldown, and standing still, since moving cuts the cast), talents,
+the equipment set (missing or locked items, a deleted set) and the appearance (its cooldown, a
+style event, a deleted outfit). If anything would fail, **nothing is changed** and you are told
+why, with the time left when the game lets it be read — in red in the middle of the screen, in
+chat and in the window. No more half switches such as "loaded, except the appearance".
+
+- A click in combat no longer queues the switch for after the fight: it is refused, with a warning.
+- A preset with an appearance only switches through a click on it (the window or its macro).
 - A character has 18 macro slots; when they are full, the chat says so and the preset keeps
   working from the window.

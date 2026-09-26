@@ -341,6 +341,14 @@ local function BuildRow(row)
     row.load:SetText(L["Load"])
     row.load:RegisterForClicks("AnyUp")
     row.load:SetAttribute("useOnKeyDown", false)
+    -- The same guard as the macro's (Macro.lua): a pre-flight "no" disarms the outfit before the
+    -- secure action runs, so the appearance never changes alone.
+    row.load:SetScript("PreClick", function(self)
+        local p = self:GetParent().preset
+        if p and not InCombatLockdown() then
+            ArmOutfit(self, (#ns.Data.Preflight(p, true) == 0) and p or nil)
+        end
+    end)
     row.load:SetScript("PostClick", function(self)
         UI.Load(self:GetParent().preset)
     end)
