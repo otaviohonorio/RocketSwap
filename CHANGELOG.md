@@ -6,7 +6,9 @@ the general ones — and puts it on the first empty slot of a visible action bar
 key binding on that slot) loads the whole preset: specialization, talents, equipment **and the
 transmog outfit**.
 
-- The chat tells you where the macro went. If no visible bar has an empty slot, drag it from
+- **Put on the bar**: a button under the preset's fields puts its macro on your cursor — click the
+  action bar slot you want.
+- The chat tells you where the macro went ("Action Bar 3, button 4"). If no visible bar has an empty slot, drag it from
   `/macro` (the character tab).
 - Renaming the preset renames its macro (macro names stop at 16 letters); deleting the preset
   deletes its macro. A macro you delete yourself is not made again, unless you type `/rs macro`.

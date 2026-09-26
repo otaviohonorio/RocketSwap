@@ -36,6 +36,14 @@ local BARS = {
     "ActionButton",
 }
 
+-- The number Edit Mode gives each bar ("Action Bar 3"), so the chat can say WHERE the macro went:
+-- the log of 26/09 had it placed in slot 52 -- bar 3, 4th button -- and the player did not find it.
+local BAR_NUMBER = {
+    ActionButton = 1, MultiBarBottomLeftButton = 2, MultiBarBottomRightButton = 3,
+    MultiBarRightButton = 4, MultiBarLeftButton = 5, MultiBar5Button = 6, MultiBar6Button = 7,
+    MultiBar7Button = 8,
+}
+
 local buttons = {}            -- uid -> secure button
 local waiting = {}            -- preset -> true while its macro waits for the end of combat
                               -- (kept here, not on the preset: the preset is saved to disk)
@@ -160,7 +168,7 @@ local function Utilizavel(b)
 end
 
 function Macro.Survey()
-    local out = { bars = {}, empty = {} }
+    local out = { bars = {}, empty = {}, where = {} }
     for _, bar in ipairs(BARS) do
         local info = { name = bar, found = 0, visible = 0, empty = 0, noAction = 0 }
         for i = 1, 12 do
@@ -174,6 +182,7 @@ function Macro.Survey()
                 elseif usavel and HasAction and not HasAction(b.action) then
                     info.empty = info.empty + 1
                     out.empty[#out.empty + 1] = b.action
+                    out.where[b.action] = { bar = BAR_NUMBER[bar], button = i }
                 end
             end
         end
@@ -190,8 +199,16 @@ local function MacroIn(slot, index)
     return tipo == "macro" and id == index
 end
 
+---"Action Bar 3, button 4", in the game's words where it has them.
+function Macro.WhereText(where)
+    if not where then return nil end
+    local barra = _G.HUD_EDIT_MODE_ACTION_BAR_LABEL and string.format(_G.HUD_EDIT_MODE_ACTION_BAR_LABEL, where.bar)
+        or string.format(L["Action Bar %d"], where.bar)
+    return string.format(L["%s, button %d"], barra, where.button)
+end
+
 ---Puts the macro on the first empty slot of a visible bar, and CHECKS that it is there. Returns
----true only when the slot holds our macro afterwards.
+---true and where it went (see `WhereText`) only when the slot holds our macro afterwards.
 function Macro.PlaceOnBar(index)
     if not (PickupMacro and PlaceAction and HasAction) then
         ns.Log.Add("macro-barra", { desfecho = "sem API" })
@@ -221,16 +238,54 @@ function Macro.PlaceOnBar(index)
         desfecho = ficou and "colocada" or "nao ficou", slot = slot, macro = index,
         pegou = okP and tostring(naMao) or ("erro: " .. tostring(errP)),
         colocou = okA and "ok" or ("erro: " .. tostring(errA)),
+        barra = survey.where[slot] and survey.where[slot].bar,
+        botao = survey.where[slot] and survey.where[slot].button,
     })
-    return ficou and true or false
+    if ficou then return true, survey.where[slot] end
+    return false
+end
+
+---THE "PUT ON THE BAR" BUTTON (26/09). The user: *"se colocar um botão de salvar na parte das
+---seleções do preset e forçar a ir para a barra"*. The macro goes on the CURSOR, as the game's own
+---macro window does it (`PickupMacro`), and the player clicks the slot they want -- no guessing
+---which slot they can see. Made (or remade) first when it does not exist.
+---@return boolean ok, string|nil why
+function Macro.PickUp(preset)
+    if not preset or not preset.name or preset.name == "" then return false, "noname" end
+    if InCombatLockdown() then return false, "combat" end
+    if not (PickupMacro and CreateMacro) then return false, "noapi" end
+    local idx = OurIndex(preset)
+    if not idx then
+        preset.macroMade = nil
+        Macro.Sync(preset, true)
+        idx = OurIndex(preset)
+    else
+        Macro.Sync(preset, true)
+    end
+    if not idx then return false, "full" end
+    if ClearCursor then ClearCursor() end
+    local ok = pcall(PickupMacro, idx)
+    ns.Log.Add("macro-cursor", { macro = idx, ok = ok and true or false })
+    return ok, ok and nil or "error"
 end
 
 --------------------------------------------------------------------------------
 -- Keeping the macro in step with the preset
 --------------------------------------------------------------------------------
 ---Creates the macro the first time the preset has a name; afterwards keeps name and icon in step.
-function Macro.Sync(preset)
+-- While the "Put on the bar" button works, nothing is placed on its own: the button puts the macro
+-- on the cursor, and an automatic copy in some slot would be a second one the player did not ask for.
+local semColocar = false
+function Macro.WithoutAutoPlace(fn)
+    semColocar = true
+    local ok, err = pcall(fn)
+    semColocar = false
+    if not ok then error(err, 0) end
+end
+
+function Macro.Sync(preset, porBotao)
     if not preset or not preset.name or preset.name == "" then return end
+    porBotao = porBotao or semColocar
     if not (CreateMacro and EditMacro and GetNumMacros) then return end
     if InCombatLockdown() then
         if not waiting[preset] then
@@ -268,8 +323,11 @@ function Macro.Sync(preset)
     local novo = CreateMacro(nome, icone, corpo, true)
     if not novo then return end
     preset.macroMade = true
-    if Macro.PlaceOnBar(novo) then
-        ns.Print(string.format(L["macro created in this character's macros and placed on your action bar: %s"], nome))
+    if porBotao then return end          -- the button puts it on the cursor itself
+    local colocou, onde = Macro.PlaceOnBar(novo)
+    if colocou then
+        ns.Print(string.format(L["macro created in this character's macros and placed on your action bar: %s"], nome)
+            .. (onde and ("  (" .. Macro.WhereText(onde) .. ")") or ""))
     else
         ns.Print(string.format(L["macro created in this character's macros (no empty slot on a visible bar, drag it from /macro): %s"], nome))
     end

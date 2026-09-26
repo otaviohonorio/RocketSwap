@@ -4504,6 +4504,36 @@ do
     PlaceAction = realPlace
     GetActionInfo = nil
 
+    -- (!) O BOTAO "POR NA BARRA" (26/09): a macro vai para o CURSOR e o jogador escolhe o espaco.
+    local _, ed = ns.UI.DebugProgress()
+    check("o editor tem o botao Por na barra", ed and ed.toBar ~= nil, true)
+    -- Abaixo do ultimo campo e ACIMA dos Avisos, com o respiro de linha da skill (9).
+    local _, botaoY = ed.toBar:PointOffset("TOPLEFT")
+    local _, avisosY = ns.UI.DebugToggles():PointOffset("TOPLEFT")
+    check("  e nao encosta na faixa de Avisos", -botaoY + 22 + 9 <= -avisosY, true)
+    check("  e fica abaixo da Aparencia", -botaoY >= -select(2, ed.transmog:PointOffset("TOPLEFT")) + 40, true)
+    for i = 121, 138 do macros[i] = nil end
+    for slot in pairs(barra) do barra[slot] = nil end
+    ns.UI.New()
+    local u = ns.UI.Selected()
+    -- Pela caixa de nome, como o jogador: o botao salva o nome digitado antes de criar a macro.
+    ed.name:SetText("Botao")
+    naMao = nil
+    ns.UI.PutOnBar()
+    local criada
+    for i, mm in pairs(macros) do if mm.name == "Botao" then criada = i end end
+    check("clicar cria a macro que faltava", criada ~= nil, true)
+    check("  e a poe no CURSOR", naMao, criada)
+    local algumaNaBarra = false
+    for _, v in pairs(barra) do if v == criada then algumaNaBarra = true end end
+    check("  sem colocar sozinha em espaco nenhum", algumaNaBarra, false)
+    naMao = nil
+
+    -- O AVISO AUTOMATICO DIZ ONDE: "Barra de Acoes 2, botao 1" (a barra inferior esquerda do teste).
+    local onde = ns.Macro.WhereText({ bar = 3, button = 4 })
+    check("o lugar e dito com o numero da barra e do botao",
+        onde:find("3", 1, true) ~= nil and onde:find("4", 1, true) ~= nil, true)
+
     -- /rs macrobar responde no chat sem erro.
     local okBar = pcall(SlashCmdList.ROCKETSWAP, "macrobar")
     check("/rs macrobar roda", okBar, true)
