@@ -95,6 +95,22 @@ function Log.Apply(preset, byClick)
     })
 end
 
+---Every attempt, refused or not, with the addon restriction's three states (26/09): the arena
+---countdown question is answered by this line, not by a guess.
+function Log.Attempt(preset, byClick, blockers)
+    local r = ns.Data.RestrictionStates and ns.Data.RestrictionStates() or {}
+    local passos = {}
+    for _, b in ipairs(blockers or {}) do passos[#passos + 1] = b.step end
+    local _, instanceType = IsInInstance and IsInInstance()
+    Log.Add("tentativa", {
+        preset = preset and preset.name or "?",
+        peloClique = byClick and true or false,
+        barrado = table.concat(passos, ","),
+        instancia = tostring(instanceType),
+        pvp = r.PvPMatch, encontro = r.Encounter, mitica = r.ChallengeMode,
+    })
+end
+
 ---O passo começou, e o que ele decidiu fazer.
 function Log.Step(step, outcome, message)
     Log.Add("passo", {
