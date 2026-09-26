@@ -83,7 +83,7 @@ commands["macrobar"] = function()
     ns.Print("macrobar: cursor=" .. tostring(s.cursor) .. "  empty visible slots=" .. #s.empty
         .. (s.empty[1] and (" (first: " .. s.empty[1] .. ")") or ""))
     for _, b in ipairs(s.bars) do
-        print(string.format("    %-26s found %2d  visible %2d  empty %2d  no .action %2d",
+        print(string.format("    %-26s found %2d  usable %2d  empty %2d  no .action %2d",
             b.name, b.found, b.visible, b.empty, b.noAction))
     end
 end
