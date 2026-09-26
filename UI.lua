@@ -668,6 +668,44 @@ local function BuildEditor()
         end,
         function() local p = Current(); return p and p.transmog end,
         function(v) local p = Current(); if p then p.transmog = v end end)
+
+    -- "PUT ON THE BAR" (26/09): the preset's macro on the cursor, the player clicks the slot.
+    -- Under the last field, on the fields' left edge, the game's button (22 high, text + 40 wide:
+    -- `SecureUIPanelButtonTemplates.xml:42,44`, the wow-ui-design table).
+    editor.toBar = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    editor.toBar:SetText(L["Put on the bar"])
+    -- By TYPE: the harness's simulator answers unknown methods with a table.
+    local textoW = editor.toBar.GetTextWidth and editor.toBar:GetTextWidth()
+    if type(textoW) ~= "number" or textoW <= 0 then textoW = 80 end
+    editor.toBar:SetSize(textoW + 40, 22)
+    editor.toBar:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X + 8, -108 - GROUP_STEP * 4 + 1)
+    editor.toBar:SetScript("OnClick", function() UI.PutOnBar() end)
+    editor.toBar:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Put on the bar"], 1, 1, 1)
+        GameTooltip:AddLine(L["The preset's macro goes to your cursor: click an action bar slot to place it."], 0.9, 0.9, 0.9, true)
+        GameTooltip:Show()
+    end)
+    editor.toBar:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
+function UI.PutOnBar()
+    local preset = UI.Selected()
+    if not preset then return end
+    local ok, why
+    ns.Macro.WithoutAutoPlace(function()
+        UI.SaveName()
+        ok, why = ns.Macro.PickUp(preset)
+    end)
+    if ok then
+        UI.SetStatus(L["The macro is on your cursor: click a slot on your action bar."], false)
+    elseif why == "noname" then
+        UI.SetStatus(L["Give the preset a name first."], true)
+    elseif why == "combat" then
+        UI.SetStatus(L["in combat: will apply when the fight ends."], true)
+    else
+        UI.SetStatus(L["Could not make the macro (this character's macros may be full)."], true)
+    end
 end
 
 --------------------------------------------------------------------------------
