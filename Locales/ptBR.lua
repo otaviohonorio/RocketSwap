@@ -302,8 +302,7 @@ L["during a boss encounter the game blocks switches made by addons."] = "durante
 L["during a Mythic+ keystone the game blocks switches made by addons."] = "durante uma chave de Mítica+ o jogo bloqueia trocas feitas por addon."
 
 -- Doação (Donate.lua, 26/09)
-L["Donate"] = "Doar"
 L["Link copied — paste it in your browser."] = "Link copiado — cole no navegador."
 L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."] = "Obrigado por apoiar o Rocket Swap! Aperte Ctrl+C para copiar o link e cole no navegador."
-L["Support the development"] = "Apoiar o desenvolvimento"
 L["Opens the donation link, ready to copy."] = "Abre o link de doação, pronto para copiar."
+L["Support the project"] = "Apoiar o projeto"
