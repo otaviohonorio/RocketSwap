@@ -134,6 +134,15 @@ local FIELD_W = 200           -- combos (o dropdown de loadout de talentos usa 2
 local NAME_W = 211            -- EditBox: a arte termina em 500, alinhada com a dos combos
 local GROUP_STEP = 50         -- rótulo (15) + combo (25) + respiro (10)
 local ATTIC_Y = -30           -- faixa entre o título e o inset
+-- The editor column, top to bottom (27/09): the two buttons to the game's windows, the title of the
+-- name box, the box, the divider and the fields. Same rhythm as a field group: title 12 + 3 above
+-- its box, 10 between blocks, and the 16/10 around the divider that the column already had.
+local EDITOR_TOP = -60                           -- level with the list's inset (`LIST_TOP`)
+local TOOL_W = 102                               -- two of them + 7 of gap = NAME_W
+local NAME_TITLE_Y = EDITOR_TOP - 22 - 10        -- button (22) + gap
+local NAME_Y = NAME_TITLE_Y - 15                 -- title (12) + 3, like `Group`
+local DIVIDER_Y = NAME_Y - 22 - 16
+local FIELDS_Y = DIVIDER_Y - 10
 local CHILD_INDENT = 15       -- recuo de opção filha (`Blizzard_SettingControls.lua:1`)
 
 local frame, editor, selection
@@ -536,35 +545,7 @@ end
 ---órfão de voltar no próximo campo que alguém acrescentar.
 ---
 ---O rótulo assenta pelo rodapé no topo do combo, +3: assim ele não depende do corpo da fonte.
----A shortcut to the game's own window for this field (27/09). The user: *"senti falta de algum botão
----para ir para o gerenciador de equipamentos e para os talentos, facilitar o acesso aos outros
----menus"*. On the label's line, right-aligned to the dropdown: where the player is when they miss
----it -- choosing the loadout or the gear set. Small text, no button art, lights up on hover.
-local function Shortcut(group, dd, text, tooltip, fn)
-    local b = CreateFrame("Button", nil, group)
-    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    b.text:SetPoint("RIGHT")
-    b.text:SetText(text)
-    local w = b.text.GetStringWidth and b.text:GetStringWidth()
-    if type(w) ~= "number" or w <= 0 then w = 80 end     -- by TYPE: the harness answers a table
-    b:SetSize(w + 4, 14)
-    b:SetPoint("BOTTOMRIGHT", dd, "TOPRIGHT", -3, 3)
-    b:SetScript("OnEnter", function(self)
-        self.text:SetFontObject("GameFontHighlightSmall")
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText(text, 1, 1, 1)
-        GameTooltip:AddLine(tooltip, 0.8, 0.8, 0.8, true)
-        GameTooltip:Show()
-    end)
-    b:SetScript("OnLeave", function(self)
-        self.text:SetFontObject("GameFontNormalSmall")
-        GameTooltip:Hide()
-    end)
-    b:SetScript("OnClick", fn)
-    return b
-end
-
-local function Group(parent, labelText, yTop, items, get, set, atalho)
+local function Group(parent, labelText, yTop, items, get, set)
     local group = CreateFrame("Frame", nil, parent)
     group:SetSize(216, 40)
     group:SetPoint("TOPLEFT", parent, "TOPLEFT", COL_X, yTop)
@@ -625,24 +606,58 @@ local function Group(parent, labelText, yTop, items, get, set, atalho)
     end
 
     group.dropdown = dd
-    if atalho then group.shortcut = Shortcut(group, dd, atalho.text, atalho.tooltip, atalho.fn) end
     return group
 end
 
 local function BuildEditor()
     editor = {}
 
-    -- O nome NÃO tem rótulo separado: a instrução mora dentro da caixa. Era metade do
-    -- "texto colado", resolvida pela raiz em vez de por um `SetShown`.
+    -- TWO BUTTONS TO THE GAME'S WINDOWS (27/09), at the top of the column. The user first asked for
+    -- *"algum botão para ir para o gerenciador de equipamentos e para os talentos"*; a small text
+    -- link over each field came first, and the user preferred *"dois botões mesmo acima de onde
+    -- coloca o nome"*. They open the places where a loadout and a gear set are MADE -- the fields
+    -- below only pick one.
+    local function Tool(text, tooltip, fn, x)
+        local b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        b:SetSize(TOOL_W, 22)
+        b:SetPoint("TOPLEFT", frame, "TOPLEFT", x, EDITOR_TOP)
+        b:SetText(text)
+        b:SetScript("OnClick", fn)
+        b:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(text, 1, 1, 1)
+            GameTooltip:AddLine(tooltip, 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        return b
+    end
+    editor.openTalents = Tool(L["Talents"], L["Opens the game's talent window, to create or edit a loadout."],
+        function() UI.OpenTalents() end, COL_X + 5)
+    editor.openGear = Tool(L["Equipment"], L["Opens the character sheet on the equipment manager, to create or save a set."],
+        function() ns.Data.OpenEquipmentManager() end, COL_X + 5 + TOOL_W + 7)
+
+    -- THE NAME HAS A TITLE (27/09). It used to live only inside the box as the instruction text,
+    -- and the user: *"falta ter um titulo ali, pro usuário saber que é o nome do preset que tá
+    -- salvando"* -- once typed, the instruction is gone and nothing says what the box is. The word
+    -- is the one the list, "+ New preset" and every message already use ("conjunto" in ptBR), so
+    -- the player never meets two names for the same thing. Placed like a `Group` label.
+    editor.nameTitle = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    editor.nameTitle:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X + 11, NAME_TITLE_Y)
+    editor.nameTitle:SetWidth(NAME_W - 6)
+    editor.nameTitle:SetJustifyH("LEFT")
+    editor.nameTitle:SetText(L["Preset name"])
+
     editor.name = CreateFrame("EditBox", nil, frame, "InputBoxInstructionsTemplate")
     editor.name:SetSize(NAME_W, 22)
-    editor.name:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X + 5, -60)
+    editor.name:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X + 5, NAME_Y)
     editor.name:SetAutoFocus(false)
     editor.name:SetMaxLetters(31)
     if editor.name.Instructions then
         -- Sem isto o texto de instrução nasce 16px à direita do texto digitado.
         editor.name.Instructions:SetAllPoints()
-        editor.name.Instructions:SetText(L["Preset name"])
+        -- With a title above, repeating it inside the box says nothing: show an example instead.
+        editor.name.Instructions:SetText(L["e.g. Raid, M+, Arena"])
     end
     editor.name:SetScript("OnEscapePressed", editor.name.ClearFocus)
     editor.name:SetScript("OnEnterPressed", editor.name.ClearFocus)
@@ -653,14 +668,14 @@ local function BuildEditor()
 
     editor.divider = frame:CreateTexture(nil, "ARTWORK")
     editor.divider:SetSize(216, 1)
-    editor.divider:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, -98)
+    editor.divider:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, DIVIDER_Y)
     if not ns.SetAtlasSafe or not ns.SetAtlasSafe(editor.divider, "Options_HorizontalDivider") then
         editor.divider:SetColorTexture(1, 1, 1, 0.12)
     end
 
     local function Current() return UI.Selected() end
 
-    editor.spec = Group(frame, L["Specialization"], -108,
+    editor.spec = Group(frame, L["Specialization"], FIELDS_Y,
         function()
             local out = {}
             for _, s in ipairs(ns.Data.GetSpecs()) do
@@ -673,7 +688,7 @@ local function BuildEditor()
         -- oferecê-lo seria oferecer o impossível.
         function(v) local p = Current(); if p then p.spec = v; p.talent = nil end end)
 
-    editor.talent = Group(frame, L["Talents"], -108 - GROUP_STEP,
+    editor.talent = Group(frame, L["Talents"], FIELDS_Y - GROUP_STEP,
         function()
             local p = Current()
             local spec = p and ns.Data.GetSpecByIndex(p.spec)
@@ -684,11 +699,9 @@ local function BuildEditor()
             return out
         end,
         function() local p = Current(); return p and p.talent end,
-        function(v) local p = Current(); if p then p.talent = v end end,
-        { text = L["Open talents"], tooltip = L["Opens the game's talent window, to create or edit a loadout."],
-          fn = function() UI.OpenTalents() end })
+        function(v) local p = Current(); if p then p.talent = v end end)
 
-    editor.gear = Group(frame, L["Gear"], -108 - GROUP_STEP * 2,
+    editor.gear = Group(frame, L["Gear"], FIELDS_Y - GROUP_STEP * 2,
         function()
             local out = {}
             for _, s in ipairs(ns.Data.GetGearSets()) do
@@ -697,13 +710,11 @@ local function BuildEditor()
             return out
         end,
         function() local p = Current(); return p and p.gear end,
-        function(v) local p = Current(); if p then p.gear = v end end,
-        { text = L["Open equipment manager"], tooltip = L["Opens the character sheet on the equipment manager, to create or save a set."],
-          fn = function() ns.Data.OpenEquipmentManager() end })
+        function(v) local p = Current(); if p then p.gear = v end end)
 
     -- Aparência é OPCIONAL de propósito: deixar em "(nenhum)" faz o conjunto não mexer na
     -- roupa. Quem não usa transmog nem percebe que o campo existe.
-    editor.transmog = Group(frame, L["Appearance"], -108 - GROUP_STEP * 3,
+    editor.transmog = Group(frame, L["Appearance"], FIELDS_Y - GROUP_STEP * 3,
         function()
             local out = {}
             for _, o in ipairs(ns.Data.GetOutfits()) do
@@ -1386,7 +1397,7 @@ function UI.DebugCardMetrics()
         cardMax = CARD_MAX, visiveis = CARDS_VISIVEIS, spacing = ROW_SPACING,
         listH = LIST_H, listTop = LIST_TOP, listBottom = LIST_BOTTOM,
         stripY = WARN_STRIP_Y, stripH = WARN_STRIP_H, footer = TEMPLATE_FOOTER,
-        height = HEIGHT, width = WIDTH, colX = COL_X, fieldW = FIELD_W,
+        height = HEIGHT, width = WIDTH, colX = COL_X, fieldW = FIELD_W, nameW = NAME_W,
     }
 end
 
@@ -1445,6 +1456,9 @@ function UI.RefreshEditor()
     local has = preset ~= nil and not (frame.progress and frame.progress:IsShown())
 
     editor.name:SetShown(has)
+    editor.nameTitle:SetShown(has)
+    editor.openTalents:SetShown(has)
+    editor.openGear:SetShown(has)
     for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
         -- `SetupMenu` só gera o menu com o frame visível: mostrar ANTES de sincronizar.
         group:SetShown(has)
@@ -1492,6 +1506,9 @@ function UI.Refresh()
         current = nil
 
         editor.name:Hide()
+        editor.nameTitle:Hide()
+        editor.openTalents:Hide()
+        editor.openGear:Hide()
         editor.divider:Hide()
         for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
             group:Hide()
