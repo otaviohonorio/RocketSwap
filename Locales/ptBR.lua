@@ -306,3 +306,9 @@ L["Link copied — paste it in your browser."] = "Link copiado — cole no naveg
 L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."] = "Obrigado por apoiar o Rocket Swap! Aperte Ctrl+C para copiar o link e cole no navegador."
 L["Opens the donation link, ready to copy."] = "Abre o link de doação, pronto para copiar."
 L["Support the project"] = "Apoiar o projeto"
+
+-- Atalhos para as janelas do jogo (UI.lua, 27/09)
+L["Open talents"] = "Abrir talentos"
+L["Opens the game's talent window, to create or edit a loadout."] = "Abre a janela de talentos do jogo, para criar ou editar uma configuração."
+L["Open equipment manager"] = "Abrir gerenciador"
+L["Opens the character sheet on the equipment manager, to create or save a set."] = "Abre a ficha do personagem no gerenciador de equipamentos, para criar ou salvar um conjunto."

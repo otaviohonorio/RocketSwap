@@ -30,3 +30,5 @@ chat and in the window. No more half switches such as "loaded, except the appear
   working from the window.
 - **Support the project**: a small link in a corner of the window opens the PayPal link ready to copy — in reais when the game
   is in Portuguese, in dollars otherwise.
+- **Shortcuts to the game's windows**: "Open talents" next to the talent loadout and "Open equipment
+  manager" next to the gear set — to create or save them without leaving the preset.

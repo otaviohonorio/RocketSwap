@@ -536,7 +536,35 @@ end
 ---órfão de voltar no próximo campo que alguém acrescentar.
 ---
 ---O rótulo assenta pelo rodapé no topo do combo, +3: assim ele não depende do corpo da fonte.
-local function Group(parent, labelText, yTop, items, get, set)
+---A shortcut to the game's own window for this field (27/09). The user: *"senti falta de algum botão
+---para ir para o gerenciador de equipamentos e para os talentos, facilitar o acesso aos outros
+---menus"*. On the label's line, right-aligned to the dropdown: where the player is when they miss
+---it -- choosing the loadout or the gear set. Small text, no button art, lights up on hover.
+local function Shortcut(group, dd, text, tooltip, fn)
+    local b = CreateFrame("Button", nil, group)
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    b.text:SetPoint("RIGHT")
+    b.text:SetText(text)
+    local w = b.text.GetStringWidth and b.text:GetStringWidth()
+    if type(w) ~= "number" or w <= 0 then w = 80 end     -- by TYPE: the harness answers a table
+    b:SetSize(w + 4, 14)
+    b:SetPoint("BOTTOMRIGHT", dd, "TOPRIGHT", -3, 3)
+    b:SetScript("OnEnter", function(self)
+        self.text:SetFontObject("GameFontHighlightSmall")
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText(text, 1, 1, 1)
+        GameTooltip:AddLine(tooltip, 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function(self)
+        self.text:SetFontObject("GameFontNormalSmall")
+        GameTooltip:Hide()
+    end)
+    b:SetScript("OnClick", fn)
+    return b
+end
+
+local function Group(parent, labelText, yTop, items, get, set, atalho)
     local group = CreateFrame("Frame", nil, parent)
     group:SetSize(216, 40)
     group:SetPoint("TOPLEFT", parent, "TOPLEFT", COL_X, yTop)
@@ -597,6 +625,7 @@ local function Group(parent, labelText, yTop, items, get, set)
     end
 
     group.dropdown = dd
+    if atalho then group.shortcut = Shortcut(group, dd, atalho.text, atalho.tooltip, atalho.fn) end
     return group
 end
 
@@ -655,7 +684,9 @@ local function BuildEditor()
             return out
         end,
         function() local p = Current(); return p and p.talent end,
-        function(v) local p = Current(); if p then p.talent = v end end)
+        function(v) local p = Current(); if p then p.talent = v end end,
+        { text = L["Open talents"], tooltip = L["Opens the game's talent window, to create or edit a loadout."],
+          fn = function() UI.OpenTalents() end })
 
     editor.gear = Group(frame, L["Gear"], -108 - GROUP_STEP * 2,
         function()
@@ -666,7 +697,9 @@ local function BuildEditor()
             return out
         end,
         function() local p = Current(); return p and p.gear end,
-        function(v) local p = Current(); if p then p.gear = v end end)
+        function(v) local p = Current(); if p then p.gear = v end end,
+        { text = L["Open equipment manager"], tooltip = L["Opens the character sheet on the equipment manager, to create or save a set."],
+          fn = function() ns.Data.OpenEquipmentManager() end })
 
     -- Aparência é OPCIONAL de propósito: deixar em "(nenhum)" faz o conjunto não mexer na
     -- roupa. Quem não usa transmog nem percebe que o campo existe.
@@ -687,6 +720,16 @@ end
 ---icone dele para a barra?"* -- the preset's card is dragged like a spell from the spellbook: its
 ---macro goes to the cursor (`PickupMacro`, made or remade first) and the player drops it on the
 ---slot they want. The click on the card still selects it: a drag only starts when the mouse moves.
+---The game's talent window on the talent tab (`PlayerSpellsUtil.lua:31`, Blizzard_FrameXMLUtil;
+---it loads the window on demand).
+function UI.OpenTalents()
+    if PlayerSpellsUtil and PlayerSpellsUtil.OpenToClassTalentsTab then
+        pcall(PlayerSpellsUtil.OpenToClassTalentsTab)
+    elseif ToggleTalentFrame then
+        pcall(ToggleTalentFrame)
+    end
+end
+
 function UI.DragPreset(preset)
     if not preset then return end
     local ok, why
