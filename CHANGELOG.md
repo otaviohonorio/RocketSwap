@@ -28,7 +28,7 @@ chat and in the window. No more half switches such as "loaded, except the appear
 - A preset with an appearance only switches through a click on it (the window or its macro).
 - A character has 18 macro slots; when they are full, the chat says so and the preset keeps
   working from the window.
-- **Support the project**: a small link with the PayPal logo in the window's footer opens the PayPal link ready to copy — in reais when the game
+- **Support the project**: a small link with the PayPal logo, on its own line at the bottom of the window, opens the PayPal link ready to copy — in reais when the game
   is in Portuguese, in dollars otherwise.
 - **Buttons to the game's windows**: "Talents" and "Equipment" at the top of the editor open the
   talent window and the equipment manager — to create or save a loadout or a gear set without

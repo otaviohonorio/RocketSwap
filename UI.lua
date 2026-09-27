@@ -129,7 +129,9 @@ local WARN_STRIP_Y = LIST_BOTTOM - 4
 -- mais os 4 de folga que a janela sempre teve.
 local WARN_STRIP_H = 130
 local TEMPLATE_FOOTER = 26
-HEIGHT = -WARN_STRIP_Y + WARN_STRIP_H + TEMPLATE_FOOTER + 4
+-- + the support line at the very bottom (Donate.lua, `DONATE_ROW`, 27/09).
+local DONATE_ROW = ns.DONATE_ROW or 0
+HEIGHT = -WARN_STRIP_Y + WARN_STRIP_H + TEMPLATE_FOOTER + 4 + DONATE_ROW
 local FIELD_W = 200           -- combos (o dropdown de loadout de talentos usa 200)
 local NAME_W = 211            -- EditBox: a arte termina em 500, alinhada com a dos combos
 local GROUP_STEP = 50         -- rótulo (15) + combo (25) + respiro (10)
@@ -1307,18 +1309,16 @@ local function Create()
     -- Rodapé: a banda que o template já reserva (y 4..26).
     frame.delete = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.delete:SetSize(100, 22)
-    frame.delete:SetPoint("BOTTOMRIGHT", -6, 4)
+    frame.delete:SetPoint("BOTTOMRIGHT", -6, 4 + DONATE_ROW)
     frame.delete:SetText(L["Delete"])
     frame.delete:SetScript("OnClick", function() UI.Delete() end)
 
-    -- "Support the project" (27/09): in the footer, left of Delete -- the user: *"ficar abaixo na
-    -- janela como um rodapé"*. It was in the top-right corner of the attic before.
-    frame.donate = ns.DonateLink(frame)
-    frame.donate:SetPoint("RIGHT", frame.delete, "LEFT", -12, 0)
+    -- "Support the project" (27/09): a line of its own at the very bottom (Donate.lua).
+    frame.donate = ns.DonateFooter(frame)
 
     frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.status:SetPoint("BOTTOMLEFT", 10, 8)
-    frame.status:SetPoint("RIGHT", frame.donate, "LEFT", -12, 0)
+    frame.status:SetPoint("BOTTOMLEFT", 10, 8 + DONATE_ROW)
+    frame.status:SetPoint("RIGHT", frame.delete, "LEFT", -8, 0)
     frame.status:SetJustifyH("LEFT")
     frame.status:SetWordWrap(false)
 
@@ -1402,7 +1402,7 @@ function UI.DebugCardMetrics()
         top = CARD_TOP, textW = CARD_TEXT_W, listW = LIST_W,
         cardMax = CARD_MAX, visiveis = CARDS_VISIVEIS, spacing = ROW_SPACING,
         listH = LIST_H, listTop = LIST_TOP, listBottom = LIST_BOTTOM,
-        stripY = WARN_STRIP_Y, stripH = WARN_STRIP_H, footer = TEMPLATE_FOOTER,
+        stripY = WARN_STRIP_Y, stripH = WARN_STRIP_H, footer = TEMPLATE_FOOTER, donateRow = DONATE_ROW,
         height = HEIGHT, width = WIDTH, colX = COL_X, fieldW = FIELD_W, nameW = NAME_W,
     }
 end
