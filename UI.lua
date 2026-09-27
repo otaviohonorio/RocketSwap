@@ -1303,9 +1303,6 @@ local function Create()
     frame.new:SetText("+ " .. L["New preset"])
     frame.new:SetScript("OnClick", function() UI.New() end)
 
-    -- "Donate" (27/09): the small grey word in the top-right corner of the attic (Donate.lua).
-    frame.donate = ns.DonateLink(frame)
-    frame.donate:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -12, ATTIC_Y - 4)
 
     -- Rodapé: a banda que o template já reserva (y 4..26).
     frame.delete = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1314,9 +1311,14 @@ local function Create()
     frame.delete:SetText(L["Delete"])
     frame.delete:SetScript("OnClick", function() UI.Delete() end)
 
+    -- "Support the project" (27/09): in the footer, left of Delete -- the user: *"ficar abaixo na
+    -- janela como um rodapé"*. It was in the top-right corner of the attic before.
+    frame.donate = ns.DonateLink(frame)
+    frame.donate:SetPoint("RIGHT", frame.delete, "LEFT", -12, 0)
+
     frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.status:SetPoint("BOTTOMLEFT", 10, 8)
-    frame.status:SetPoint("RIGHT", frame.delete, "LEFT", -8, 0)
+    frame.status:SetPoint("RIGHT", frame.donate, "LEFT", -12, 0)
     frame.status:SetJustifyH("LEFT")
     frame.status:SetWordWrap(false)
 
@@ -1345,6 +1347,10 @@ end
 ---desloca os índices, e um índice guardado passaria a apontar para outro conjunto.
 ---Acesso à lista, só para o harness poder disparar o clique de uma linha. Sem isto o teste
 ---que trava o bug "não consigo clicar em outros conjuntos" não teria como existir.
+function UI.DebugFrame()
+    return frame
+end
+
 function UI.DebugList()
     return frame and frame.list
 end
