@@ -1249,6 +1249,17 @@ local function Create()
     frame.new:SetText("+ " .. L["New preset"])
     frame.new:SetScript("OnClick", function() UI.New() end)
 
+    -- "Donate" (26/09): Donate.lua. The game's button, 22 high, text + 40 wide.
+    frame.donate = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.donate:SetText(L["Donate"])
+    do
+        local w = frame.donate.GetTextWidth and frame.donate:GetTextWidth()
+        if type(w) ~= "number" or w <= 0 then w = 50 end    -- by TYPE: the harness answers a table
+        frame.donate:SetSize(w + 40, 22)
+    end
+    frame.donate:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, ATTIC_Y)
+    frame.donate:SetScript("OnClick", function() ns.ShowDonate() end)
+
     -- Rodapé: a banda que o template já reserva (y 4..26).
     frame.delete = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.delete:SetSize(100, 22)

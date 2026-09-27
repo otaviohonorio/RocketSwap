@@ -300,3 +300,8 @@ L["%s was NOT loaded — nothing was changed:"] = "%s NÃO foi carregado — nad
 L["in a PvP match -- the countdown included -- the game blocks switches made by addons. Switch before accepting the queue."] = "numa partida de PvP — inclusive na contagem — o jogo bloqueia trocas feitas por addon. Troque antes de aceitar a fila."
 L["during a boss encounter the game blocks switches made by addons."] = "durante o encontro com um chefe o jogo bloqueia trocas feitas por addon."
 L["during a Mythic+ keystone the game blocks switches made by addons."] = "durante uma chave de Mítica+ o jogo bloqueia trocas feitas por addon."
+
+-- Doação (Donate.lua, 26/09)
+L["Donate"] = "Doar"
+L["Link copied — paste it in your browser."] = "Link copiado — cole no navegador."
+L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."] = "Obrigado por apoiar o Rocket Swap! Aperte Ctrl+C para copiar o link e cole no navegador."

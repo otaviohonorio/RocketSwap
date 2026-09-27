@@ -599,6 +599,10 @@ commands["log"] = function(rest)
     print("  WTF\\Account\\<conta>\\SavedVariables\\RocketSwap.lua")
 end
 
+-- `/rs doar` (or `donate`): the donation link (Donate.lua).
+commands["donate"] = function() ns.ShowDonate() end
+commands["doar"] = commands["donate"]
+
 commands["help"] = function()
     ns.Print(L["version"] .. " " .. ns.version .. " — " .. L["commands:"])
     print("  /rs                 " .. L["opens the window"])

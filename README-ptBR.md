@@ -90,6 +90,7 @@ python tests/sabotar.py
 Estes addons são gratuitos e vão continuar sendo. Se eles te poupam tempo toda sessão, há duas
 formas de ajudar, e as duas pagam a mesma coisa — as horas de manter tudo em dia a cada patch:
 
+- **[PayPal](https://www.paypal.com/donate/?business=HH4PHH48DPG9J&no_recurring=0&currency_code=BRL)** — uma doação avulsa, em reais, de qualquer valor.
 - **[Ko-fi](https://ko-fi.com/ottorocket)** — uma contribuição avulsa, de qualquer valor, **sem
   precisar de conta**.
 - **[GitHub Sponsors](https://github.com/sponsors/otaviohonorio)** — recorrente, se preferir.
