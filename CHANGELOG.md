@@ -6,6 +6,8 @@ the general ones — and puts it on the first empty slot of a visible action bar
 key binding on that slot) loads the whole preset: specialization, talents, equipment **and the
 transmog outfit**.
 
+- **One switch at a time.** While a preset is loading, the Load button of every preset is off,
+  and hovering one says which preset is being loaded. They come back when the switch ends.
 - **Drag a preset to your action bar**: drag its card from the list, like a spell from the
   spellbook, and drop it on the slot you want.
 - The chat tells you where the macro went ("Action Bar 3, button 4"). If no visible bar has an empty slot, drag it from

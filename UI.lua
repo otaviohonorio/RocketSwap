@@ -374,6 +374,8 @@ local function BuildRow(row)
         GameTooltip:Show()
     end)
     row.load:SetScript("OnLeave", GameTooltip_Hide)
+    -- A button that is off says why only if the mouse still reaches it.
+    row.load:SetMotionScriptsWhileDisabled(true)
 
     row.check = row:CreateTexture(nil, "OVERLAY")
     row.check:SetSize(16, 16)
@@ -461,6 +463,21 @@ end
 UI.ArmOutfit = ArmOutfit
 
 ---Preenche a linha com um conjunto.
+-- (!) TURNING A BUTTON ON AND OFF IS PROTECTED (`SetEnabled`, `IsProtectedFunction` in the
+-- client's SimpleButtonAPIDocumentation.lua, 12.1.0), and Load is a secure button: in combat the
+-- game blocks the call. The reason is kept at once -- the tooltip is ours -- and the button is
+-- set when the combat ends (`UI.SyncLoadButtons`, from the window's clock).
+local loadStatePending = false
+local function SetLoadState(row, preset)
+    local motivo = ns.Data.LoadBlockedReason(preset)
+    row.load.blockedReason = motivo
+    if InCombatLockdown() then
+        loadStatePending = true
+        return
+    end
+    row.load:SetEnabled(motivo == nil)
+end
+
 local function FillRow(row, preset)
     BuildRow(row)
     row.preset = preset
@@ -533,9 +550,7 @@ local function FillRow(row, preset)
     -- responde "não deu" é pior que botão apagado. Quem age é o botão da faixa vermelha.
     -- Os dois motivos de apagar o botão saem da MESMA função (`Data.LoadBlockedReason`), que
     -- é onde o harness alcança. Aqui sobra o desenho: apagar e guardar a frase da dica.
-    local motivo = ns.Data.LoadBlockedReason(preset)
-    row.load:SetEnabled(motivo == nil)
-    row.load.blockedReason = motivo
+    SetLoadState(row, preset)
 
     row.selected:SetShown(selection ~= nil and selection:IsElementDataSelected(preset))
 end
@@ -1339,6 +1354,7 @@ local function Create()
         self.__tick = self.__tick + (elapsed or 0)
         if self.__tick < 0.1 then return end
         self.__tick = 0
+        UI.SyncLoadButtons()
         UI.RefreshProgress()
     end)
 
@@ -1615,10 +1631,30 @@ end
 ---Chamada do `PostClick` do botão seguro, e por isso o terceiro argumento é `true`: a ação de
 ---aparência JÁ foi disparada pelo clique, e o passo de aparência tem que ESPERAR a resposta do
 ---servidor em vez de conferir na hora e acusar falha numa troca que está a caminho.
+-- What the rows last saw: a switch running, or not.
+local applyingSeen = false
+
+---The Load buttons follow the switch: off while one runs, back when it ends. A switch can start
+---outside the window too (a macro, the minimap menu, the queue alert), so the window's clock
+---asks; and a change that fell in combat is done when the combat ends.
+---@param force boolean|nil -- a click: a switch may have ended and another begun between two
+---looks of the clock, and the rows would have seen no change at all
+function UI.SyncLoadButtons(force)
+    if not frame or not frame.list then return end
+    local agora = ns.Data.IsApplying()
+    local devendo = loadStatePending and not InCombatLockdown()
+    if agora == applyingSeen and not devendo and not force then return end
+    applyingSeen = agora
+    loadStatePending = false
+    if frame.list.ReinitializeFrames then frame.list:ReinitializeFrames() end
+end
+
 function UI.Load(preset)
     if not preset then return end
     ns.db.last = preset.name
     ns.Data.Apply(preset, UI.SetStatus, true)
+    -- In the same frame as the click: the other buttons go off before a second click can land.
+    UI.SyncLoadButtons(true)
     -- NO MESMO QUADRO DO CLIQUE. O `OnUpdate` traria o painel em até 0,1 s, mas o defeito que
     -- este painel conserta é justamente a sensação de que o clique não fez nada — então ele não
     -- pode ser a primeira coisa a chegar atrasada.

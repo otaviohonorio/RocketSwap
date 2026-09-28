@@ -232,6 +232,7 @@ L["click Load to switch to %s completely."] =
 
 -- O progresso da troca: a janela mostrando que sao ETAPAS (0.18.0)
 L["Switching to %s"] = "Trocando para %s"
+L["Switching to %s. Wait for it to finish."] = "Trocando para %s. Espere terminar."
 -- "pulado" nao e falha, e o rotulo diz por que -- senao o passo pulado fica igual ao que ainda
 -- nao comecou, e a pessoa termina sem saber se a aparencia foi aplicada ou esquecida.
 L["%s — nothing to change"] = "%s — nada a mudar"

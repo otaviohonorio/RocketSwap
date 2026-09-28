@@ -599,6 +599,10 @@ end
 function Data.LoadBlockedReason(preset)
     if not preset then return nil end
 
+    -- A switch that is running comes first, and is of every preset (`Data.ApplyingReason`).
+    local trocando = Data.ApplyingReason()
+    if trocando then return trocando end
+
     local problema = preset.gear and Data.GearSetProblem(preset.gear)
     if problema then
         return format(
@@ -2027,6 +2031,19 @@ end
 
 function Data.IsApplying()
     return running ~= nil
+end
+
+---(!) ONE SWITCH AT A TIME, AND THE BUTTONS SAY SO (28/09). The user, before the 0.38.0 went
+---out: *"quando apertar no botão de carregar, tem que desativar o botão carregar dos outros
+---salvos, vai que o jogador sai clicando em todos de uma vez só"*. A second click was already
+---refused (`Data.Apply`), with a line in the chat; the buttons went on looking ready. It is the
+---rule the user gave twice before: a button that takes the click and then answers "no" is
+---worse than a button that is off.
+---@return string|nil reason -- what the button's tooltip says while a switch runs
+function Data.ApplyingReason()
+    if not running then return nil end
+    return format(L["Switching to %s. Wait for it to finish."],
+        running.preset and running.preset.name or "?")
 end
 
 ---O estado de cada passo da troca, na ordem em que acontecem — a da troca em curso, ou o retrato
