@@ -28,6 +28,9 @@ chat and in the window. No more half switches such as "loaded, except the appear
 - A preset with an appearance only switches through a click on it (the window or its macro).
 - A character has 18 macro slots; when they are full, the chat says so and the preset keeps
   working from the window.
+- **Report a problem**: beside "Support the project", at the bottom of the window, a link that
+  lets you choose GitHub or CurseForge and opens the address ready to copy, with the addon's
+  version in the dialog.
 - **Support the project**: a small link with the PayPal logo, on its own line at the bottom of the window, opens the PayPal link ready to copy — in reais when the game
   is in Portuguese, in dollars otherwise.
 - **Buttons to the game's windows**: "Talents" and "Equipment" at the top of the editor open the
