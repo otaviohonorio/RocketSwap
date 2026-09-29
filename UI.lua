@@ -354,10 +354,15 @@ local function BuildRow(row)
     row.load:SetAttribute("useOnKeyDown", false)
     -- The same guard as the macro's (Macro.lua): a pre-flight "no" disarms the outfit before the
     -- secure action runs, so the appearance never changes alone.
+    --
+    -- (!) `UI.ArmOutfit`, NOT `ArmOutfit` (28/09). The local function is declared BELOW this one,
+    -- so here the bare name was a global that does not exist: a Lua error on every click of Load
+    -- out of combat, 12 of them in !BugGrabber, and it went out in the 0.38.0. The harness only
+    -- clicked the macro's button, never this one.
     row.load:SetScript("PreClick", function(self)
         local p = self:GetParent().preset
         if p and not InCombatLockdown() then
-            ArmOutfit(self, (#ns.Data.Preflight(p, true) == 0) and p or nil)
+            UI.ArmOutfit(self, (#ns.Data.Preflight(p, true) == 0) and p or nil)
         end
     end)
     row.load:SetScript("PostClick", function(self)
@@ -478,6 +483,43 @@ local function SetLoadState(row, preset)
     row.load:SetEnabled(motivo == nil)
 end
 
+-- (!) WHAT A ROW SHOWS THAT IS THE GAME'S TO CHANGE (28/09): how many pieces the gear set has
+-- lost, and why Load is off. The user's print had "PvP: 1 item missing" on our row while the
+-- game's own equipment manager, open beside it, showed the same set with nothing missing. Both
+-- read the same number (`numLost`); the game's list draws again on BAG_UPDATE
+-- (`PaperDollEquipmentManagerPane_OnEvent`, 12.1.0.69933) and ours did not listen to the bags, so
+-- a row could keep a number read in the middle of a swap. Instead of guessing which event was
+-- missing, the row keeps what it was drawn from and the window's clock compares it with the
+-- game (`UI.SyncLoadButtons`).
+--
+-- "In use" goes along, for the same reason: the diary of 07/09 has EQUIPMENT_SWAP_FINISHED
+-- arriving with `true` while the set still read as not worn. What is read at the event is not
+-- always what is true a moment later.
+local function RowState(preset)
+    local problema = preset.gear and ns.Data.GearSetProblem(preset.gear)
+    return (problema and problema.perdidas or 0)
+        .. "|" .. (ns.Data.IsLoaded(preset) and "in use" or "")
+        .. "|" .. (ns.Data.LoadBlockedReason(preset) or "")
+end
+
+-- The diary says WHEN a set began to miss a piece and when it stopped, with the game's count
+-- and whether a switch was running: it is what tells a number of the middle of a swap from a
+-- piece that is really gone. One line per change, not per drawing.
+local lostSeen = {}
+local function NoteLost(preset, problema)
+    local id = preset.gear
+    if id == nil then return end
+    local agora = problema and problema.perdidas or 0
+    if (lostSeen[id] or 0) == agora then return end
+    lostSeen[id] = agora
+    ns.Log.Add("falta", {
+        conjunto = id,
+        estado = ns.Data.DescribeGearSet(id),
+        slots = problema and problema.slots and table.concat(problema.slots, ", ") or nil,
+        trocando = ns.Data.IsApplying(),
+    })
+end
+
 local function FillRow(row, preset)
     BuildRow(row)
     row.preset = preset
@@ -522,6 +564,7 @@ local function FillRow(row, preset)
     -- — *"a gente consegue antes de trocar, avisar isso"*.
     -- A FAIXA DO AVISO, ancorada abaixo da última linha que apareceu.
     local problema = preset.gear and ns.Data.GearSetProblem(preset.gear)
+    NoteLost(preset, problema)
     row.warn:SetShown(problema ~= nil)
     if problema then
         row.warn:ClearAllPoints()
@@ -551,6 +594,7 @@ local function FillRow(row, preset)
     -- Os dois motivos de apagar o botão saem da MESMA função (`Data.LoadBlockedReason`), que
     -- é onde o harness alcança. Aqui sobra o desenho: apagar e guardar a frase da dica.
     SetLoadState(row, preset)
+    row.drawn = RowState(preset)
 
     row.selected:SetShown(selection ~= nil and selection:IsElementDataSelected(preset))
 end
@@ -1631,20 +1675,20 @@ end
 ---Chamada do `PostClick` do botão seguro, e por isso o terceiro argumento é `true`: a ação de
 ---aparência JÁ foi disparada pelo clique, e o passo de aparência tem que ESPERAR a resposta do
 ---servidor em vez de conferir na hora e acusar falha numa troca que está a caminho.
--- What the rows last saw: a switch running, or not.
-local applyingSeen = false
-
----The Load buttons follow the switch: off while one runs, back when it ends. A switch can start
----outside the window too (a macro, the minimap menu, the queue alert), so the window's clock
----asks; and a change that fell in combat is done when the combat ends.
----@param force boolean|nil -- a click: a switch may have ended and another begun between two
----looks of the clock, and the rows would have seen no change at all
-function UI.SyncLoadButtons(force)
+---The rows follow the game. Each row keeps what it was drawn from (`RowState`), and this compares
+---it with what the game says now: a switch that began or ended (in the window or outside it: a
+---macro, the minimap menu, the queue alert), a piece that left or came back to the bags. A
+---change that fell in combat is done when the combat ends. Called by the window's clock, and by
+---the click, which cannot wait for the clock.
+function UI.SyncLoadButtons()
     if not frame or not frame.list then return end
-    local agora = ns.Data.IsApplying()
-    local devendo = loadStatePending and not InCombatLockdown()
-    if agora == applyingSeen and not devendo and not force then return end
-    applyingSeen = agora
+    local velha = loadStatePending and not InCombatLockdown()
+    if not velha and frame.list.ForEachFrame then
+        frame.list:ForEachFrame(function(row)
+            if row.preset and row.drawn ~= RowState(row.preset) then velha = true end
+        end)
+    end
+    if not velha then return end
     loadStatePending = false
     if frame.list.ReinitializeFrames then frame.list:ReinitializeFrames() end
 end
@@ -1654,7 +1698,7 @@ function UI.Load(preset)
     ns.db.last = preset.name
     ns.Data.Apply(preset, UI.SetStatus, true)
     -- In the same frame as the click: the other buttons go off before a second click can land.
-    UI.SyncLoadButtons(true)
+    UI.SyncLoadButtons()
     -- NO MESMO QUADRO DO CLIQUE. O `OnUpdate` traria o painel em até 0,1 s, mas o defeito que
     -- este painel conserta é justamente a sensação de que o clique não fez nada — então ele não
     -- pode ser a primeira coisa a chegar atrasada.

@@ -1,41 +1,9 @@
-# Rocket Swap 0.38.0
+# Rocket Swap 0.38.1
 
-**Every preset gets its own macro, ready on your action bar.** Save a preset with a name and the
-addon creates a macro with the same name and the preset's icon — in this character's macros, not
-the general ones — and puts it on the first empty slot of a visible action bar. One click (or a
-key binding on that slot) loads the whole preset: specialization, talents, equipment **and the
-transmog outfit**.
-
-- **One switch at a time.** While a preset is loading, the Load button of every preset is off,
-  and hovering one says which preset is being loaded. They come back when the switch ends.
-- **Drag a preset to your action bar**: drag its card from the list, like a spell from the
-  spellbook, and drop it on the slot you want.
-- The chat tells you where the macro went ("Action Bar 3, button 4"). If no visible bar has an empty slot, drag it from
-  `/macro` (the character tab).
-- Renaming the preset renames its macro (macro names stop at 16 letters); deleting the preset
-  deletes its macro. A macro you delete yourself is not made again, unless you type `/rs macro`.
-- `/rs macro` makes the macros for presets you saved before this version.
-- In combat nothing changes: the macro is made when the fight ends.
-
-**All or nothing.** Before a preset switches, every step it needs is checked with the game —
-specialization (including its cooldown, and standing still, since moving cuts the cast), talents,
-the equipment set (missing or locked items, a deleted set) and the appearance (its cooldown, a
-style event, a deleted outfit). If anything would fail, **nothing is changed** and you are told
-why, with the time left when the game lets it be read — in red in the middle of the screen, in
-chat and in the window. No more half switches such as "loaded, except the appearance".
-
-- A click in combat no longer queues the switch for after the fight: it is refused, with a warning.
-- In a PvP match (the arena countdown included), a boss encounter or a Mythic+ key, the game
-  blocks switches made by addons: the preset says so instead of switching halfway.
-- A preset with an appearance only switches through a click on it (the window or its macro).
-- A character has 18 macro slots; when they are full, the chat says so and the preset keeps
-  working from the window.
-- **Report a problem**: beside "Support the project", at the bottom of the window, a link that
-  lets you choose GitHub or CurseForge and opens the address ready to copy, with the addon's
-  version in the dialog.
-- **Support the project**: a small link with the PayPal logo, on its own line at the bottom of the window, opens the PayPal link ready to copy — in reais when the game
-  is in Portuguese, in dollars otherwise.
-- **Buttons to the game's windows**: "Talents" and "Equipment" at the top of the editor open the
-  talent window and the equipment manager — to create or save a loadout or a gear set without
-  leaving the preset.
-- **The preset name has a title** above its box, so it is clear what you are naming.
+- **Fixed a Lua error on every click of Load** in the addon's window (0.38.0). The switch
+  itself went through; the error also kept the window from holding the transmog outfit back
+  when the switch was refused before it began.
+- **The preset rows keep up with the game.** A row could stay with "1 item missing", and Load
+  off, for a gear set that had every piece: what it showed was read once, at an event. The
+  missing-item warning, the Load button and the "in use" mark are now checked against the game
+  while the window is open.
