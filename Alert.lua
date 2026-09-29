@@ -206,7 +206,7 @@ local function Build()
     ui:SetScript("OnDragStop", ui.StopMovingOrSizing)
     ui:Hide()
 
-    if ui.SetTitle then ui:SetTitle(ADDON) end
+    if ui.SetTitle then ui:SetTitle(ns.NAME) end
     if ui.SetPortraitToAsset then ui:SetPortraitToAsset(ns.FirstIcon(ns.ICON_CANDIDATES)) end
     if ui.Inset then ui.Inset:Hide() end
 

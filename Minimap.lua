@@ -118,7 +118,7 @@ function Minimap_.Create()
 
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetText(ADDON, 1, 1, 1)
+        GameTooltip:SetText(ns.TITLE, 1, 1, 1)
         GameTooltip:AddLine(L["Left click: open. Right click: pick a preset."],
             0.7, 0.7, 0.7, true)
         GameTooltip:Show()

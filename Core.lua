@@ -53,8 +53,17 @@ ns.Log = setmetatable({ enabled = false }, {
     __index = function() return function() end end,
 })
 
+-- (!) THE ADDON'S NAME, AS THE PLAYER READS IT (29/09). The user, looking at the three minimap
+-- buttons: *"Rocket Mount, Rocket Meter estão com esse espaço e pintada a palavra rocket, o swap
+-- não tá nesse padrão"* -- this one said "RocketSwap", the folder's name, in white. The
+-- workspace's format is the .toc's `## Title`: "Rocket" in the orange of the three addons, a
+-- space, the name. `NAME` is the same without the colour, for where the game paints the text
+-- itself (a window's title bar).
+ns.TITLE = "|cffff6a00Rocket|r Swap"
+ns.NAME = "Rocket Swap"
+
 function ns.Print(...)
-    print("|cffffd100" .. ADDON .. "|r:", ...)
+    print(ns.TITLE .. ":", ...)
 end
 
 --------------------------------------------------------------------------------

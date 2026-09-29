@@ -1311,7 +1311,7 @@ local function Create()
     end)
     frame:Hide()
 
-    if frame.SetTitle then frame:SetTitle(ADDON) end
+    if frame.SetTitle then frame:SetTitle(ns.NAME) end
     if frame.SetPortraitToAsset then
         frame:SetPortraitToAsset(ns.FirstIcon(ns.ICON_CANDIDATES))
     end
