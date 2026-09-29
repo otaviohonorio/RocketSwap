@@ -98,11 +98,22 @@ end
 
 ---The index of OUR macro for this preset, found by its body -- never by name, since the player may
 ---have another macro with the same name, and ours may have been renamed.
+-- (!) THE LIMITS ARE THE GAME'S, FROM WHERE THE GAME KEEPS THEM (28/09). The macro window reads
+-- `Constants.MacroConsts` (`Blizzard_MacroUI.lua:148-156`, 12.1.0.69933: 120 and 30). The old
+-- globals MAX_ACCOUNT_MACROS and MAX_CHARACTER_MACROS are not defined anywhere in the client's
+-- interface any more, so `MAX_CHARACTER_MACROS or 18` was always 18: a character with 18 macros
+-- was told the list was full, with room for 12 more. The harness defined the old globals, which
+-- the game does not. Found by `tools/globais.py`.
+local function MacroLimits()
+    local c = Constants and Constants.MacroConsts
+    return (c and c.MAX_ACCOUNT_MACROS) or 120, (c and c.MAX_CHARACTER_MACROS) or 30
+end
+
 local function OurIndex(preset)
     if not (preset.uid and GetNumMacros and GetMacroBody) then return nil end
     local marca = PREFIX .. preset.uid .. " "
     local global, char = GetNumMacros()
-    local first = (MAX_ACCOUNT_MACROS or 120) + 1
+    local first = MacroLimits() + 1
     for i = first, first + (char or 0) - 1 do
         local body = GetMacroBody(i)
         if body and body:find(marca, 1, true) then return i end
@@ -323,7 +334,7 @@ function Macro.Sync(preset, porBotao)
     if preset.macroMade then return end
 
     local _, char = GetNumMacros()
-    local max = MAX_CHARACTER_MACROS or 18
+    local _, max = MacroLimits()
     if (char or 0) >= max then
         ns.Print(string.format(L["this character's macros are full (%d of %d): the preset has no macro."],
             char, max))

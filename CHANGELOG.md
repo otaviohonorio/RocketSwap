@@ -10,3 +10,5 @@
 - **Fixed an endless loop in the wrong-gear warning.** When the game had an item's data but its
   tooltip was still loading, the warning asked for the item again and again until the game cut
   it off, with a stutter and a Lua error.
+- **The macro limit is the game's: 30 per character.** The addon counted 18 and refused to make
+  a preset's macro with room to spare.
