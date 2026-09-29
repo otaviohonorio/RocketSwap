@@ -170,6 +170,16 @@ end
 function ns.LoadPreset(preset)
     if not preset then return false end
 
+    -- Without a name it does not load (`Data.HasName`): the window opens on it, where the name
+    -- is typed.
+    if not ns.Data.HasName(preset) then
+        Abrir()
+        ns.UI.Select(preset)
+        ns.UI.SetStatus(L["Give the preset a name first."], true)
+        ns.Print(L["Give the preset a name first."])
+        return false
+    end
+
     if preset.transmog then
         Abrir()
         ns.UI.Select(preset)

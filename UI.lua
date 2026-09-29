@@ -405,9 +405,14 @@ local function BuildRow(row)
     row:SetScript("OnEnter", function(self)
         if not self.preset then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(self.preset.name ~= "" and self.preset.name or L["Unnamed"], 1, 1, 1)
+        local named = ns.Data.HasName(self.preset)
+        GameTooltip:SetText(named and self.preset.name or L["Unnamed"], 1, 1, 1)
         GameTooltip:AddLine(Subtitle(self.preset), 0.7, 0.7, 0.7, true)
-        GameTooltip:AddLine(L["Drag to an action bar to make it a button."], 0.5, 0.8, 1, true)
+        if named then
+            GameTooltip:AddLine(L["Drag to an action bar to make it a button."], 0.5, 0.8, 1, true)
+        else
+            GameTooltip_AddErrorLine(GameTooltip, L["Give the preset a name first."])
+        end
 
         -- O PORQUÊ DO VERMELHO. Sem esta linha a pessoa vê "falta 1 item" e conclui a coisa
         -- errada — que a troca vai ficar incompleta. O estrago real é outro: o espaço fica com
@@ -525,7 +530,10 @@ local function FillRow(row, preset)
     row.preset = preset
     ArmOutfit(row.load, preset)
 
-    row.name:SetText(preset.name ~= "" and preset.name or L["Unnamed"])
+    -- Without a name the row says so in the game's red, like a broken set in its equipment
+    -- manager: it is a preset that asks for something before it can be used.
+    row.name:SetText(ns.Data.HasName(preset) and preset.name
+        or RED_FONT_COLOR:WrapTextInColorCode(L["Unnamed"]))
 
     local linhas = CardLines(preset)
     for i, fs in ipairs(row.lines) do
@@ -629,14 +637,16 @@ local function Group(parent, labelText, yTop, items, get, set)
     function group.Sync()
         local list = items()
 
+        -- The name typed goes to the preset BEFORE the choice: the box only saves when it loses
+        -- the focus, and a click on a field does not take the focus from it.
         dd:SetupMenu(function(_, root)
-            root:CreateButton(L["(none)"], function() set(nil); UI.AfterEdit() end)
+            root:CreateButton(L["(none)"], function() UI.SaveName(); set(nil); UI.AfterEdit() end)
             if #list > 0 then root:CreateDivider() end
 
             for _, item in ipairs(list) do
                 local entry = root:CreateRadio(item.text,
                     function() return get() == item.value end,
-                    function() set(item.value); UI.AfterEdit() end,
+                    function() UI.SaveName(); set(item.value); UI.AfterEdit() end,
                     item.value)
 
                 -- O conjunto de itens já tem ícone; mostrá-lo no menu custa cinco linhas e
@@ -656,7 +666,9 @@ local function Group(parent, labelText, yTop, items, get, set)
 
             -- Sem nada para escolher, o combo fica apagado em vez de abrir um menu de um
             -- item só — o caso real de uma spec sem loadout salvo.
-            if root.HasElements then dd:SetEnabled(root:HasElements()) end
+            -- LOCKED stays off: the game runs this again on every show and every opening
+            -- (`DropdownButton.lua:117,246`, 12.1.0). Off, its dropdown does not open (`:109`).
+            if root.HasElements then dd:SetEnabled(group.locked == nil and root:HasElements()) end
         end)
 
         local current, text = get(), nil
@@ -665,6 +677,28 @@ local function Group(parent, labelText, yTop, items, get, set)
         end
         dd:SetDefaultText(text or L["(none)"])
     end
+
+    ---Turns the field off with a reason, or back on with `nil`. The reason is what the tooltip
+    ---says: a field that is off and does not say why is just a broken field.
+    function group.SetLocked(reason)
+        if group.locked == reason then return end
+        group.locked = reason
+        if reason then
+            dd:SetEnabled(false)
+        else
+            dd:SetEnabled(true)
+            if group:IsShown() then group.Sync() end
+        end
+    end
+    dd:SetMotionScriptsWhileDisabled(true)
+    dd:HookScript("OnEnter", function(self)
+        if not group.locked then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip_SetTitle(GameTooltip, labelText)
+        GameTooltip_AddErrorLine(GameTooltip, group.locked)
+        GameTooltip:Show()
+    end)
+    dd:HookScript("OnLeave", function() if group.locked then GameTooltip:Hide() end end)
 
     group.dropdown = dd
     return group
@@ -707,6 +741,10 @@ local function BuildEditor()
     editor.nameTitle:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X + 11, NAME_TITLE_Y)
     editor.nameTitle:SetWidth(NAME_W - 6)
     editor.nameTitle:SetJustifyH("LEFT")
+    -- One line, always: with "(required)" after it the title is 184 wide in Portuguese, of the
+    -- 205 it has (measured with the game's font at the 12 of `GameFontNormal`). A longer
+    -- translation is cut instead of falling over the box.
+    editor.nameTitle:SetWordWrap(false)
     editor.nameTitle:SetText(L["Preset name"])
 
     editor.name = CreateFrame("EditBox", nil, frame, "InputBoxInstructionsTemplate")
@@ -726,6 +764,11 @@ local function BuildEditor()
     -- conjunto, então ele só confirmava o nome — e sua existência levantava a dúvida "a
     -- escolha do combo salvou?".
     editor.name:SetScript("OnEditFocusLost", function() UI.SaveName() end)
+    -- (!) THE NAME IS REQUIRED (30/09), and the column says so AS IT IS TYPED: with the box empty
+    -- the title carries "(required)" in the game's red and the four fields below are off; the
+    -- first letter turns them on. `HookScript`, not `SetScript`: the template has its own
+    -- OnTextChanged, the one that hides the example text.
+    editor.name:HookScript("OnTextChanged", function() UI.RefreshNameState() end)
 
     editor.divider = frame:CreateTexture(nil, "ARTWORK")
     editor.divider:SetSize(216, 1)
@@ -1516,6 +1559,34 @@ function UI.SetStatus(text, isError)
     end
 end
 
+---Is the name missing, as the player sees it NOW? With the focus in the box it is what is typed
+---that counts (the preset only gets it when the box is left); without it, what the preset has.
+local function NameMissing(preset)
+    if not preset then return false end
+    if editor.name:HasFocus() then
+        return not ((editor.name:GetText() or ""):find("%S") ~= nil)
+    end
+    return not ns.Data.HasName(preset)
+end
+
+---The title of the box and the lock of the fields, from the name. The way the game does it in
+---its own forms: what comes after the name stays off until there is one (the button of the
+---talent loadout dialog, `Blizzard_ClassTalentLoadoutCreateDialog.lua:12`, 12.1.0).
+function UI.RefreshNameState()
+    if not frame or not editor then return end
+    local missing = NameMissing(UI.Selected())
+    if missing then
+        editor.nameTitle:SetText(L["Preset name"] .. " "
+            .. RED_FONT_COLOR:WrapTextInColorCode(L["(required)"]))
+    else
+        editor.nameTitle:SetText(L["Preset name"])
+    end
+    local reason = missing and L["Give the preset a name first."] or nil
+    for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
+        group.SetLocked(reason)
+    end
+end
+
 ---Só o editor. Chamado quando a seleção muda ou quando um combo escreve.
 function UI.RefreshEditor()
     if not frame or not editor then return end
@@ -1532,19 +1603,22 @@ function UI.RefreshEditor()
     editor.nameTitle:SetShown(has)
     editor.openTalents:SetShown(has)
     editor.openGear:SetShown(has)
-    for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
-        -- `SetupMenu` só gera o menu com o frame visível: mostrar ANTES de sincronizar.
-        group:SetShown(has)
-        if has then group.Sync() end
-    end
-    editor.divider:SetShown(has)
 
+    -- The box first: the lock of the fields is read from it.
     if has and not editor.name:HasFocus() then
         editor.name:SetText(preset.name or "")
         if editor.name.Instructions and InputBoxInstructions_OnTextChanged then
             InputBoxInstructions_OnTextChanged(editor.name)
         end
     end
+    if has then UI.RefreshNameState() end
+
+    for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
+        -- `SetupMenu` só gera o menu com o frame visível: mostrar ANTES de sincronizar.
+        group:SetShown(has)
+        if has then group.Sync() end
+    end
+    editor.divider:SetShown(has)
 end
 
 function UI.Refresh()
@@ -1622,6 +1696,18 @@ end
 function UI.New()
     local presets = Presets()
 
+    -- ONE WITHOUT A NAME AT A TIME. "+ New preset" with one still unnamed goes to it instead of
+    -- piling another "Unnamed" on the list.
+    for _, p in ipairs(presets) do
+        if not ns.Data.HasName(p) then
+            current = p
+            UI.Refresh()
+            editor.name:SetFocus()
+            UI.SetStatus(L["Give the preset a name first."], true)
+            return
+        end
+    end
+
     -- O conjunto novo já nasce com o que está valendo AGORA. É o caso de uso real: você
     -- acabou de arrumar spec, talentos e equipamento para uma masmorra — agora só quer dar
     -- um nome a isso. Começar vazio obrigaria a redigitar o óbvio.
@@ -1647,9 +1733,26 @@ function UI.SaveName()
 
     local name = editor.name:GetText() or ""
     name = name:match("^%s*(.-)%s*$")
+    -- THE NAME IS REQUIRED: erased, the one the preset had comes back, and the window says so.
+    -- A preset that never had one stays as it is, asking for it. Before the "nothing changed"
+    -- below: an empty box on a preset without a name changed nothing and still has to say it.
+    if name == "" then
+        if ns.Data.HasName(preset) then
+            editor.name:SetText(preset.name)
+            if editor.name.Instructions and InputBoxInstructions_OnTextChanged then
+                InputBoxInstructions_OnTextChanged(editor.name)
+            end
+            UI.SetStatus(L["A preset needs a name: the previous one was kept."], true)
+        else
+            UI.SetStatus(L["Give the preset a name first."], true)
+        end
+        UI.RefreshNameState()
+        return
+    end
     if name == preset.name then return end
 
     preset.name = name
+    UI.SetStatus("", false)
     UI.AfterEdit()
 end
 

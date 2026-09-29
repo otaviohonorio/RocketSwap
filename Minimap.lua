@@ -52,7 +52,8 @@ function Minimap_.Menu(owner)
     MenuUtil.CreateContextMenu(owner, function(_, root)
         root:CreateTitle(L["Switch to"])
         for _, preset in ipairs(presets) do
-            root:CreateButton(preset.name or "?", function()
+            -- A preset of before the name was required: it says so, instead of an empty line.
+            root:CreateButton(ns.Data.HasName(preset) and preset.name or L["Unnamed"], function()
                 ns.LoadPreset(preset)
             end)
         end

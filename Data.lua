@@ -649,6 +649,9 @@ function Data.LoadBlockedReason(preset)
     local trocando = Data.ApplyingReason()
     if trocando then return trocando end
 
+    -- Then the name: a preset without one is not finished (`Data.HasName`).
+    if not Data.HasName(preset) then return L["Give the preset a name first."] end
+
     local problema = preset.gear and Data.GearSetProblem(preset.gear)
     if problema then
         return format(
@@ -1824,6 +1827,21 @@ function Data.RestrictionStates()
     return out
 end
 
+-- (!) THE NAME IS REQUIRED (30/09). The user: *"tem como fazer o preset name ser obrigatorio?
+-- talvez deixar os combos desabilitados e só habilita colocando o nome do preset e claro, precisa
+-- deixar claro que é obrigatorio"*. Without a name a preset was half a preset everywhere: no
+-- macro (Macro.lua refuses), an empty line in the minimap menu, "Loading ..." with nothing after
+-- it, and no way to reach it by `/rs load`. The rule lives here, where every way of loading
+-- passes; the window draws it (UI.lua).
+--
+-- A preset saved without a name BEFORE the rule is not deleted: it stays in the list as
+-- "Unnamed", and asks for the name before it loads or changes.
+---@return boolean
+function Data.HasName(preset)
+    local name = preset and preset.name
+    return type(name) == "string" and name:find("%S") ~= nil
+end
+
 local RESTRICAO_TEXTO = {
     PvPMatch = L["in a PvP match -- the countdown included -- the game blocks switches made by addons. Switch before accepting the queue."],
     Encounter = L["during a boss encounter the game blocks switches made by addons."],
@@ -1837,6 +1855,12 @@ function Data.Preflight(preset, byClick)
     local out = {}
     local function Nao(step, text, s) out[#out + 1] = { step = step, text = Com(text, s), seconds = s } end
     if not preset then return out end
+
+    -- The name comes before everything: it is of the preset, not of the moment.
+    if not Data.HasName(preset) then
+        Nao("name", L["Give the preset a name first."])
+        return out
+    end
 
     if InCombatLockdown() then
         Nao("combat", L["in combat: nothing was changed. Switch after the fight."])
