@@ -586,6 +586,52 @@ function Data.SaveGearSet(setID)
     return ok
 end
 
+--------------------------------------------------------------------------------
+-- (!) IN TRAVEL FORM THE SPECIALIZATION DOES NOT CHANGE (29/09)
+--
+-- The user's screenshot, a druid in Travel Form: Specialization and Talents with a red cross,
+-- Gear and Appearance with a green tick -- *"caso o druida tiver na forma de viagem, ocorre
+-- erro ao trocar, precisamos avisar ao usuário e não mudar nada"*. The diary of that character
+-- has it twice: `CanChangeSpec` answers yes, `SetSpecialization` answers accepted, and the cast
+-- fails at once (SPECIALIZATION_CHANGE_CAST_FAILED, UNIT_SPELLCAST_FAILED of the spell 200749),
+-- four times in a row. Nothing the game answers BEFORE the cast says no.
+--
+-- What the game's own tables say (SpellMisc, SpellShapeshiftForm, 12.1.0): the spell that
+-- changes specialization is not allowed while mounted, and the flight forms (27, 29) are forms
+-- with a mount type. For the forms of the ground and of the water (3, 4) there is no such
+-- proof: they are here because they are the same spell of the druid, Travel Form, which turns
+-- into one or another by where the druid is -- and the user's words are "forma de viagem".
+-- Cat, Bear and Moonkin are NOT here: nothing says they cut the cast.
+--------------------------------------------------------------------------------
+local TRAVEL_FORMS = { [3] = true, [4] = true, [27] = true, [29] = true }
+
+---The form the player is in, when it is one that cuts the change of specialization.
+---@return string|nil reason -- with the form's name as the game gives it, in its language
+function Data.FormBlocksSpec()
+    if not GetShapeshiftFormID then return nil end
+    local ok, id = pcall(GetShapeshiftFormID)
+    if not ok or type(id) ~= "number" then return nil end
+    if issecretvalue and issecretvalue(id) then return nil end
+    if not TRAVEL_FORMS[id] then return nil end
+
+    local nome
+    if GetShapeshiftForm and GetShapeshiftFormInfo and C_Spell and C_Spell.GetSpellName then
+        local okI, indice = pcall(GetShapeshiftForm)
+        if okI and type(indice) == "number" and indice > 0 then
+            local okF, _, _, _, magia = pcall(GetShapeshiftFormInfo, indice)
+            if okF and type(magia) == "number" then
+                local okN, n = pcall(C_Spell.GetSpellName, magia)
+                if okN and type(n) == "string" and n ~= "" then nome = n end
+            end
+        end
+    end
+    if nome then
+        return format(L["you are in %s: leave the form to change specialization."], nome)
+    end
+    -- The game's own sentence for it, when the form has no name to give.
+    return ERR_NOT_WHILE_SHAPESHIFTED or L["you are shapeshifted: leave the form to change specialization."]
+end
+
 ---Por que o botão Carregar está apagado, ou `nil` se ele pode ser clicado.
 ---
 ---(!) A REGRA VIVE AQUI, e não dentro do desenho da linha. Ela já morou lá, e a sabotagem
@@ -611,6 +657,8 @@ function Data.LoadBlockedReason(preset)
     end
 
     if preset.spec ~= nil and preset.spec ~= Data.GetCurrentSpecIndex() then
+        local forma = Data.FormBlocksSpec()
+        if forma then return forma end
         local pode, motivo = Data.CanChangeSpec()
         if not pode then
             return motivo or L["the game refused to change specialization now; wait a few seconds."]
@@ -1805,7 +1853,10 @@ function Data.Preflight(preset, byClick)
     local trocaSpec = preset.spec ~= nil and preset.spec ~= specAtual
     if trocaSpec then
         local pode, motivo, recarga = Data.CanChangeSpec()
-        if not pode then
+        local forma = Data.FormBlocksSpec()
+        if forma then
+            Nao("spec", forma)
+        elseif not pode then
             if recarga then
                 Nao("spec", L["changing specialization is on cooldown."], SegundosDeRecarga(SpecSpellID()))
             else
@@ -2178,11 +2229,15 @@ local function SpecCastCut(event)
 
     if running.specCastCuts > SPEC_CAST_CUT_MAX then
         if running.progress then running.progress.spec = "failed" end
-        running.failures = running.failures or {}
-        running.failures[#running.failures + 1] = L["the specialization change failed."]
+        -- (!) THE SPECIALIZATION THAT DOES NOT CHANGE STOPS THE CHAIN (29/09). It used to go on
+        -- to the next step, and the diary of the druid in Travel Form has what came of it: the
+        -- specialization of one role and the gear of another. It is what `abort` already was
+        -- for a refusal of the game; a cast cut until the ceiling is the same thing.
+        local motivo = format(L["%s was NOT loaded: the specialization did not change, and nothing after it was touched."],
+            running.preset and running.preset.name or "?")
         -- O DESFECHO TAMBÉM VAI PARA O DIÁRIO. O evento já ia; o que o passo fez com ele, não.
-        if ns.Log then ns.Log.Step("spec", "fail", L["the specialization change failed."]) end
-        RunNext()
+        if ns.Log then ns.Log.Step("spec", "abort", motivo) end
+        Finish(false, motivo)
         return
     end
 

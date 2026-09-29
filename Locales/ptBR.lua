@@ -71,7 +71,6 @@ L["%s is ready."] = "%s pronto."
 L["Nothing to change — %s is already loaded."] = "Nada a trocar — %s já está carregado."
 
 L["in combat: will apply when the fight ends."] = "em combate: aplico quando a luta acabar."
-L["the specialization change failed."] = "a troca de especialização falhou."
 L["the talent loadout could not be loaded."] = "não deu para carregar os talentos."
 L["the gear set could not be equipped."] = "não deu para equipar o conjunto de itens."
 L["%d item(s) of this set are not available right now."] =
@@ -233,6 +232,9 @@ L["click Load to switch to %s completely."] =
 -- O progresso da troca: a janela mostrando que sao ETAPAS (0.18.0)
 L["Switching to %s"] = "Trocando para %s"
 L["Switching to %s. Wait for it to finish."] = "Trocando para %s. Espere terminar."
+L["you are in %s: leave the form to change specialization."] = "você está em %s: saia da forma para trocar de especialização."
+L["you are shapeshifted: leave the form to change specialization."] = "você está transformado: saia da forma para trocar de especialização."
+L["%s was NOT loaded: the specialization did not change, and nothing after it was touched."] = "%s NÃO foi carregado: a especialização não trocou, e nada depois dela foi mexido."
 -- "pulado" nao e falha, e o rotulo diz por que -- senao o passo pulado fica igual ao que ainda
 -- nao comecou, e a pessoa termina sem saber se a aparencia foi aplicada ou esquecida.
 L["%s — nothing to change"] = "%s — nada a mudar"
