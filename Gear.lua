@@ -254,13 +254,20 @@ function Gear.RequestLoad(slot)
         local ok, obj = pcall(Item.CreateFromItemID, Item, id)
         if ok and obj and obj.ContinueOnItemLoad then
             pcall(obj.ContinueOnItemLoad, obj, function()
-                pendingLoads[id] = nil
                 Gear.ClearCache()
                 -- Quem quiser reagir se inscreve. O `Gear` não conhece o aviso de equipamento: se
                 -- chamasse `ns.Alert` direto, a camada de leitura passaria a depender da de tela.
                 if type(Gear.onItemLoaded) == "function" then
                     pcall(Gear.onItemLoaded, id)
                 end
+                -- (!) THE REQUEST IS ONLY OVER AFTER WHOEVER WAITED HAS RUN (28/09). With the
+                -- item already in the client's cache the game calls this back AT ONCE, inside
+                -- `ContinueOnItemLoad` -- and the tooltip can still be the "retrieving" note. The
+                -- one who waited read the slot again, the slot asked again, the game called back
+                -- again: `C stack overflow`, 22 times in !BugGrabber on 25/09, stack
+                -- RequestLoad > IsPvPItem > Wrong > Alert.Check > RequestLoad. Cleared here, the
+                -- reading made from inside the callback finds the request still open and stops.
+                pendingLoads[id] = nil
             end)
             return true
         end

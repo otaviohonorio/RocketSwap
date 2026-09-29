@@ -7,3 +7,6 @@
   off, for a gear set that had every piece: what it showed was read once, at an event. The
   missing-item warning, the Load button and the "in use" mark are now checked against the game
   while the window is open.
+- **Fixed an endless loop in the wrong-gear warning.** When the game had an item's data but its
+  tooltip was still loading, the warning asked for the item again and again until the game cut
+  it off, with a stutter and a Lua error.
