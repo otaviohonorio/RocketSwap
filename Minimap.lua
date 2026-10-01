@@ -38,28 +38,160 @@ local function Reposition()
         math.cos(angle) * RADIUS, math.sin(angle) * RADIUS)
 end
 
----O menu do botao direito: os conjuntos, pelo titulo, para trocar sem abrir a janela.
+--------------------------------------------------------------------------------
+-- The right-click list
+--
+-- (!) THE LIST IS MADE OF SECURE BUTTONS, NOT OF THE GAME'S MENU ITEMS (01/10). A user reported:
+-- right click, pick a preset, and the WINDOW opened instead of the switch. Read in the saved
+-- file of this machine: 11 of the 12 presets have an appearance, and a preset with appearance
+-- cannot be loaded from the game's context menu (`MenuUtil.CreateContextMenu`): the outfit only
+-- changes inside the player's click on a SECURE button (UI.lua, `ArmOutfit`), and a menu item is
+-- not one. `ns.LoadPreset` then opened the window for the "right" click -- for every preset
+-- with an appearance, which is nearly all of them. No installed addon puts a secure button
+-- inside the game's menu (searched), so the list is ours, each row a secure button with the
+-- recipe of the window's Load button: the outfit armed in PreClick, the rest in PostClick.
+--
+-- THE LOOK IS THE GAME'S CONTEXT MENU (Blizzard_Menu, 12.1.0): the background is the atlas
+-- `common-dropdown-bg` drawn 10 beyond the sides and 3 beyond top and bottom at 0.925
+-- (`MenuStyle1Mixin:Generate`), the inset 8 / 8 / 8 / 15 (`GetInset`), each item 20 tall
+-- (`MenuVariants.CreateFontString`), the highlight `UI-QuestTitleHighlight` added over it
+-- (`MenuVariants.CreateHighlight`), the title in the gold of `NORMAL_FONT_COLOR`.
+--------------------------------------------------------------------------------
+local MENU_ITEM = 20
+local MENU_INSET = { left = 8, top = 8, right = 8, bottom = 15 }
+local MENU_PAD = 20            -- `GetChildExtentPadding().width`
+local MENU_MIN = 120
+local menu
+
+local function MenuRow(index)
+    local row = menu.rows[index]
+    if row then return row end
+    row = CreateFrame("Button", nil, menu, "SecureActionButtonTemplate")
+    row:SetHeight(MENU_ITEM)
+    row:RegisterForClicks("AnyUp")
+    row:SetAttribute("useOnKeyDown", false)
+    row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightLeft")
+    row.text:SetPoint("LEFT")
+    row.text:SetHeight(MENU_ITEM)
+    row.highlight = row:CreateTexture(nil, "BACKGROUND")
+    row.highlight:SetAllPoints()
+    row.highlight:SetBlendMode("ADD")
+    row.highlight:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    row.highlight:Hide()
+    row:SetScript("OnEnter", function(self) self.highlight:Show() end)
+    row:SetScript("OnLeave", function(self) self.highlight:Hide() end)
+    -- The same guard as the Load button's: a pre-flight "no" disarms the outfit before the
+    -- secure action runs, so the appearance never changes alone.
+    row:SetScript("PreClick", function(self)
+        local preset = self.preset
+        if preset and not InCombatLockdown() then
+            ns.UI.ArmOutfit(self, (#ns.Data.Preflight(preset, true) == 0) and preset or nil)
+        end
+    end)
+    row:SetScript("PostClick", function(self)
+        local preset = self.preset
+        menu:Hide()
+        if not preset then return end
+        -- Without a name it does not load: the window opens on it, where the name is typed.
+        if not ns.Data.HasName(preset) then
+            ns.LoadPreset(preset)
+            return
+        end
+        -- Why it will not load, said in the chat: the window may be closed, and a click that
+        -- does nothing and says nothing is what was reported.
+        local motivo = ns.Data.LoadBlockedReason(preset)
+        if motivo then ns.Print(motivo) end
+        ns.UI.Load(preset)
+    end)
+    menu.rows[index] = row
+    return row
+end
+
+local function CreateMenu()
+    if menu then return menu end
+    menu = CreateFrame("Frame", ADDON .. "MinimapMenu", UIParent)
+    menu:SetFrameStrata("FULLSCREEN_DIALOG")
+    menu:SetClampedToScreen(true)
+    menu:EnableMouse(true)
+    menu:Hide()
+    menu.rows = {}
+
+    menu.bg = menu:CreateTexture(nil, "BACKGROUND")
+    menu.bg:SetAtlas("common-dropdown-bg")
+    menu.bg:SetPoint("TOPLEFT", -10, 3)
+    menu.bg:SetPoint("BOTTOMRIGHT", 10, -3)
+    menu.bg:SetAlpha(0.925)
+
+    menu.title = menu:CreateFontString(nil, "OVERLAY", "GameFontNormalLeft")
+    menu.title:SetPoint("TOPLEFT", MENU_INSET.left, -MENU_INSET.top)
+    menu.title:SetHeight(MENU_ITEM)
+
+    -- Closes as the game's menus do: a click anywhere else, Esc, and the start of a fight (a
+    -- secure row cannot be touched in combat; hidden before the lockdown, nothing has to be).
+    menu:RegisterEvent("GLOBAL_MOUSE_DOWN")
+    menu:RegisterEvent("PLAYER_REGEN_DISABLED")
+    menu:SetScript("OnEvent", function(self, event)
+        if not self:IsShown() then return end
+        if event == "PLAYER_REGEN_DISABLED" then self:Hide(); return end
+        if self:IsMouseOver() or (button and button:IsMouseOver()) then return end
+        if not InCombatLockdown() then self:Hide() end
+    end)
+    if UISpecialFrames and tinsert then tinsert(UISpecialFrames, menu:GetName()) end
+    return menu
+end
+
+---The right-click list: the presets, by name, each a click away from the whole switch.
 ---
----Sem conjunto nenhum, ou num cliente sem o menu novo, o direito faz o que o esquerdo faz --
----abre a janela. NUNCA uma troca: e a troca sem pedir que este menu existe para eliminar.
+---With no preset the right click does what the left does -- opens the window. In combat the
+---list does not open: nothing switches in combat, and a secure row cannot be set up there.
+---Opening the list NEVER switches by itself: the switch is the click on a row.
 function Minimap_.Menu(owner)
     local presets = ns.db and ns.db.presets or {}
-    if #presets == 0 or not _G.MenuUtil then
+    if #presets == 0 then
         ns.UI.Toggle()
         return false
     end
+    if InCombatLockdown() then
+        ns.Print(L["in combat: nothing was changed. Switch after the fight."])
+        return false
+    end
 
-    MenuUtil.CreateContextMenu(owner, function(_, root)
-        root:CreateTitle(L["Switch to"])
-        for _, preset in ipairs(presets) do
-            -- A preset of before the name was required: it says so, instead of an empty line.
-            root:CreateButton(ns.Data.HasName(preset) and preset.name or L["Unnamed"], function()
-                ns.LoadPreset(preset)
-            end)
-        end
-    end)
+    CreateMenu()
+    if menu:IsShown() then menu:Hide(); return false end
+
+    menu.title:SetText(L["Switch to"])
+    local width = menu.title:GetStringWidth() or 0
+    for i, preset in ipairs(presets) do
+        local row = MenuRow(i)
+        row.preset = preset
+        -- A preset of before the name was required: it says so, instead of an empty line.
+        row.text:SetText(ns.Data.HasName(preset) and preset.name or L["Unnamed"])
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", MENU_INSET.left, -(MENU_INSET.top + i * MENU_ITEM))
+        row:SetPoint("RIGHT", -MENU_INSET.right, 0)
+        row:Show()
+        local w = row.text:GetStringWidth() or 0
+        if w > width then width = w end
+    end
+    for i = #presets + 1, #menu.rows do
+        menu.rows[i].preset = nil
+        menu.rows[i]:Hide()
+    end
+    menu:SetSize(math.max(MENU_MIN, width + MENU_PAD) + MENU_INSET.left + MENU_INSET.right,
+        MENU_INSET.top + (#presets + 1) * MENU_ITEM + MENU_INSET.bottom)
+
+    menu:ClearAllPoints()
+    if owner and owner.GetCenter then
+        menu:SetPoint("TOPRIGHT", owner, "BOTTOMLEFT", 0, 0)
+    else
+        menu:SetPoint("CENTER")
+    end
+    menu:Show()
     return true
 end
+
+---For the harness: the list as drawn.
+function Minimap_.__menu() return menu end
 
 function Minimap_.Create()
     if button then return button end

@@ -1,5 +1,8 @@
 # Rocket Swap 0.39.0
 
+- **The minimap list switches for real.** Right click on the minimap button, pick a preset, and
+  it now loads, appearance included. Before, a preset with an appearance opened the window
+  instead of switching. The list closes on a click elsewhere or Esc, and does not open in combat.
 - **A preset needs a name.** While the name box is empty its title says "(required)" and the
   fields below it are off; they turn on at the first letter. Erasing the name of a preset brings
   the previous one back.
