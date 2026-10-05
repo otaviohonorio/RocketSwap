@@ -535,6 +535,7 @@ function Alert.OnQueuePop()
         -- que é onde ela não serve para mais nada.
         queueShown = false
         if StaticPopup_Hide then pcall(StaticPopup_Hide, "ROCKETSWAP_READY_CHECK") end
+        ns.Log.Add("popup", { which = "queue", action = "hide" })
     end
 end
 
@@ -558,6 +559,9 @@ function Alert.ShowQueueSummary(mapa, teamSize)
     if StaticPopup_Show then
         local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",
             titulo .. "\n\n" .. Alert.Summary("\n"))
+        -- While one of our boxes is on screen, the game's own `StaticPopup_Hide` runs marked by
+        -- us (the client says so in `StaticPopup.lua:96-99`). The diary has to tell when it was up.
+        ns.Log.Add("popup", { which = "queue", action = "show", ok = ok })
         if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
             pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
         end
@@ -621,6 +625,7 @@ function Alert.OnReadyCheck()
         -- segundo é saber **o que está olhando**.
         local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",
             L["What you are using"] .. "\n\n" .. Alert.Summary("\n"))
+        ns.Log.Add("popup", { which = "readycheck", action = "show", ok = ok })
         if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
             -- Só então o aviso do meio da tela, como rede: melhor um aviso que some do que nada.
             pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
