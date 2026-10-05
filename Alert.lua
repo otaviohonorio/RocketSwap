@@ -534,7 +534,7 @@ function Alert.OnQueuePop()
         -- trava libera o próximo convite. Sem isto, a caixa ficaria pendurada dentro da partida,
         -- que é onde ela não serve para mais nada.
         queueShown = false
-        if StaticPopup_Hide then pcall(StaticPopup_Hide, "ROCKETSWAP_READY_CHECK") end
+        if ns.Dialog then ns.Dialog.Hide("summary") end
         ns.Log.Add("popup", { which = "queue", action = "hide" })
     end
 end
@@ -556,15 +556,14 @@ function Alert.ShowQueueSummary(mapa, teamSize)
 
     ns.Print(L["PvP queue is up:"] .. " " .. resumo)
 
-    if StaticPopup_Show then
-        local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",
-            titulo .. "\n\n" .. Alert.Summary("\n"))
-        -- While one of our boxes is on screen, the game's own `StaticPopup_Hide` runs marked by
-        -- us (the client says so in `StaticPopup.lua:96-99`). The diary has to tell when it was up.
-        ns.Log.Add("popup", { which = "queue", action = "show", ok = ok })
-        if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
-            pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
-        end
+    -- The box is OURS, not the game's `StaticPopup` (05/10: a box of the game opened by an addon
+    -- marks the game's own dialog code, and the game then refuses a protected call of its own
+    -- and blames the addon -- `Dialog.lua` has the whole story).
+    local ok, shown = pcall(ns.Dialog.Show, "summary", titulo .. "\n\n" .. Alert.Summary("\n"))
+    ok = ok and shown == true
+    ns.Log.Add("popup", { which = "queue", action = "show", ok = ok })
+    if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
+        pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
     end
 end
 
@@ -586,17 +585,8 @@ end
 -- Dentro do `if`: `StaticPopupDialogs` é global do jogo e sempre existe, mas indexar global nula
 -- em escopo de ARQUIVO derruba o addon inteiro no carregamento — e perder o addon por causa de
 -- uma caixa de aviso é troca ruim.
-if StaticPopupDialogs then
-    StaticPopupDialogs["ROCKETSWAP_READY_CHECK"] = {
-        text = "%s",
-        button1 = OKAY,
-        timeout = 0,
-        whileDead = 1,
-        hideOnEscape = 1,
-        -- Sem `OnAccept`: a caixa é informativa, o OK só a fecha. Ação escondida atrás de um OK
-        -- que diz "OK" é o tipo de coisa que o jogador não espera.
-    }
-end
+-- (05/10) The definition of a game dialog that was here is gone: the box is the addon's own
+-- (`Dialog.lua`), with the same behaviour -- it waits for the OK, shows while dead, Esc closes.
 
 function Alert.OnReadyCheck()
     if not ns.db or ns.db.readyCheck == false then return end
@@ -610,7 +600,8 @@ function Alert.OnReadyCheck()
     -- `pcall` porque `StaticPopup_Show` **dá erro** quando o diálogo não existe
     -- (`StaticPopup.lua:302-304`, `error("Dialog "..which.." does not exist.")`) — e não existir é
     -- possível se outro addon limpar a tabela global.
-    if StaticPopup_Show then
+    -- (05/10) The box is now the addon's own (`Dialog.lua`); the net below stays.
+    do
         -- UMA LINHA POR CAMPO na caixa, e tudo numa só no chat. A caixa tem altura livre e o
         -- chat não; e é na caixa que o jogador vai parar para ler.
         -- TÍTULO SEM DOIS-PONTOS. `L["ready check:"]` é PREFIXO de linha de chat, e lá o
@@ -623,8 +614,9 @@ function Alert.OnReadyCheck()
         -- mandou o ready check — e essa é a dúvida de quem lê uma linha que apareceu no meio da
         -- conversa. Na caixa, o jogador já sabe por que ela abriu; o que ele precisa em meio
         -- segundo é saber **o que está olhando**.
-        local ok = pcall(StaticPopup_Show, "ROCKETSWAP_READY_CHECK",
+        local ok, shown = pcall(ns.Dialog.Show, "summary",
             L["What you are using"] .. "\n\n" .. Alert.Summary("\n"))
+        ok = ok and shown == true
         ns.Log.Add("popup", { which = "readycheck", action = "show", ok = ok })
         if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
             -- Só então o aviso do meio da tela, como rede: melhor um aviso que some do que nada.

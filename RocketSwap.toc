@@ -8,7 +8,7 @@
 ## Category-ptBR: Combate
 
 ## Author: Otto Rocket (Otávio Honório)
-## Version: 0.39.0
+## Version: 0.39.1
 ## X-Curse-Project-ID: 1698583
 ## SavedVariablesPerCharacter: RocketSwapDB
 #@debug@
@@ -20,6 +20,7 @@
 Locales\enUS.lua
 Locales\ptBR.lua
 Core.lua
+Dialog.lua
 Donate.lua
 #@debug@
 Log.lua

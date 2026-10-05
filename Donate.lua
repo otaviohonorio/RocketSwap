@@ -16,75 +16,28 @@ local ADDON, ns = ...
 local L = ns.L
 
 local BASE = "https://www.paypal.com/donate/?business=HH4PHH48DPG9J&no_recurring=0&currency_code="
-local POPUP = "ROCKETSWAP_DONATE"
-local REPORT_POPUP = "ROCKETSWAP_REPORT"
 
 function ns.DonateURL()
     local brl = GetLocale and GetLocale() == "ptBR"
     return BASE .. (brl and "BRL" or "USD")
 end
 
-local function EditBoxOf(dialog)
-    if dialog.GetEditBox then return dialog:GetEditBox() end
-    return dialog.editBox or (dialog.GetName and _G[dialog:GetName() .. "EditBox"])
-end
-
----The game's popup with a link in its box, already selected.
----@param text string what the dialog says
----@param url function the link, asked for when the dialog opens
-local function CopyBox(text, url)
-    return {
-        text = text,
-        button2 = CLOSE,
-        hasEditBox = true,
-        editBoxWidth = 350,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-        preferredIndex = 3,
-        OnShow = function(self)
-            local box = EditBoxOf(self)
-            if not box then return end
-            box:SetText(url())
-            box:HighlightText()
-            box:SetFocus()
-            -- The popup's box is SHARED with every other popup of the game: the scripts go on
-            -- here and come off in OnHide, or they would follow into someone else's dialog.
-            box:SetScript("OnKeyDown", function(_, key)
-                if key == "C" and IsControlKeyDown and IsControlKeyDown() then
-                    C_Timer.After(0.1, function()
-                        self:Hide()
-                        ns.Print(L["Link copied — paste it in your browser."])
-                    end)
-                end
-            end)
-            -- Typing over it would lose the link: whatever is typed, the link comes back.
-            box:SetScript("OnTextChanged", function(b, userInput)
-                if userInput then
-                    b:SetText(url())
-                    b:HighlightText()
-                end
-            end)
-        end,
-        OnHide = function(self)
-            local box = EditBoxOf(self)
-            if box then
-                box:SetScript("OnKeyDown", nil)
-                box:SetScript("OnTextChanged", nil)
-            end
-        end,
-        EditBoxOnEscapePressed = function(box) box:GetParent():Hide() end,
-    }
+---The box with a link in it, already selected: the addon's own (`Dialog.lua`), not the game's
+---`StaticPopup` -- a game dialog opened by an addon marks the game's dialog code (05/10).
+---Without the box (the game gave no shell), the link goes to the chat.
+local function CopyBox(key, text, url)
+    if ns.Dialog then
+        local ok, shown = pcall(ns.Dialog.Show, key, text, { url = url })
+        if ok and shown then return true end
+    end
+    ns.Print(url)
+    return false
 end
 
 function ns.ShowDonate()
-    if not (StaticPopupDialogs and StaticPopup_Show) then return end
-    if not StaticPopupDialogs[POPUP] then
-        StaticPopupDialogs[POPUP] = CopyBox(
-            L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."],
-            ns.DonateURL)
-    end
-    StaticPopup_Show(POPUP)
+    CopyBox("donate",
+        L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."],
+        ns.DonateURL())
 end
 
 --------------------------------------------------------------------------------
@@ -115,14 +68,13 @@ end
 
 ---The box with the link of one place, ready to copy.
 function ns.ShowReport(site)
-    if not (site and StaticPopupDialogs and StaticPopup_Show) then return end
+    if not site then return end
     reporting = site
-    if not StaticPopupDialogs[REPORT_POPUP] then
-        StaticPopupDialogs[REPORT_POPUP] = CopyBox(
-            L["Rocket Swap %s — report a problem on %s.|n|nPress Ctrl+C to copy the link, then paste it in your browser. Say what you were doing and what happened."],
-            function() return reporting and reporting.url or "" end)
-    end
-    StaticPopup_Show(REPORT_POPUP, ns.ReportVersion(), site.name)
+    -- `|n` is the game's line break in a dialog definition; the box is ours and takes a real one.
+    local texto = string.format(
+        L["Rocket Swap %s — report a problem on %s.|n|nPress Ctrl+C to copy the link, then paste it in your browser. Say what you were doing and what happened."],
+        ns.ReportVersion(), site.name)
+    CopyBox("report", (texto:gsub("|n", "\n")), site.url or "")
 end
 
 ---The player chooses where: the game's menu with the places. With one place only, or on a
