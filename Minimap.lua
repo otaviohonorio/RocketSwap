@@ -291,5 +291,5 @@ end
 ---conjunto está ativo já é dito na janela, pelo ✓.
 function Minimap_.Refresh()
     if not button then return end
-    button.icon:SetTexture(ns.LOGO)
+    button.icon:SetTexture(ns.LOGO_MINIMAP)
 end
