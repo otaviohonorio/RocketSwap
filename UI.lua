@@ -364,6 +364,13 @@ local function BuildRow(row)
         if p and not InCombatLockdown() then
             UI.ArmOutfit(self, (#ns.Data.Preflight(p, true) == 0) and p or nil)
         end
+        -- (06/10) WHICH control took the click, and what was armed on it. The game recorded
+        -- "RocketSwap tried to call the protected function 'ChangeToOutfit()'" from inside the
+        -- secure click, once, and the diary could not say whether the click was on this button,
+        -- on the minimap list or on a macro.
+        ns.Log.Add("click", { where = "window", preset = p and p.name or "?",
+            type = tostring(self:GetAttribute("type")), outfit = tostring(self:GetAttribute("outfit-index")),
+            combat = InCombatLockdown() and true or false })
     end)
     row.load:SetScript("PostClick", function(self)
         UI.Load(self:GetParent().preset)

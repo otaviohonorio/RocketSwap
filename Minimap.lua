@@ -87,6 +87,10 @@ local function MenuRow(index)
         if preset and not InCombatLockdown() then
             ns.UI.ArmOutfit(self, (#ns.Data.Preflight(preset, true) == 0) and preset or nil)
         end
+        -- Which control took the click (see the Load button's PreClick, UI.lua).
+        ns.Log.Add("click", { where = "minimap", preset = preset and preset.name or "?",
+            type = tostring(self:GetAttribute("type")), outfit = tostring(self:GetAttribute("outfit-index")),
+            combat = InCombatLockdown() and true or false })
     end)
     row:SetScript("PostClick", function(self)
         local preset = self.preset
