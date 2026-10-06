@@ -1,6 +1,4 @@
-# Rocket Swap 0.39.1
+# Rocket Swap 0.39.2
 
-- **Fixed the error "RocketSwap tried to call the protected function 'IsUserOAuthed()'".** It
-  appeared while the addon's summary box (ready check, PvP queue invite) was on screen. The
-  summary, the support link and the report link now open in the addon's own box, which looks
-  the same and no longer gets in the way of the game's own windows.
+- **New icon.** Rocket Swap has its own icon now, in the addon list, on the minimap button and on
+  its windows (it used to share one with Rocket Meter).

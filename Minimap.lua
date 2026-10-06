@@ -214,7 +214,9 @@ function Minimap_.Create()
     button.icon = button:CreateTexture(nil, "BACKGROUND")
     button.icon:SetSize(20, 20)
     button.icon:SetPoint("CENTER", -1, 1)
-    button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    button.icon:SetTexCoord(0, 1, 0, 1)
+    -- Round, as the other two addons' buttons: the art is square and the ring is not.
+    button.icon:SetMask("Interface\\CharacterFrame\\TempPortraitAlphaMask")
 
     local border = button:CreateTexture(nil, "OVERLAY")
     border:SetSize(53, 53)
@@ -289,5 +291,5 @@ end
 ---conjunto está ativo já é dito na janela, pelo ✓.
 function Minimap_.Refresh()
     if not button then return end
-    button.icon:SetTexture(ns.FirstIcon(ICON_CANDIDATES))
+    button.icon:SetTexture(ns.LOGO)
 end

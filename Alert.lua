@@ -207,7 +207,7 @@ local function Build()
     ui:Hide()
 
     if ui.SetTitle then ui:SetTitle(ns.NAME) end
-    if ui.SetPortraitToAsset then ui:SetPortraitToAsset(ns.FirstIcon(ns.ICON_CANDIDATES)) end
+    if ui.SetPortraitToAsset then ui:SetPortraitToAsset(ns.LOGO) end
     if ui.Inset then ui.Inset:Hide() end
 
     ui.headline = ui:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")

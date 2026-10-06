@@ -1356,7 +1356,7 @@ local function Create()
 
     if frame.SetTitle then frame:SetTitle(ns.NAME) end
     if frame.SetPortraitToAsset then
-        frame:SetPortraitToAsset(ns.FirstIcon(ns.ICON_CANDIDATES))
+        frame:SetPortraitToAsset(ns.LOGO)
     end
     tinsert(UISpecialFrames, frame:GetName())
 

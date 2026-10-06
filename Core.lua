@@ -1,6 +1,12 @@
 -- RocketSwap | Core.lua
 -- Namespace do addon: tudo que for compartilhado entre arquivos vai em `ns`.
 local ADDON, ns = ...
+
+-- (!) THE ADDON'S OWN ICON (06/10/2026). The three addons had the game's icons (two of them the
+-- SAME one, so the list of addons showed them alike). The art is ours and ships in `Textures/`:
+-- the rocket of the three addons with this addon's badge. One file serves every place: the
+-- addon list (`## IconTexture`), the minimap button (masked round) and the window's portrait.
+ns.LOGO = "Interface\\AddOns\\" .. ADDON .. "\\Textures\\Logo.png"
 local L = ns.L
 
 -- A versao vem do .toc, nunca de uma constante aqui: numero em dois lugares vira numero
