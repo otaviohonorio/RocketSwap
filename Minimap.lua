@@ -211,17 +211,30 @@ function Minimap_.Create()
     -- nome de ícone bonito pôde ser CONFIRMADO em disco (o dump da Blizzard só entrega
     -- `INV_Misc_QuestionMark` e `INV_Misc_Coin_17`), e ícone inexistente falha em silêncio.
     -- O ícone do conjunto vem da API, então é sempre real.
-    button.icon = button:CreateTexture(nil, "BACKGROUND")
-    button.icon:SetSize(20, 20)
-    button.icon:SetPoint("CENTER", -1, 1)
+    -- (!) THE GAME'S RING AND THE ICON, AT THE NUMBERS EVERY OTHER BUTTON USES (06/10). Reported
+    -- with a screenshot: our drawing sat off-centre inside the gold ring. The button had the ring
+    -- at 53 and the icon at 19, shifted (-1, 1) -- numbers of the OLD clients. On retail the
+    -- minimap-button library the other addons ship (LibDBIcon-1.0, `WOW_PROJECT_MAINLINE`
+    -- branch) draws the ring at 50 from the top left, the game's dark disc at 24 and the icon at
+    -- 18, both at the button's very centre. With the game's square icons nobody saw the 1.5
+    -- points; with a ring of our own inside the gold one, it shows.
+    button.disc = button:CreateTexture(nil, "BACKGROUND")
+    button.disc:SetSize(24, 24)
+    button.disc:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    button.disc:SetPoint("CENTER", button, "CENTER")
+
+    button.icon = button:CreateTexture(nil, "ARTWORK")
+    button.icon:SetSize(18, 18)
+    button.icon:SetPoint("CENTER", button, "CENTER")
     button.icon:SetTexCoord(0, 1, 0, 1)
     -- Round, as the other two addons' buttons: the art is square and the ring is not.
     button.icon:SetMask("Interface\\CharacterFrame\\TempPortraitAlphaMask")
 
     local border = button:CreateTexture(nil, "OVERLAY")
-    border:SetSize(53, 53)
+    border:SetSize(50, 50)
     border:SetPoint("TOPLEFT")
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    button.border = border
 
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
