@@ -1,0 +1,326 @@
+-- RocketSwap | Core.lua
+-- Namespace do addon: tudo que for compartilhado entre arquivos vai em `ns`.
+local ADDON, ns = ...
+
+-- (!) THE ADDON'S OWN ICON (06/10/2026). The three addons had the game's icons (two of them the
+-- SAME one, so the list of addons showed them alike). The art is ours and ships in `Textures/`:
+-- the rocket of the three addons with this addon's badge. One file serves every place: the
+-- addon list (`## IconTexture`), the minimap button (masked round) and the window's portrait.
+ns.LOGO = "Interface\\AddOns\\" .. ADDON .. "\\Textures\\Logo.png"
+-- The minimap button is some 20 points wide: there the rocket would be a smudge, so it takes
+-- the BADGE alone, large (06/10: "no icone do minimap tem que ficar apenas o redondo que fica
+-- no canto sem o foguete, pq e muito pequeno pra ver qual e").
+ns.LOGO_MINIMAP = "Interface\\AddOns\\" .. ADDON .. "\\Textures\\Minimap.png"
+local L = ns.L
+
+-- A versao vem do .toc, nunca de uma constante aqui: numero em dois lugares vira numero
+-- errado em um deles. (Padronizado com o RocketMeter em 05/09/2026.)
+ns.version = C_AddOns.GetAddOnMetadata(ADDON, "Version") or "0.0.0"
+
+ns.defaults = {
+    presets = {},        -- { { name, spec, talent, gear }, ... }
+    last = nil,          -- nome do ultimo conjunto carregado, para o clique direito
+    minimap = { angle = 210 },
+    pos = nil,
+
+    -- Os dois avisos, ligados por padrao: eles sao o que o addon faz por quem nunca criar
+    -- um conjunto. Desligaveis por /rs warn e /rs ready.
+    -- (!) UM POR CONTEXTO (22/09). Era uma chave so (`warn`) para os dois conteudos, e o
+    -- pedido foi separar: *"tem como separar os avisos para PVP e PVE?"*. Faz sentido porque as
+    -- duas situacoes nao andam juntas -- quem faz mitica+ toda noite e PvP de vez em quando quer
+    -- o aviso ligado num e calado no outro, e com uma chave so tinha que escolher.
+    --
+    -- A chave velha continua lida uma vez, na migracao (ver `Core.lua`, ADDON_LOADED): quem
+    -- tinha desligado o aviso nao pode ver ele voltar sozinho.
+    warnPvE = true,       -- equipamento de PvP em masmorra ou raide
+    warnPvP = true,       -- equipamento de PvE em arena ou campo de batalha
+    readyCheck = true,    -- resumo do que voce esta usando, no ready check
+    queuePop = true,      -- o mesmo resumo quando a fila de PvP chama (convite na tela)
+
+    -- ⚑ MODO GUERRA NASCE CALADO (pedido de 12/09: *"tira o alerta dos itens de pvp em mundo
+    -- aberto no war mode, ou transforma em opcao por padrao desmarcada"*).
+    --
+    -- O contexto FICA -- ele existe por pedido dele mesmo, de 08/09 (*"inclusive quando seto para
+    -- pvp, habilitando o war mode on, sem avisos"*) --, mas o aviso dele passa a ser opt-in. A
+    -- razao esta na diferenca entre as duas situacoes: partida de PvP e uma janela fechada em que
+    -- o equipamento errado custa a partida; modo guerra e o mundo aberto, onde a maior parte do
+    -- tempo e missao e farm, e o aviso aparece sem que nada esteja acontecendo.
+    warnWarMode = false,  -- avisar tambem com Modo Guerra ligado, no mundo aberto
+    muted = {},           -- situacoes que o usuario mandou calar
+    mutedSlots = {},      -- slots que o usuario mandou calar
+}
+
+-- O DIARIO E FERRAMENTA DE DESENVOLVIMENTO, E NAO VAI NO PACOTE. Regra do usuario (23/09):
+-- *"quando forem publicados não devem gerar os logs, por que vai ficar consumindo espaço e disco
+-- do usuário, apenas aqui para desenvolvimento"*. `Log.lua` e o `RocketSwapLogDB` ficam em
+-- `#@debug@` no .toc, que o empacotador remove de TODO build (alpha inclusive), e o `.pkgmeta`
+-- tira o arquivo do zip.
+--
+-- Este substituto e o que o jogador recebe: toda chamada responde nada, entao as ~30 chamadas
+-- ao diario espalhadas pelo addon nao precisam de guarda, e esquecer uma nao quebra a versao
+-- publicada. Em desenvolvimento o `Log.lua`, carregado depois deste arquivo, troca pelo real.
+ns.Log = setmetatable({ enabled = false }, {
+    __index = function() return function() end end,
+})
+
+-- (!) THE ADDON'S NAME, AS THE PLAYER READS IT (29/09). The user, looking at the three minimap
+-- buttons: *"Rocket Mount, Rocket Meter estão com esse espaço e pintada a palavra rocket, o swap
+-- não tá nesse padrão"* -- this one said "RocketSwap", the folder's name, in white. The
+-- workspace's format is the .toc's `## Title`: "Rocket" in the orange of the three addons, a
+-- space, the name. `NAME` is the same without the colour, for where the game paints the text
+-- itself (a window's title bar).
+ns.TITLE = "|cffff6a00Rocket|r Swap"
+ns.NAME = "Rocket Swap"
+
+function ns.Print(...)
+    print(ns.TITLE .. ":", ...)
+end
+
+--------------------------------------------------------------------------------
+-- Fila de combate: trocar spec, talentos ou itens e proibido com o combate travado.
+--------------------------------------------------------------------------------
+local queue = {}
+
+function ns.RunWhenSafe(fn)
+    if InCombatLockdown() then
+        queue[#queue + 1] = fn
+    else
+        fn()
+    end
+end
+
+local function FlushQueue()
+    if #queue == 0 then return end
+    local pending = queue
+    queue = {}
+    for i = 1, #pending do
+        pending[i]()
+    end
+end
+
+--------------------------------------------------------------------------------
+-- Icone: escolher sem chutar
+--------------------------------------------------------------------------------
+---Devolve o primeiro caminho de textura da lista que EXISTE neste cliente.
+---
+---`SetTexture` com caminho inexistente falha em SILENCIO — o botao fica vazio e nada avisa.
+---Nome de icone e o tipo de coisa que eu nao consigo confirmar em disco (as texturas moram
+---no CASC, nao na pasta de addons), entao ate aqui eu estava torcendo.
+---
+---`GetFileIDFromPath` resolve isso: devolve o id do arquivo, ou nil se o caminho nao existe.
+---E API documentada do 12.1.0 (`ClientDocumentation.lua:29`), e serve exatamente como teste de
+---existencia.
+---@param paths string[] candidatos, do preferido para o ultimo recurso
+---@return string|nil caminho, boolean verificado
+function ns.FirstIcon(paths)
+    if type(GetFileIDFromPath) ~= "function" then
+        return paths[#paths], false     -- sem como verificar: usa o ultimo recurso
+    end
+
+    for _, path in ipairs(paths) do
+        local ok, id = pcall(GetFileIDFromPath, path)
+        if ok and id then return path, true end
+    end
+    return paths[#paths], false
+end
+
+--------------------------------------------------------------------------------
+---Aplica um atlas SO SE ele existir neste cliente, e diz se conseguiu.
+---
+---Esta funcao ja era chamada em dois lugares (`UI.lua:365` e `:472`) e **nunca existiu**: a
+---guarda `if not ns.SetAtlasSafe` sempre caia no plano B, entao o divisor da coluna nunca chegou
+---a tentar a arte da Blizzard. Codigo que se le como "tenta o atlas, senao usa a cor" fazendo
+---so a segunda metade -- e sem nada acusando, porque a guarda estava certa.
+---
+---`SetAtlas` com nome inexistente falha em SILENCIO e deixa a textura em branco, que e o
+---sintoma mais dificil de diagnosticar: nao ha erro, so um retangulo vazio. `GetAtlasInfo`
+---devolve nil para atlas que nao existe, e `GetAtlas()` depois do `SetAtlas` confirma que
+---pegou -- as duas conferencias, porque uma sozinha ja deixou passar um cabecalho azul aqui.
+---@param texture table
+---@param atlas string
+---@return boolean aplicou
+function ns.SetAtlasSafe(texture, atlas)
+    if not texture or not atlas or not texture.SetAtlas then return false end
+
+    if C_Texture and C_Texture.GetAtlasInfo then
+        local ok, info = pcall(C_Texture.GetAtlasInfo, atlas)
+        if not ok or not info then return false end
+    end
+
+    if not pcall(texture.SetAtlas, texture, atlas) then return false end
+    if not texture.GetAtlas then return false end
+    return texture:GetAtlas() ~= nil
+end
+
+--------------------------------------------------------------------------------
+---A janela, sem fechar a que ja esta aberta.
+---
+---`UI.Toggle` alterna, entao chamar ela com a janela aberta FECHA -- e o atalho que deveria
+---mostrar um conjunto acabava escondendo tudo.
+local function Abrir()
+    if ns.UI.IsShown and ns.UI.IsShown() then return end
+    ns.UI.Toggle()
+end
+
+---Carrega um conjunto pelo caminho do ATALHO: menu do minimapa ou `/rs load`.
+---
+---(!) ATALHO NAO E CLIQUE SEGURO, e essa diferenca decide o que da para fazer aqui.
+---
+---CONJUNTO COM APARENCIA NAO SE APLICA POR ESTE CAMINHO. A troca de aparencia so acontece no
+---clique do BOTAO SEGURO, e o que acontecia era pior que nao funcionar:
+---
+---  1. a aparencia nunca entrava, entao `IsLoaded` nunca dava verdadeiro;
+---  2. com `IsLoaded` falso, o atalho REAPLICAVA tudo a cada uso -- e o jogador via "do nada ele
+---     seta o item que ja deveria estar setado", que foi o relato;
+---  3. e ainda era uma troca parcial, que e o pior dos dois mundos.
+---
+---Entao o atalho abre a janela com esse conjunto selecionado. Um clique a mais, e o clique
+---certo -- o que faz a troca INTEIRA.
+---@return boolean trocou de verdade
+function ns.LoadPreset(preset)
+    if not preset then return false end
+
+    -- Without a name it does not load (`Data.HasName`): the window opens on it, where the name
+    -- is typed.
+    if not ns.Data.HasName(preset) then
+        Abrir()
+        ns.UI.Select(preset)
+        ns.UI.SetStatus(L["Give the preset a name first."], true)
+        ns.Print(L["Give the preset a name first."])
+        return false
+    end
+
+    if preset.transmog then
+        Abrir()
+        ns.UI.Select(preset)
+        ns.Print(format(L["click Load to switch to %s completely."], preset.name or "?"))
+        return false
+    end
+
+    ns.Data.Apply(preset, function(text, isError)
+        ns.UI.SetStatus(text, isError)
+        if isError then ns.Print(text) end
+    end)
+    return true
+end
+
+---O conjunto usado por ultimo, por nome. Sobrou para o `/rs load` sem argumento e para quem
+---chamava de fora; o minimapa NAO usa mais isto -- ver o comentario em `Minimap.lua`.
+function ns.LoadLast()
+    local wanted = ns.db and ns.db.last
+    if not wanted then
+        Abrir()
+        return false
+    end
+    for _, preset in ipairs(ns.db.presets) do
+        if preset.name == wanted then
+            return ns.LoadPreset(preset)
+        end
+    end
+    Abrir()
+    return false
+end
+
+--------------------------------------------------------------------------------
+-- Eventos
+--------------------------------------------------------------------------------
+local handlers = {}
+
+function handlers:ADDON_LOADED(addon)
+    if addon ~= ADDON then return end
+
+    -- SavedVariables so existem a partir daqui.
+    RocketSwapDB = RocketSwapDB or {}
+    -- (!) MIGRACAO DA CHAVE UNICA `warn` PARA AS DUAS POR CONTEXTO (0.35.0).
+    --
+    -- Roda ANTES dos defaults, de proposito: depois deles, `warnPvE`/`warnPvP` ja teriam nascido
+    -- `true` e a escolha de quem tinha DESLIGADO o aviso estaria perdida -- uma opcao que volta
+    -- sozinha e a pior forma de quebrar confianca numa opcao.
+    if RocketSwapDB and RocketSwapDB.warn ~= nil then
+        if RocketSwapDB.warnPvE == nil then RocketSwapDB.warnPvE = RocketSwapDB.warn end
+        if RocketSwapDB.warnPvP == nil then RocketSwapDB.warnPvP = RocketSwapDB.warn end
+        RocketSwapDB.warn = nil
+    end
+
+    for k, v in pairs(ns.defaults) do
+        if RocketSwapDB[k] == nil then
+            RocketSwapDB[k] = type(v) == "table" and CopyTable(v) or v
+        end
+    end
+    ns.db = RocketSwapDB
+
+    -- O CABECALHO DO DIARIO: versao, idioma e quando comecou. Sem isto o arquivo chegava sem
+    -- dizer de que build ele e -- e a primeira coisa que se pergunta ao ler um log e "de quando
+    -- e isso?". `Log.Init` existia e nao tinha chamador.
+    if ns.Log then ns.Log.Init() end
+end
+
+function handlers:PLAYER_LOGIN()
+    ns.Minimap.Create()
+    ns.Alert.Create()
+    -- The secure buttons the presets' macros click are not saved: they are made again here.
+    if ns.Macro then ns.Macro.Restore() end
+    ns.Print(format(L["loaded. %d preset(s). Type /rs."], #ns.db.presets))
+end
+
+function handlers:PLAYER_REGEN_ENABLED()
+    FlushQueue()
+    if ns.Macro then ns.Macro.CombatEnded() end
+end
+
+-- Trocas feitas a mao (pela ficha ou pela janela de talentos) mudam qual conjunto esta
+-- ativo. A janela precisa acompanhar, senao o "check" fica mentindo.
+function handlers:EQUIPMENT_SETS_CHANGED()
+    ns.UI.Refresh()
+    ns.Minimap.Refresh()
+end
+function handlers:PLAYER_EQUIPMENT_CHANGED()
+    ns.UI.Refresh()
+    ns.Minimap.Refresh()
+end
+function handlers:TRAIT_CONFIG_UPDATED() ns.UI.Refresh() end
+function handlers:ACTIVE_PLAYER_SPECIALIZATION_CHANGED() ns.UI.Refresh() end
+
+-- OS EVENTOS QUE MUDAM "DA PARA TROCAR DE SPEC AGORA?".
+--
+-- O botao Carregar fica apagado enquanto o jogo nao deixa, e apagado sem reavaliar seria pior que
+-- nao apagar: o jogador ficaria com um botao morto sem saber quando volta. Estes tres sao os que
+-- a propria janela de talentos escuta para reabilitar o botao dela
+-- (`Blizzard_ClassSpecializationsFrame.lua:69-73`), mais o fim de combate, que ja esta acima.
+--
+-- `PLAYER_SPECIALIZATION_CHANGED` alem do `ACTIVE_...`: o primeiro cobre o processo INTEIRO da
+-- troca (a Blizzard registra os dois, e o comentario dela diz que este "needs to always be
+-- registered so that the entire spec change process is always captured").
+function handlers:PLAYER_SPECIALIZATION_CHANGED() ns.UI.Refresh() end
+
+-- Andar cancela o cast de troca de spec, e `SPECIALIZATION_CHANGE_CAST_FAILED` nao cobre isso --
+-- e por isso que a janela nativa escuta estes dois.
+-- APRENDE A MAGIA DE TROCAR DE SPEC. Nao ha constante para ela na documentacao do cliente -- o
+-- que ha e o predicado `IsSpecializationActivateSpell`, que a janela de talentos usa para
+-- reconhecer o cast dela. Entao o addon pergunta ao jogo, uma vez, e guarda.
+--
+-- Sem isso nao da para saber quando a troca volta a ser possivel, e o botao ou fica apagado de
+-- menos (o caso relatado) ou apagado demais.
+function handlers:UNIT_SPELLCAST_SUCCEEDED(unit, _castGUID, spellID)
+    if unit ~= "player" then return end
+    ns.Data.NoteSpellCast(spellID)
+    ns.UI.Refresh()
+end
+
+function handlers:UNIT_SPELLCAST_FAILED() ns.UI.Refresh() end
+function handlers:UNIT_SPELLCAST_INTERRUPTED() ns.UI.Refresh() end
+
+-- E o fim do prazo/recarga nao dispara evento proprio: `SPELL_UPDATE_COOLDOWN` e o que avisa que
+-- alguma recarga andou, e e o gancho que o medidor nativo usa para redesenhar o cooldown do botao
+-- de conjunto de aparencia (`Blizzard_TransmogTemplates.lua:57-61`).
+function handlers:SPELL_UPDATE_COOLDOWN() ns.UI.Refresh() end
+
+local frame = CreateFrame("Frame", ADDON .. "EventFrame")
+for event in pairs(handlers) do
+    frame:RegisterEvent(event)
+end
+frame:SetScript("OnEvent", function(self, event, ...)
+    handlers[event](self, ...)
+end)
+
+ns.frame = frame

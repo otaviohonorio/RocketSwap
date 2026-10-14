@@ -1,0 +1,35 @@
+## Interface: 120100, 120105
+
+## Title: |cffff6a00Rocket|r Swap
+## Notes: Presets that tie specialization, talents and gear together — switch all three with one click.
+## Category: Combat
+
+## Notes-ptBR: Conjuntos que relacionam especialização, talentos e itens — troque os três com um clique.
+## Category-ptBR: Combate
+
+## Author: Otto Rocket (Otávio Honório)
+## Version: 0.39.4
+## X-Curse-Project-ID: 1698583
+## SavedVariablesPerCharacter: RocketSwapDB
+#@debug@
+## SavedVariables: RocketSwapLogDB
+#@end-debug@
+## IconTexture: Interface\AddOns\RocketSwap\Textures\Logo.png
+## X-Donate: PayPal:https://www.paypal.com/donate/?business=HH4PHH48DPG9J&no_recurring=0&currency_code=USD
+
+Locales\enUS.lua
+Locales\ptBR.lua
+Core.lua
+Dialog.lua
+Donate.lua
+#@debug@
+Log.lua
+#@end-debug@
+Data.lua
+UI.lua
+Macro.lua
+Progress.lua
+Minimap.lua
+Gear.lua
+Alert.lua
+Commands.lua
