@@ -137,8 +137,10 @@ local function Link(parent, word, tip, icon, click)
         self.icon:SetAlpha(1)
         self.text:SetFontObject("GameFontHighlightSmall")
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText(word, 1, 1, 1)
-        GameTooltip:AddLine(tip, 0.8, 0.8, 0.8, true)
+        -- (14/10) The workspace standard: the title, and one green line per action, its verb
+        -- in the infinitive.
+        GameTooltip_SetTitle(GameTooltip, word)
+        GameTooltip_AddInstructionLine(GameTooltip, tip)
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function(self)
@@ -151,13 +153,13 @@ local function Link(parent, word, tip, icon, click)
 end
 
 function ns.DonateLink(parent)
-    return Link(parent, L["Support the project"], L["Opens the donation link, ready to copy."],
+    return Link(parent, L["Support the project"], L["Click: open the donation link, ready to copy"],
         function(icon) icon:SetTexture(ns.PAYPAL_ICON) end,
         function() ns.ShowDonate() end)
 end
 
 function ns.ReportLink(parent)
-    return Link(parent, L["Report a problem"], L["Opens the address to report a problem, ready to copy."],
+    return Link(parent, L["Report a problem"], L["Click: choose where to report a problem"],
         function(icon) icon:SetAtlas(ns.REPORT_ICON) end,
         function(self) ns.ReportMenu(self) end)
 end
