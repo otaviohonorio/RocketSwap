@@ -620,7 +620,13 @@ end
 ---órfão de voltar no próximo campo que alguém acrescentar.
 ---
 ---O rótulo assenta pelo rodapé no topo do combo, +3: assim ele não depende do corpo da fonte.
-local function Group(parent, labelText, yTop, items, get, set)
+---
+---`emptyText` is what the field shows when nothing is picked and `clearText` the menu entry that
+---clears it (both "(none)" by default). An optional field can show nothing and name the clear
+---entry by what the preset then does (21/10, Appearance).
+local function Group(parent, labelText, yTop, items, get, set, emptyText, clearText)
+    emptyText = emptyText or L["(none)"]
+    clearText = clearText or L["(none)"]
     local group = CreateFrame("Frame", nil, parent)
     group:SetSize(216, 40)
     group:SetPoint("TOPLEFT", parent, "TOPLEFT", COL_X, yTop)
@@ -646,7 +652,7 @@ local function Group(parent, labelText, yTop, items, get, set)
         -- The name typed goes to the preset BEFORE the choice: the box only saves when it loses
         -- the focus, and a click on a field does not take the focus from it.
         dd:SetupMenu(function(_, root)
-            root:CreateButton(L["(none)"], function() UI.SaveName(); set(nil); UI.AfterEdit() end)
+            root:CreateButton(clearText, function() UI.SaveName(); set(nil); UI.AfterEdit() end)
             if #list > 0 then root:CreateDivider() end
 
             for _, item in ipairs(list) do
@@ -681,7 +687,7 @@ local function Group(parent, labelText, yTop, items, get, set)
         for _, item in ipairs(list) do
             if item.value == current then text = item.text end
         end
-        dd:SetDefaultText(text or L["(none)"])
+        dd:SetDefaultText(text or emptyText)
     end
 
     ---Turns the field off with a reason, or back on with `nil`. The reason is what the tooltip
@@ -822,8 +828,12 @@ local function BuildEditor()
         function() local p = Current(); return p and p.gear end,
         function(v) local p = Current(); if p then p.gear = v end end)
 
-    -- Aparência é OPCIONAL de propósito: deixar em "(nenhum)" faz o conjunto não mexer na
-    -- roupa. Quem não usa transmog nem percebe que o campo existe.
+    -- Aparência é OPCIONAL de propósito: vazio, o conjunto não mexe na roupa. Quem não usa
+    -- transmog nem percebe que o campo existe.
+    -- (21/10) EMPTY, THE FIELD IS BLANK. The user: *"quando não é selecionado a aparência fica
+    -- (none), tem que melhorar o texto"*, then *"ou deixa vazio mesmo"* -- "(nenhum)" read as "no
+    -- appearance", and in Portuguese it did not even agree with "Aparência". The menu entry that
+    -- clears it still needs words, and says what the preset then does: "Keep current".
     editor.transmog = Group(frame, L["Appearance"], FIELDS_Y - GROUP_STEP * 3,
         function()
             local out = {}
@@ -833,7 +843,8 @@ local function BuildEditor()
             return out
         end,
         function() local p = Current(); return p and p.transmog end,
-        function(v) local p = Current(); if p then p.transmog = v end end)
+        function(v) local p = Current(); if p then p.transmog = v end end,
+        "", L["Keep current"])
 
 end
 

@@ -49,6 +49,10 @@ L["When the arena or battleground invite shows up, it prints the same summary �
     "Quando aparece o convite da arena ou do campo de batalha, ele mostra o mesmo resumo — é o último momento em que ainda dá para ajustar talentos e itens."
 
 L["(none)"] = "(nenhum)"
+-- A opção que esvazia o campo Aparência (21/10): o campo vazio fica em branco, e a opção diz o que o
+-- conjunto faz então — não mexe na roupa. "(nenhum)" lia como "sem aparência" e nem concordava com o
+-- rótulo ("Aparência: (nenhum)").
+L["Keep current"] = "Manter a atual"
 -- O conjunto que está no corpo com peça trocada. `(nenhum)` era falso aqui — ver o comentário em
 -- `Alert.Summary`. "peças" e não "itens" de propósito: "Itens" é o RÓTULO do campo, e
 -- "Itens: Gélido (13 de 14 itens)" repetiria a etiqueta dentro do valor.
