@@ -253,6 +253,7 @@ function Macro.PlaceOnBar(index)
     local naMao = GetCursorInfo and GetCursorInfo()
     local okA, errA = pcall(PlaceAction, slot)
     if ClearCursor then ClearCursor() end
+    if ns.Log then ns.Log.TaintProbe("PlaceAction") end
     local ficou = MacroIn(slot, index)
     ns.Log.Add("macro-barra", {
         desfecho = ficou and "colocada" or "nao ficou", slot = slot, macro = index,
@@ -285,6 +286,7 @@ function Macro.PickUp(preset)
     if not idx then return false, "full" end
     if ClearCursor then ClearCursor() end
     local ok = pcall(PickupMacro, idx)
+    if ns.Log then ns.Log.TaintProbe("PickupMacro") end
     ns.Log.Add("macro-cursor", { macro = idx, ok = ok and true or false })
     return ok, ok and nil or "error"
 end
@@ -323,6 +325,7 @@ function Macro.Sync(preset, porBotao)
     if idx then
         local antigo = GetMacroInfo and GetMacroInfo(idx)
         EditMacro(idx, nome, icone, corpo)
+        if ns.Log then ns.Log.TaintProbe("EditMacro") end
         if antigo and antigo ~= nome then
             ns.Print(string.format(L["macro renamed: %s"], nome))
         end
@@ -341,6 +344,7 @@ function Macro.Sync(preset, porBotao)
         return
     end
     local novo = CreateMacro(nome, icone, corpo, true)
+    if ns.Log then ns.Log.TaintProbe("CreateMacro") end
     if not novo then return end
     preset.macroMade = true
     if porBotao then return end          -- the button puts it on the cursor itself
@@ -364,6 +368,7 @@ function Macro.Remove(preset)
     if idx and DeleteMacro then
         local nome = GetMacroInfo and GetMacroInfo(idx) or preset.name
         DeleteMacro(idx)
+        if ns.Log then ns.Log.TaintProbe("DeleteMacro") end
         ns.Print(string.format(L["macro deleted with the preset: %s"], nome or "?"))
     end
 end

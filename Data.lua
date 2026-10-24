@@ -583,6 +583,7 @@ function Data.SaveGearSet(setID)
     if ns.Log then
         ns.Log.Call("gear", "SaveEquipmentSet(" .. tostring(setID) .. ")", ok, err)
     end
+    if ns.Log then ns.Log.TaintProbe("SaveEquipmentSet") end
     return ok
 end
 
@@ -710,6 +711,7 @@ function Data.OpenEquipmentManager()
     elseif _G and _G.PaperDollSidebarTab3 and _G.PaperDollSidebarTab3.Click then
         pcall(_G.PaperDollSidebarTab3.Click, _G.PaperDollSidebarTab3)
     end
+    if ns.Log then ns.Log.TaintProbe("OpenEquipmentManager") end
     return true
 end
 
@@ -1257,6 +1259,7 @@ function Steps.spec(preset)
     elseif ns.Log then
         ns.Log.Call("spec", "nenhuma funcao de troca de spec existe")
     end
+    if ns.Log then ns.Log.TaintProbe("SetSpecialization") end
     -- `aceito == false` é RECUSA DO JOGO, e o diário mostrou que ela é comum: em quatro das nove
     -- trocas gravadas o jogo devolveu `false`, sempre quando a troca vinha poucos segundos depois
     -- de outra. Trocar de especialização tem custo no jogo, e insistir não adianta — esperar sim.
@@ -1396,6 +1399,7 @@ function Steps.talent(preset)
         ns.Log.Call("talent", "LoadConfig(" .. tostring(preset.talent) .. ")",
             ok, LoadConfigResultName(result), changeError)
     end
+    if ns.Log then ns.Log.TaintProbe("LoadConfig") end
     if not ok then return "fail", L["the talent loadout could not be loaded."] end
 
     -- A ESCRITA DE "QUAL LOADOUT ESTÁ VALENDO" SAIU DAQUI, e foram duas razões:
@@ -1525,6 +1529,7 @@ function Steps.gear(preset)
     if ns.Log then
         ns.Log.Call("gear", "UseEquipmentSet(" .. tostring(preset.gear) .. ")", ok, equipou)
     end
+    if ns.Log then ns.Log.TaintProbe("UseEquipmentSet") end
     if not ok then return "fail", Data.GearFailureReason(preset.gear) end
 
     -- RECUSA IMEDIATA NÃO SE ESPERA. Sem swap, `EQUIPMENT_SWAP_FINISHED` não vem — e o passo
@@ -1633,6 +1638,7 @@ ConfirmTalent = function()
     if running.preset.spec and Data.GetCurrentSpecIndex() ~= running.preset.spec then return end
 
     pcall(C_ClassTalents.UpdateLastSelectedSavedConfigID, spec.id, running.preset.talent)
+    if ns.Log then ns.Log.TaintProbe("UpdateLastSelectedSavedConfigID") end
 end
 
 --------------------------------------------------------------------------------
