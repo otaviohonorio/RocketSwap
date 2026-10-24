@@ -1,4 +1,4 @@
-# Rocket Swap 0.39.5
+# Rocket Swap 0.39.6
 
-- The Appearance field of a preset is blank when no appearance is chosen, instead of "(none)". The
-  menu entry that clears it now reads "Keep current": the preset leaves your appearance as it is.
+- The minimap button now follows the size of the minimap: with the minimap enlarged in Edit Mode
+  it moves along the bigger border, like other addons' buttons, instead of staying inside the map.
