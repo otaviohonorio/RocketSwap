@@ -42,7 +42,9 @@ ns.UI = UI
 --
 -- Dividir o ganho entre as duas colunas obrigaria a recalcular as duas, e a da direita nunca
 -- esteve apertada -- quem esta e a lista, que virou card e carrega um rotulo em cada linha.
-local WIDTH = 680
+-- (25/10) 680 -> 720, the 40 to the editor's column this time: a loadout Rocket SBA Lab makes has up to 30 letters,
+-- "Rocket SBA Lab: M+ Moldachamas" is 201 px in GameFontHighlight, and the combo of 200 shows 166 (the ruler)
+local WIDTH = 720
 local HEIGHT
 local LIST_W = 420            -- largura externa do inset da lista: x 4..424
 local GUTTER = 20             -- calha entre colunas (MountJournal)
@@ -132,15 +134,15 @@ local TEMPLATE_FOOTER = 26
 -- + the support line at the very bottom (Donate.lua, `DONATE_ROW`, 27/09).
 local DONATE_ROW = ns.DONATE_ROW or 0
 HEIGHT = -WARN_STRIP_Y + WARN_STRIP_H + TEMPLATE_FOOTER + 4 + DONATE_ROW
-local FIELD_W = 200           -- combos (o dropdown de loadout de talentos usa 200)
-local NAME_W = 211            -- EditBox: a arte termina em 500, alinhada com a dos combos
+local FIELD_W = 240           -- combos: the widest loadout name the lab makes (201 px) + the combo's 34 of art
+local NAME_W = 251            -- EditBox: its art ends where the combos' does
 local GROUP_STEP = 50         -- rótulo (15) + combo (25) + respiro (10)
 local ATTIC_Y = -30           -- faixa entre o título e o inset
 -- The editor column, top to bottom (27/09): the two buttons to the game's windows, the title of the
 -- name box, the box, the divider and the fields. Same rhythm as a field group: title 12 + 3 above
 -- its box, 10 between blocks, and the 16/10 around the divider that the column already had.
 local EDITOR_TOP = -60                           -- level with the list's inset (`LIST_TOP`)
-local TOOL_W = 102                               -- two of them + 7 of gap = NAME_W
+local TOOL_W = 122                               -- two of them + 7 of gap = NAME_W
 local NAME_TITLE_Y = EDITOR_TOP - 22 - 10        -- button (22) + gap
 local NAME_Y = NAME_TITLE_Y - 15                 -- title (12) + 3, like `Group`
 local DIVIDER_Y = NAME_Y - 22 - 16
@@ -628,7 +630,7 @@ local function Group(parent, labelText, yTop, items, get, set, emptyText, clearT
     emptyText = emptyText or L["(none)"]
     clearText = clearText or L["(none)"]
     local group = CreateFrame("Frame", nil, parent)
-    group:SetSize(216, 40)
+    group:SetSize(FIELD_W + 16, 40)
     group:SetPoint("TOPLEFT", parent, "TOPLEFT", COL_X, yTop)
 
     -- +8 compensa o transbordo da arte do combo, para ela cair exatamente na coluna.
@@ -783,7 +785,7 @@ local function BuildEditor()
     editor.name:HookScript("OnTextChanged", function() UI.RefreshNameState() end)
 
     editor.divider = frame:CreateTexture(nil, "ARTWORK")
-    editor.divider:SetSize(216, 1)
+    editor.divider:SetSize(FIELD_W + 16, 1)
     editor.divider:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, DIVIDER_Y)
     if not ns.SetAtlasSafe or not ns.SetAtlasSafe(editor.divider, "Options_HorizontalDivider") then
         editor.divider:SetColorTexture(1, 1, 1, 0.12)
@@ -1431,6 +1433,25 @@ local function Create()
     frame.new:SetText("+ " .. L["New preset"])
     frame.new:SetScript("OnClick", function() UI.New() end)
 
+    -- (25/10) the Rocket SBA Lab's builds as presets: shown only when the game has a pair of its talents and items
+    frame.fromLab = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.fromLab:SetSize(160, 22)
+    frame.fromLab:SetText(L["From Rocket SBA Lab"])
+    frame.fromLab:SetScript("OnClick", function() UI.FromRocketLab() end)
+    frame.fromLab:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+        GameTooltip_SetTitle(GameTooltip, L["From Rocket SBA Lab"])
+        GameTooltip_AddNormalLine(GameTooltip, L["Rocket SBA Lab saves each build's talents and items in the game, under the build's name. This joins the two of each one into a preset here."], true)
+        GameTooltip_AddBlankLineToTooltip(GameTooltip)
+        for _, p in ipairs(ns.Data.RocketPairs()) do
+            GameTooltip_AddHighlightLine(GameTooltip, p.name .. ": " .. p.loadoutName .. " + " .. p.setName)
+        end
+        GameTooltip_AddBlankLineToTooltip(GameTooltip)
+        GameTooltip_AddInstructionLine(GameTooltip, L["Click: create or update the presets"])
+        GameTooltip:Show()
+    end)
+    frame.fromLab:SetScript("OnLeave", GameTooltip_Hide)
+
 
     -- Rodapé: a banda que o template já reserva (y 4..26).
     frame.delete = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1658,6 +1679,13 @@ function UI.Refresh()
     frame.list:SetShown(not empty)
     frame.new:SetShown(not empty)
     frame.delete:SetShown(not empty)
+    frame.fromLab:SetShown(#ns.Data.RocketPairs() > 0)
+    frame.fromLab:ClearAllPoints()
+    if empty then
+        frame.fromLab:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, ATTIC_Y)
+    else
+        frame.fromLab:SetPoint("LEFT", frame.new, "RIGHT", 8, 0)
+    end
 
     if empty then
         -- SEM LISTA NÃO HÁ CORRENTE. Sem esta linha, `current` continuava apontando para o último
@@ -1742,6 +1770,50 @@ function UI.New()
     current = preset
     UI.Refresh()
     editor.name:SetFocus()
+end
+
+---(25/10) Makes or updates a preset for each Rocket SBA Lab build the game has (Data.RocketPairs): the preset with the
+---same items set and specialization, else the one of the same name, gets the build's talents; none, a new one.
+function UI.FromRocketLab()
+    local presets = Presets()
+    local made, updated, same = 0, 0, 0
+    local last
+    for _, pair in ipairs(ns.Data.RocketPairs()) do
+        local found
+        for _, p in ipairs(presets) do
+            if p.gear == pair.gear and p.spec == pair.spec then found = p; break end
+        end
+        if not found then
+            for _, p in ipairs(presets) do
+                if p.name == pair.name then found = p; break end
+            end
+        end
+        if found then
+            if found.talent == pair.talent and found.gear == pair.gear and found.spec == pair.spec then
+                same = same + 1
+            else
+                found.spec, found.talent, found.gear = pair.spec, pair.talent, pair.gear
+                updated = updated + 1
+            end
+            last = found
+        else
+            last = { name = pair.name, spec = pair.spec, talent = pair.talent, gear = pair.gear }
+            presets[#presets + 1] = last
+            made = made + 1
+        end
+        if ns.Macro then ns.Macro.Sync(last) end
+    end
+    if not last then
+        UI.SetStatus(L["The game has no talents and items of Rocket SBA Lab yet."], true)
+        return
+    end
+    current = last
+    UI.Refresh()
+    if made + updated == 0 then
+        UI.SetStatus(L["The Rocket SBA Lab presets are already up to date."], false)
+    else
+        UI.SetStatus(L["Rocket SBA Lab: %d preset(s) created, %d updated."]:format(made, updated), false)
+    end
 end
 
 function UI.SaveName()

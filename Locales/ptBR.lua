@@ -329,3 +329,11 @@ L["Opens the character sheet on the equipment manager, to create or save a set."
 -- the minimap tooltip, the same in every Rocket addon (13/10)
 L["Click: open the window"] = "Clique: abrir a janela"
 L["Right-click: pick a preset"] = "Clique direito: escolher um conjunto"
+-- (25/10) the Rocket SBA Lab's builds as presets (Data.RocketPairs, UI.FromRocketLab)
+L["From Rocket SBA Lab"] = "Do Rocket SBA Lab"
+L["Rocket SBA Lab saves each build's talents and items in the game, under the build's name. This joins the two of each one into a preset here."] =
+    "O Rocket SBA Lab salva no jogo os talentos e os itens de cada build, com o nome dela. Este botão junta os dois de cada uma num conjunto daqui."
+L["Click: create or update the presets"] = "Clique: criar ou atualizar os conjuntos"
+L["The game has no talents and items of Rocket SBA Lab yet."] = "O jogo ainda não tem talentos e itens do Rocket SBA Lab."
+L["The Rocket SBA Lab presets are already up to date."] = "Os conjuntos do Rocket SBA Lab já estão em dia."
+L["Rocket SBA Lab: %d preset(s) created, %d updated."] = "Rocket SBA Lab: %d conjunto(s) criado(s), %d atualizado(s)."

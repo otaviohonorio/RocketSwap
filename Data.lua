@@ -719,6 +719,38 @@ function Data.OpenEquipmentManager()
     return true
 end
 
+-- (25/10) THE ROCKET SBA LAB'S BUILDS, FROM THE GAME'S OWN LISTS. RocketLab saves each build as the game's own presets:
+-- the talents as a loadout "Rocket SBA Lab: M+ <hero tree>" (or "Raide"/"Raid") and the items as an equipment set
+-- "Rocket M+" (or "Rocket Raide", with the spec's number when another spec holds the name), assigned to the
+-- specialization. The two of one build share that word, so a RocketSwap preset is made of them here, reading the game's
+-- lists only -- never RocketLab's data (the workspace rule: no addon reads another addon; the plan of 25/10, "ponte com o
+-- RocketSwap pelos conjuntos nativos (nome padronizado)"). Both languages: the player may have switched the game's.
+local ROCKET_TAG = { ["M+"] = "mplus", ["Raid"] = "raid", ["Raide"] = "raid" }
+
+---The pairs found: { { name, spec (index), talent (configID), gear (setID), tag, loadoutName, setName }, ... }.
+function Data.RocketPairs()
+    local out = {}
+    if not (C_EquipmentSet and C_EquipmentSet.GetEquipmentSetAssignedSpec) then return out end
+    for _, g in ipairs(Data.GetGearSets()) do
+        local tag = g.name:match("^Rocket (%S+)$") or g.name:match("^Rocket (%S+) %d+$")
+        local content = tag and ROCKET_TAG[tag]
+        local ok, specIndex = false, nil
+        if content then ok, specIndex = pcall(C_EquipmentSet.GetEquipmentSetAssignedSpec, g.setID) end
+        local spec = ok and specIndex and Data.GetSpecByIndex(specIndex)
+        if spec then
+            for _, l in ipairs(Data.GetLoadouts(spec.id)) do
+                local ltag = l.name:match("^Rocket SBA Lab: (%S+) ")
+                if ltag and ROCKET_TAG[ltag] == content then
+                    out[#out + 1] = { name = spec.name .. " " .. tag, spec = specIndex, talent = l.configID,
+                                      gear = g.setID, tag = tag, loadoutName = l.name, setName = g.name }
+                    break
+                end
+            end
+        end
+    end
+    return out
+end
+
 ---Nome de um loadout/conjunto por id, para a lista mostrar texto em vez de número.
 function Data.LoadoutName(specID, configID)
     if not configID then return nil end
