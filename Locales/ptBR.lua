@@ -310,15 +310,15 @@ L["during a boss encounter the game blocks switches made by addons."] = "durante
 L["during a Mythic+ keystone the game blocks switches made by addons."] = "durante uma chave de Mítica+ o jogo bloqueia trocas feitas por addon."
 
 -- Doação (Donate.lua, 26/09)
-L["Link copied — paste it in your browser."] = "Endereço copiado — cole no navegador."
-L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."] = "Obrigado por apoiar o Rocket Swap! Aperte Ctrl+C para copiar o endereço e cole no navegador."
-L["Click: open the donation link, ready to copy"] = "Clique: abrir o endereço de doação, pronto para copiar"
+L["Link copied — paste it in your browser."] = "Link copiado — cole no navegador."
+L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."] = "Obrigado por apoiar o Rocket Swap! Aperte Ctrl+C para copiar o link e cole no navegador."
+L["Click: open the donation link, ready to copy"] = "Clique: abrir o link de doação, pronto para copiar"
 L["Support the project"] = "Apoiar o projeto"
 L["Report a problem"] = "Relatar um problema"
 L["Report a problem on"] = "Relatar um problema em"
 L["Click: choose where to report a problem"] = "Clique: escolher onde relatar um problema"
 L["Rocket Swap %s — report a problem on %s.|n|nPress Ctrl+C to copy the link, then paste it in your browser. Say what you were doing and what happened."] =
-    "Rocket Swap %s — relatar um problema em %s.|n|nAperte Ctrl+C para copiar o endereço e cole no navegador. Conte o que você estava fazendo e o que aconteceu."
+    "Rocket Swap %s — relatar um problema em %s.|n|nAperte Ctrl+C para copiar o link e cole no navegador. Conte o que você estava fazendo e o que aconteceu."
 
 -- Botões para as janelas do jogo e título do nome (UI.lua, 27/09)
 L["Equipment"] = "Equipamentos"
