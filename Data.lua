@@ -622,7 +622,11 @@ function Data.FormBlocksSpec()
             local okF, _, _, _, magia = pcall(GetShapeshiftFormInfo, indice)
             if okF and type(magia) == "number" then
                 local okN, n = pcall(C_Spell.GetSpellName, magia)
-                if okN and type(n) == "string" and n ~= "" then nome = n end
+                if okN and type(n) == "string" and n ~= "" then
+                    -- (25/10) the form's icon before its name (the user: *"coloque o icone também"*)
+                    local okT, tex = pcall(C_Spell.GetSpellTexture, magia)
+                    nome = (okT and tex and ("|T%s:14:14:0:0|t "):format(tostring(tex)) or "") .. n
+                end
             end
         end
     end
