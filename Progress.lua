@@ -1,17 +1,17 @@
 -- RocketSwap | Progress.lua
--- O painel flutuante da troca: aparece sozinho quando a troca começa, some sozinho quando
--- acaba, e **não depende de a janela do addon estar aberta**.
+-- The swap's floating panel: it shows by itself when the swap starts, goes away by itself when it
+-- ends, and **does not depend on the addon's window being open**.
 --
--- POR QUE ELE EXISTE, se a janela já mostra o progresso na coluna da direita. Porque o pedido
--- do usuário foi literal — *"ainda sinto falta de um aviso e alguma coisa que mostre o progresso
--- melhor da troca até terminar, que visualmente o usuário entenda que ainda está trocando"* — e
--- o painel de dentro da janela responde só para quem está com a janela aberta. Na prática o
--- jogador clica em Carregar e volta a olhar o jogo: é ali, e não na janela que ele acabou de
--- deixar para trás, que o sinal precisa aparecer.
+-- WHY IT EXISTS, when the window already shows the progress in its right column. Because the user's
+-- request was literal -- *"ainda sinto falta de um aviso e alguma coisa que mostre o progresso
+-- melhor da troca até terminar, que visualmente o usuário entenda que ainda está trocando"* -- and
+-- the panel inside the window answers only whoever has the window open. In practice the player
+-- clicks Load and goes back to looking at the game: that, and not the window just left behind, is
+-- where the signal has to show.
 --
--- ⚑ E ELE NÃO TEM DADO PRÓPRIO. Tudo vem de `Data.GetProgress()`, o mesmo que a janela lê, e a
--- arte de cada estado vem de `ns.ProgressVisuals`, a mesma tabela que a janela usa. Duas telas
--- com duas leituras do mesmo fato divergem na primeira mudança — e aí uma delas mente.
+-- ⚑ AND IT HAS NO DATA OF ITS OWN. Everything comes from `Data.GetProgress()`, the same the window
+-- reads, and each state's art comes from `ns.ProgressVisuals`, the same table the window uses. Two
+-- screens with two readings of the same fact drift apart at the first change -- and then one lies.
 local ADDON, ns = ...
 local L = ns.L
 
@@ -28,34 +28,34 @@ local TITLE_GAP = 13
 local BAR_H = 8
 local BAR_GAP = 8
 
--- Quanto o resultado fica na tela depois de a troca acabar. **Três segundos, escolha do
--- usuário**: some sozinho, sem exigir clique, mas dá tempo de ler o que aconteceu.
+-- How long the result stays on screen after the swap ends. **Three seconds, the user's choice**:
+-- it goes away by itself, with no click needed, but leaves time to read what happened.
 --
--- Falha NÃO entra nessa conta: se algum passo falhou, o painel fica até o jogador fechar. O
--- que precisa ser lido não pode ter prazo, e aqui o prazo apagaria justamente o único caso em
--- que ele tem algo a dizer.
+-- A failure does NOT count here: if any step failed, the panel stays until the player closes it.
+-- What has to be read cannot have a deadline, and here the deadline would erase the one case
+-- where it has something to say.
 local HOLD = 3
 
--- O GRITO DE VITÓRIA. Pedido do usuário: nos três segundos que sobram depois de a troca
--- terminar, o painel deixa de ser relatório e vira comemoração.
+-- THE VICTORY CRY. The user's request: in the three seconds left after the swap ends, the panel
+-- stops being a report and becomes a celebration.
 --
--- E faz sentido além da piada: naquele ponto a lista de passos já cumpriu o papel dela — quem
--- estava acompanhando já viu cada um fechar. O que ainda falta comunicar é uma coisa só, e de
--- longe: **acabou, e deu certo**. Uma linha grande diz isso melhor que quatro linhas de detalhe.
+-- And it makes sense beyond the joke: at that point the list of steps has done its job -- whoever
+-- was following already saw each one close. What is left to say is one thing only, and from afar:
+-- **it is over, and it worked**. One big line says that better than four lines of detail.
 --
--- E é **só a frase**. Uma versão anterior deixava "Trocando para <conjunto>" embaixo dela, e o
--- usuário apontou o óbvio: nessa altura já trocou, então a linha estava no tempo errado —
--- anunciava como presente o que tinha acabado de virar passado.
+-- And it is **the phrase alone**. An earlier version left "Switching to <set>" under it, and the
+-- user pointed out the obvious: by then it has switched, so the line was in the wrong tense --
+-- announcing as present what had just become past.
 --
--- SÓ NO SUCESSO. Se algum passo falhou, o painel continua mostrando a lista e fica até o
--- jogador fechar: comemorar por cima de um passo que não deu seria o pior desfecho possível.
+-- ONLY ON SUCCESS. If any step failed, the panel keeps showing the list and stays until the
+-- player closes it: celebrating over a step that failed would be the worst possible ending.
 --
--- Não é chave de tradução de propósito: é nome próprio, e o mesmo em qualquer idioma.
+-- It is not a translation key on purpose: it is a proper name, the same in every language.
 local SHOUT = "Leroy Jeeeeeennkiiinnss!"
 
--- A cor da barra em cada momento. Dourado é "andando" — é a cor de progresso do jogo inteiro.
--- Verde só aparece quando **fechou tudo e deu certo**, e por isso ele não precisa de legenda:
--- ninguém confunde barra cheia e verde com troca pela metade.
+-- The bar's colour at each moment. Gold is "moving" -- the progress colour of the whole game.
+-- Green only shows when **everything closed and it worked**, so it needs no legend: nobody
+-- mistakes a full green bar for a swap halfway.
 local BAR_RUNNING = { 1, 0.82, 0, 0.85 }
 local BAR_DONE    = { 0.25, 0.78, 0.35, 0.90 }
 
@@ -64,19 +64,19 @@ local frame
 --------------------------------------------------------------------------------
 -- A barra
 --------------------------------------------------------------------------------
--- ⚑ A BARRA ANDA POR PASSO, NÃO POR TEMPO — e essa distinção é o que a torna honesta.
+-- ⚑ THE BAR MOVES BY STEP, NOT BY TIME -- and that difference is what makes it honest.
 --
--- A corrente não sabe quanto vai demorar: o passo de especialização espera o servidor, e o
--- diário real mostrou a mesma troca sendo aceita ora em 4, ora em 14 segundos. Barra que corre
--- sozinha contra um relógio inventa uma previsão que ninguém tem, e barra que trava no meio é
--- pior que barra nenhuma — foi por isso que a versão de dentro da janela recusou ter uma.
+-- The chain does not know how long it will take: the specialization step waits for the server,
+-- and the real log showed the same swap accepted in 4 seconds one time and 14 another. A bar
+-- running by itself against a clock invents a forecast nobody has, and a bar stuck halfway is
+-- worse than no bar -- that is why the version inside the window refused to have one.
 --
--- O que dá para afirmar é **quantos passos fecharam de quantos**. Isso é verdade a cada quadro,
--- é o que o jogador quer saber, e não depende de adivinhação.
+-- What can be stated is **how many steps closed out of how many**. That is true at every frame,
+-- it is what the player wants to know, and it needs no guessing.
 --
--- E tem uma exceção legítima: quando o passo em curso é uma CONJURAÇÃO de verdade (a troca de
--- especialização conjura a magia 200749), o jogo informa início e fim, e aí a fatia daquele
--- passo pode andar com o tempo real da conjuração. Isso não é previsão: é medida.
+-- And there is one fair exception: when the step under way is a real CAST (the specialization
+-- switch casts spell 200749), the game says when it starts and ends, and then that step's slice
+-- can move with the cast's real time. That is not a forecast: it is a measure.
 local function BarFill(passos)
     if not passos or #passos == 0 then return 0 end
 
@@ -92,7 +92,7 @@ local function BarFill(passos)
     local fatia = 1 / #passos
     local fill = fechados * fatia
 
-    -- A fatia do passo em curso só avança quando há conjuração medida.
+    -- The slice of the step under way only moves when there is a measured cast.
     if atual and UnitCastingInfo then
         local _, _, _, startMS, endMS = UnitCastingInfo("player")
         if startMS and endMS and endMS > startMS then
@@ -135,7 +135,7 @@ local function Build()
     if pos then
         frame:SetPoint(pos.point or "CENTER", UIParent, pos.point or "CENTER", pos.x or 0, pos.y or 0)
     else
-        -- Acima da barra de ação e abaixo do centro: fora da mira, mas no caminho do olho.
+        -- Above the action bar and below the centre: out of the crosshair, but in the eye's way.
         frame:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 220)
     end
 
@@ -171,16 +171,16 @@ local function Build()
     trilho.fill:SetWidth(1)
     trilho.fill:SetColorTexture(1, 0.82, 0, 0.85)
 
-    -- Os cortes entre as fatias: sem eles a barra vira um bloco e o jogador perde a noção de
-    -- quantas etapas existem, que é a informação que esta barra carrega.
-    -- Visível desde o começo e até o fim: ela é a única parte da tela de progresso que continua
-    -- dizendo algo depois que a troca acaba.
+    -- The cuts between the slices: without them the bar becomes one block and the player loses track
+    -- of how many stages there are, which is the information this bar carries.
+    -- Visible from start to end: it is the only part of the progress screen that still says something
+    -- after the swap ends.
     trilho:Show()
     trilho.ticks = {}
     trilho:SetScript("OnShow", function() end)
     frame.trilho = trilho
 
-    -- As linhas de passo, com a mesma arte e os mesmos estados da janela.
+    -- The step lines, with the window's same art and states.
     frame.rows = {}
     for i = 1, 4 do
         local row = CreateFrame("Frame", nil, frame)
@@ -205,10 +205,10 @@ local function Build()
         frame.rows[i] = row
     end
 
-    -- O grito ocupa o painel inteiro quando aparece, entáo nasce centralizado e escondido.
-    -- O grito ocupa o espaço das linhas de passo, ABAIXO da barra — que não sai da tela. Duas
-    -- linhas são permitidas: numa janela de 240 a frase não cabe inteira, e encolher a fonte
-    -- para forçar uma linha só tiraria dela justamente o tamanho, que é o recado.
+    -- The cry fills the whole panel when it shows, so it is born centred and hidden.
+    -- The cry takes the space of the step lines, BELOW the bar -- which never leaves the screen. Two
+    -- lines are allowed: in a 240-wide window the phrase does not fit whole, and shrinking the font
+    -- to force one line would take from it exactly the size, which is the message.
     frame.shout = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     frame.shout:SetPoint("TOPLEFT", frame.trilho, "BOTTOMLEFT", 0, -6)
     frame.shout:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, PAD)
@@ -265,13 +265,13 @@ local function LayoutTicks(trilho, n)
     end
 end
 
----As duas caras do painel: o relatório (enquanto troca, e quando falha) e o grito (quando
----termina bem). Uma esconde a outra inteira — sobrepor as duas deixaria o grito ilegiível por
----cima das linhas de passo.
+--- The panel's two faces: the report (while switching, and when it fails) and the cry (when it
+--- ends well). One hides the other entirely -- laying one over the other would leave the cry
+--- unreadable over the step lines.
 local function ShowShout(frame_, mostrar)
     frame_.shout:SetShown(mostrar)
-    -- A BARRA NÃO SAI. Ela é a única coisa da tela de progresso que ainda diz algo depois do
-    -- fim — cheia e verde, é o "tudo fechado" em forma, e some junto com o painel.
+    -- THE BAR STAYS. It is the only thing of the progress screen that still says something after the
+    -- end -- full and green, it is "all closed" as a shape, and it goes away with the panel.
     frame_.clock:SetShown(not mostrar)
     frame_.title:SetShown(not mostrar)
     for _, row in ipairs(frame_.rows) do
@@ -295,8 +295,8 @@ function Progress.Refresh()
         return
     end
 
-    -- As duas transições, do mesmo jeito que a janela as trata: `info.live` é o agora,
-    -- `frame.live` é o que este painel viu por último.
+    -- The two transitions, the way the window handles them: `info.live` is now,
+    -- `frame.live` is what this panel saw last.
     if info.live and not frame.live then
         frame.live, frame.holdUntil = true, nil
     elseif not info.live and frame.live then
@@ -305,7 +305,7 @@ function Progress.Refresh()
         for _, p in ipairs(passos) do
             if p.state == "failed" then falhou = true end
         end
-        -- Falha não tem prazo: fica até o jogador fechar.
+        -- A failure has no deadline: it stays until the player closes it.
         frame.holdUntil = falhou and math.huge or (GetTime() + HOLD)
         frame.close:SetShown(falhou)
         frame.shouting = not falhou
@@ -317,11 +317,11 @@ function Progress.Refresh()
         return
     end
 
-    -- A ALTURA É A MESMA DO COMEÇO AO FIM. Encolher no desfecho faz o painel pular na tela
-    -- bem no instante em que o olho volta para ele, e um salto de layout se lê como defeito.
+    -- THE HEIGHT IS THE SAME FROM START TO END. Shrinking at the end makes the panel jump on screen
+    -- right when the eye comes back to it, and a layout jump reads as a defect.
     frame:SetHeight(PAD * 2 + TITLE_INK + BAR_GAP + BAR_H + TITLE_GAP + ROW * #passos)
 
-    -- TERMINOU E DEU CERTO: o painel troca de conteúdo pelos três segundos que lhe restam.
+    -- ENDED AND IT WORKED: the panel changes its content for the three seconds it has left.
     if frame.shouting then
         ShowShout(frame, true)
         if not frame:IsShown() then frame:Show() end
@@ -339,7 +339,7 @@ function Progress.Refresh()
     local trilho = frame.trilho
     LayoutTicks(trilho, #passos)
     local fill = BarFill(passos)
-    -- `SetWidth(0)` some com a textura e o jogo reclama; 1px é o mínimo visível.
+    -- `SetWidth(0)` makes the texture vanish and the game complains; 1 px is the smallest visible.
     trilho.fill:SetWidth(math.max(1, trilho:GetWidth() * fill))
 
     for i, row in ipairs(frame.rows) do
@@ -361,7 +361,7 @@ function Progress.Refresh()
     if not frame:IsShown() then frame:Show() end
 end
 
----Chamado pela corrente quando uma troca começa.
+--- Called by the chain when a swap starts.
 function Progress.Start()
     if ns.db and ns.db.hideProgress then return end
     if not frame then Build() end
@@ -375,10 +375,10 @@ function Progress.Frame()
     return frame
 end
 
----A conta da barra, exposta para o harness.
+--- The bar's arithmetic, exposed for the harness.
 ---
----A arte da barra só se vê no jogo, mas a CONTA é aritmética e se confere em disco — e é ela
----que carrega a promessa: a barra afirma quantos passos fecharam, e nada sobre tempo.
+--- The bar's art only shows in the game, but the ARITHMETIC is arithmetic and is checked on disk --
+--- and it is what carries the promise: the bar states how many steps closed, and nothing about time.
 function Progress.DebugShout()
     return SHOUT
 end

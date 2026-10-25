@@ -4,12 +4,12 @@ local L = ns.L
 
 local commands = {}
 
--- O painel flutuante da troca. Existe desligamento porque quem joga com a janela do addon
--- aberta o tempo todo já tem a mesma informação na coluna da direita, e aí ele é repetição.
--- (!) `SaveEquipmentSet` grava o que você está vestindo POR CIMA do conjunto. Isso conserta a
--- peça que sumiu — e destruiria o conjunto inteiro se você estivesse vestindo outra coisa. Por
--- isso o comando confere `consertavel` antes: ele só age quando você já está vestindo o conjunto
--- inteiro menos o que sumiu, que é o único caso em que "salvar" significa "consertar".
+-- The swap's floating panel. It can be turned off because whoever plays with the addon's window
+-- open all the time already has the same information in the right column, and there it is repetition.
+-- (!) `SaveEquipmentSet` writes what you are wearing OVER the set. That fixes the piece that went
+-- missing -- and would wreck the whole set if you were wearing something else. So the command
+-- checks `consertavel` first: it only acts when you are already wearing the whole set but what went
+-- missing, the one case where "save" means "fix".
 commands["fix"] = function()
     local presets = ns.db and ns.db.presets or {}
     local consertados = 0
@@ -25,7 +25,7 @@ commands["fix"] = function()
             elseif problema then
                 ns.Print(format(L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."],
                     problema.nome or "?", problema.perdidas))
-                -- LEVA, em vez de explicar onde fica. O jogador está no meio de outra coisa.
+                -- It TAKES you there, instead of explaining where it is. The player is in the middle of something else.
                 ns.Print(L["Open the equipment manager, fix the set and save it, then switch."])
                 ns.Data.OpenEquipmentManager()
             end
@@ -48,8 +48,8 @@ commands["progress"] = function()
         or L["swap progress panel on."])
 end
 
--- O comando é em inglês como todos os outros (`warn`, `ready`, `queue`), mas quem joga em
--- português vai digitar "progresso" — e recusar por causa de uma letra seria implicância.
+-- The command is in English like all the others (`warn`, `ready`, `queue`), but whoever plays in
+-- Portuguese will type "progresso" -- and refusing over one letter would be nitpicking.
 commands["progresso"] = function() commands["progress"]() end
 
 commands[""] = function()
@@ -105,8 +105,8 @@ commands["list"] = function()
     end
 end
 
--- `/rs warn` liga/desliga o aviso; `/rs warn warmode` liga/desliga o de modo guerra, que nasce
--- desligado. A mesma porta para as duas coisas porque e o mesmo aviso -- uma e o recorte da outra.
+-- `/rs warn` turns the warning on/off; `/rs warn warmode` turns the War Mode one on/off, which
+-- starts off. The same door for both because it is the same warning -- one is a slice of the other.
 commands["warn"] = function(rest)
     local arg = (rest or ""):lower()
     if arg:find("warmode", 1, true) or arg:find("guerra", 1, true) then
@@ -116,8 +116,8 @@ commands["warn"] = function(rest)
         return
     end
 
-    -- `/rs warn` sem argumento mexe nos DOIS, que e o que quem digita o comando curto espera.
-    -- `/rs warn pve` e `/rs warn pvp` mexem num so.
+    -- `/rs warn` with no argument changes BOTH, which is what whoever types the short command expects.
+    -- `/rs warn pve` and `/rs warn pvp` change one only.
     local qual = (rest or ""):lower():gsub("%s", "")
     if qual == "pve" then
         ns.db.warnPvE = ns.db.warnPvE == false
@@ -139,8 +139,8 @@ commands["ready"] = function()
     ns.Print(ns.db.readyCheck and L["ready check summary on."] or L["ready check summary off."])
 end
 
--- `/rs queue`: o mesmo resumo do ready check, no convite da fila de PvP. Comando proprio, e nao
--- um argumento de `/rs ready`, porque sao dois gatilhos independentes -- ha quem queira so um.
+-- `/rs queue`: the same summary as the ready check, on the PvP queue's invite. A command of its own,
+-- and not an argument of `/rs ready`, because they are two independent triggers -- some want only one.
 commands["queue"] = function()
     ns.db.queuePop = ns.db.queuePop == false
     ns.Print(ns.db.queuePop and L["PvP queue pop summary on."] or L["PvP queue pop summary off."])
@@ -152,19 +152,19 @@ commands["unmute"] = function()
     ns.Print(L["all warnings re-enabled."])
 end
 
--- Instrumentacao. A deteccao de peca de PvP depende de uma LINHA DE TOOLTIP casar com um
--- padrao montado a partir de uma string global — e isso pode falhar por idioma, por tooltip
--- nao carregada ou por a peca nao ter a linha. Sem este comando, a falha e silenciosa e
--- indistinguivel de "esta tudo certo".
--- ⚑ `/rs gear <slot>` DESPEJA AS LINHAS CRUAS, e ele nasceu do print de 13/09: o peitoral mostra
--- na tooltip a linha de PvP ("aumenta o nível do item para um mínimo de 344 em Arenas...") e o
--- addon insiste em chamá-lo de PvE -- inclusive depois de trocar de personagem, ou seja, com o
--- cache zerado. O padrão casa com aquele texto (conferido fora do jogo), então o que sobra é a
--- pergunta que só o cliente responde: **o que `C_TooltipInfo.GetInventoryItem` está devolvendo
--- para aquele slot?**
+-- Instrumentation. Telling a PvP piece depends on a TOOLTIP LINE matching a pattern built from a
+-- global string -- and that can fail by language, by a tooltip not loaded or by the piece not
+-- having the line. Without this command, the failure is silent and cannot be told from
+-- "all is fine".
+-- ⚑ `/rs gear <slot>` DUMPS THE RAW LINES, and it was born from the print of 13/09: the chest shows
+-- the PvP line in its tooltip ("aumenta o nível do item para um mínimo de 344 em Arenas...") and the
+-- addon insists on calling it PvE -- even after switching characters, that is, with the cache
+-- empty. The pattern matches that text (checked outside the game), so what is left is the
+-- question only the client answers: **what is `C_TooltipInfo.GetInventoryItem` returning
+-- for that slot?**
 --
--- Sem este despejo, as hipóteses restantes (linha ausente da estrutura, texto em `rightText`,
--- valor secret, linha partida em duas) são indistinguíveis -- e cada palpite custa uma ida ao jogo.
+-- Without this dump, the guesses left (a line missing from the structure, text in `rightText`,
+-- a secret value, a line split in two) cannot be told apart -- and each guess costs a trip to the game.
 local function DumpSlot(slot)
     local link = GetInventoryItemLink("player", slot)
     ns.Print(("slot %d (%s):"):format(slot, ns.Gear.SlotName(slot)))
@@ -190,8 +190,8 @@ local function DumpSlot(slot)
 
     print(("   %d linha(s):"):format(#data.lines))
     for i, line in ipairs(data.lines) do
-        -- As BARRAS SÃO DOBRADAS para o chat mostrar o texto cru: sem isso um `|cff...` vira cor e
-        -- a linha aparece pintada e cortada, que é justamente esconder a evidência.
+        -- The BARS ARE DOUBLED so the chat shows the raw text: without it a `|cff...` becomes colour and
+        -- the line shows painted and cut, which is exactly hiding the evidence.
         local function mostrar(v)
             if v == nil then return "-" end
             if issecretvalue and issecretvalue(v) then return "|cffff5555(secret)|r" end
@@ -231,35 +231,35 @@ commands["gear"] = function(rest)
     end
 end
 
--- Instrumentacao da APARENCIA. O usuario relatou duas vezes que a troca de transmog "nao troca e
--- nao gera nenhum erro", e a segunda vez com o passo ja conferindo o resultado. Sem erro sobram
--- exatamente tres hipoteses, e nenhuma delas se decide lendo codigo em disco:
+-- Instrumentation of the APPEARANCE. The user reported twice that the transmog swap "nao troca e
+-- nao gera nenhum erro", the second time with the step already checking the result. With no error,
+-- exactly three guesses are left, and none of them is settled by reading code on disk:
 --
---   A. o passo e PULADO -- `GetActiveOutfitID()` ja devolve o ID que o conjunto quer;
---   B. a chamada e ACEITA e a confirmacao passa, mas a aparencia nao muda de verdade;
---   C. a chamada e RECUSADA em silencio. A fonte do 12.1.0 mostra TRES portas que recusam sem
---      dizer nada, e nenhuma delas o addon consultava:
+--   A. the step is SKIPPED -- `GetActiveOutfitID()` already returns the ID the set wants;
+--   B. the call is ACCEPTED and the check passes, but the appearance does not really change;
+--   C. the call is REFUSED silently. The 12.1.0 source shows THREE doors that refuse without
+--      saying anything, and the addon checked none of them:
 --
---        * RECARGA. Trocar de aparencia a mao gasta a magia 1247613
---          (`Constants.TransmogOutfitDataConsts.EQUIP_TRANSMOG_OUTFIT_MANUAL_SPELL_ID`), e a
---          propria UI do jogo desenha o cooldown por cima do botao
---          (`Blizzard_TransmogTemplates.lua:191-198`). Em recarga, nao troca e nao avisa. Esta e
---          a suspeita mais forte para quem esta TESTANDO -- trocar varias vezes seguidas e
---          exatamente o que mantem a recarga de pe;
---        * CONJUNTO TRAVADO (`IsLockedOutfit`), que a UI marca com um cadeado (`:80-82`);
---        * EVENTO DE ESTILO em andamento (`InTransmogEvent`): durante ele a UI DESABILITA todo
---          conjunto que nao seja do evento (`:85-87`).
+--        * COOLDOWN. Switching appearance by hand spends spell 1247613
+--          (`Constants.TransmogOutfitDataConsts.EQUIP_TRANSMOG_OUTFIT_MANUAL_SPELL_ID`), and the
+--          game's own UI draws the cooldown over the button
+--          (`Blizzard_TransmogTemplates.lua:191-198`). On cooldown, it does not switch and does not
+--          warn. This is the strongest suspect for whoever is TESTING -- switching several times in
+--          a row is exactly what keeps the cooldown up;
+--        * A LOCKED SET (`IsLockedOutfit`), which the UI marks with a padlock (`:80-82`);
+--        * A STYLE EVENT under way (`InTransmogEvent`): during it the UI DISABLES every
+--          set that is not the event's (`:85-87`).
 --
---      E ha uma quarta possibilidade, de porta errada: a UI do jogo NAO usa `ChangeToOutfit`.
---      O botao de conjunto chama `ChangeDisplayedOutfit(outfitID, trigger, toggleLock,
---      allowRemoveOutfit)` (`Blizzard_TransmogTemplates.lua:72`) -- por outfitID, com o gatilho
---      de situacao. `ChangeToOutfit` e o caminho de macro/slash, por indice.
+--      And there is a fourth possibility, the wrong door: the game's UI does NOT use `ChangeToOutfit`.
+--      The set button calls `ChangeDisplayedOutfit(outfitID, trigger, toggleLock,
+--      allowRemoveOutfit)` (`Blizzard_TransmogTemplates.lua:72`) -- by outfitID, with the situation
+--      trigger. `ChangeToOutfit` is the macro/slash path, by index.
 --
--- Este comando distingue as tres em uma execucao. `/rs transmog` mostra o estado; `/rs transmog
--- <indice>` chama a API e le o ID ativo ANTES, LOGO DEPOIS e meio segundo depois -- porque nao
--- esta verificado que a troca vale no mesmo quadro, e essa era a duvida que sobrava.
--- Instrumentacao do AVISO DE EQUIPAMENTO. Seis portas fecham esse caminho e nenhuma escreve
--- nada; `/rs alert` mostra as seis de uma vez. Ver `Alert.Diagnose`.
+-- This command tells the three apart in one run. `/rs transmog` shows the state; `/rs transmog
+-- <index>` calls the API and reads the active ID BEFORE, RIGHT AFTER and half a second later --
+-- because it is not checked that the swap holds in the same frame, and that was the doubt left.
+-- Instrumentation of the EQUIPMENT WARNING. Six doors close that path and none writes anything;
+-- `/rs alert` shows the six at once. See `Alert.Diagnose`.
 commands["alert"] = function()
     local d = ns.Alert.Diagnose()
 
@@ -308,7 +308,7 @@ commands["transmog"] = function(rest)
         return
     end
 
-    -- QUE FUNCOES EXISTEM. Uma delas faltando explica tudo, e nao custa nada perguntar.
+    -- WHICH FUNCTIONS EXIST. One of them missing explains everything, and asking costs nothing.
     local faltando = {}
     for _, nome in ipairs({ "GetOutfitsInfo", "GetActiveOutfitID", "ChangeToOutfit" }) do
         if type(C_TransmogOutfitInfo[nome]) ~= "function" then
@@ -330,7 +330,7 @@ commands["transmog"] = function(rest)
 
     ------------------------------------------------------------------ so mostrar
     ------------------------------------------------------------------ as portas
-    ---Devolve o texto do que esta impedindo, ou nil quando nada esta.
+    --- Returns the text of what is blocking, or nil when nothing is.
     local function Portas(outfitID)
         local motivos = {}
 
@@ -359,12 +359,11 @@ commands["transmog"] = function(rest)
     end
 
     ------------------------------------------------------------------ as situacoes automaticas
-    ---O sistema de conjuntos do Midnight troca aparencia SOZINHO por situacao, e duas das
-    ---situacoes sao `Specialization` e `EquipmentSet`
-    ---(`TransmogOutfitConstantsDocumentation.lua:373-374`) -- exatamente os dois passos que a
-    ---corrente do addon executa antes da aparencia. Se isso estiver ligado, o jogo pode estar
-    ---trocando por conta propria em cima do que pedimos, e isso nao aparece como erro em lugar
-    ---nenhum. Ler o estado e barato e responde.
+    --- Midnight's set system switches appearance BY ITSELF per situation, and two of the
+    --- situations are `Specialization` and `EquipmentSet`
+    --- (`TransmogOutfitConstantsDocumentation.lua:373-374`) -- exactly the two steps the addon's
+    --- chain runs before the appearance. If that is on, the game may be switching on its own on top of
+    --- what we asked, and that shows as an error nowhere. Reading the state is cheap and answers it.
     local function Situacoes()
         local partes = {}
 
@@ -419,8 +418,8 @@ commands["transmog"] = function(rest)
                     .. (info.isEventOutfit and " (evento)" or "")))
         end
 
-        -- E O QUE CADA CONJUNTO QUER, resolvido do mesmo jeito que o passo resolve. Se o indice
-        -- sair `nil` aqui, o conjunto guarda um `outfitID` que nao existe mais.
+        -- AND WHAT EACH SET WANTS, resolved the same way the step resolves it. If the index comes out
+        -- `nil` here, the set keeps an `outfitID` that no longer exists.
         ns.Print("o que cada conjunto pede:")
         for _, preset in ipairs(ns.db.presets) do
             if preset.transmog then
@@ -458,14 +457,14 @@ commands["transmog"] = function(rest)
 
     local antes = Ativo()
 
-    -- AS DUAS PORTAS DE ENTRADA, na mesma execucao, porque a duvida e qual delas serve a addon:
+    -- THE TWO DOORS IN, in the same run, because the doubt is which of them serves an addon:
     --
-    --   `ChangeToOutfit(indice, allowRemove)`  -- caminho de macro/slash, por INDICE;
-    --   `ChangeDisplayedOutfit(id, gatilho, travar, allowRemove)` -- o que o BOTAO do jogo usa.
+    --   `ChangeToOutfit(index, allowRemove)`  -- the macro/slash path, by INDEX;
+    --   `ChangeDisplayedOutfit(id, trigger, lock, allowRemove)` -- what the game's BUTTON uses.
     --
-    -- `allowRemoveOutfit = false` nas duas: com `true`, pedir a aparencia que ja esta posta e
-    -- tratado como LIMPAR (`SlashCommands.lua:1714`), e isso confundiria a leitura -- pareceria
-    -- que a chamada nao fez nada, quando fez o oposto.
+    -- `allowRemoveOutfit = false` in both: with `true`, asking for the appearance already on is
+    -- treated as CLEARING (`SlashCommands.lua:1714`), and that would muddle the reading -- it would
+    -- look like the call did nothing, when it did the opposite.
     local ok, err = pcall(C_TransmogOutfitInfo.ChangeToOutfit, indice, false)
     ns.Print(("1) ChangeToOutfit(%d, false): %s"):format(
         indice, ok and "|cff40d878sem erro|r" or ("|cffff5555" .. tostring(err) .. "|r")))
@@ -483,7 +482,7 @@ commands["transmog"] = function(rest)
             return
         end
 
-        -- A PRIMEIRA PORTA NAO PEGOU. Tenta a que o jogo usa, com o mesmo alvo.
+        -- THE FIRST DOOR DID NOT TAKE. Tries the one the game uses, with the same target.
         ns.Print("|cffff5555o ID ativo NAO virou o alvo.|r Tentando a porta que a UI do jogo usa:")
         if not alvoID or not C_TransmogOutfitInfo.ChangeDisplayedOutfit then
             print("   indisponivel: " .. (alvoID and "a funcao nao existe" or "indice sem outfitID"))
@@ -504,22 +503,22 @@ commands["transmog"] = function(rest)
             if depoisDa2 == tostring(alvoID) then
                 ns.Print("|cff40d878e ESTA funcionou.|r A porta certa e `ChangeDisplayedOutfit`.")
             else
-                -- O ESPERADO. As duas sao PROTEGIDAS: o patch 12.0.5 adicionou uma acao segura
-                -- `"outfit"` justamente por causa disso.
+                -- THE EXPECTED. Both are PROTECTED: patch 12.0.5 added a secure action
+                -- `"outfit"` exactly because of that.
                 --
-                -- O comando continua tentando porque prova, na maquina do jogador, o que aqui e
-                -- so citacao -- e porque se um dia a Blizzard liberar, ele avisa.
+                -- The command keeps trying because it proves, on the player's machine, what here is
+                -- only a quote -- and because if Blizzard ever opens it up, it tells.
                 ns.Print("|cffff5555nenhuma das duas trocou -- e e o esperado.|r As duas sao "
                     .. "protegidas; addon nao troca aparencia.")
                 ns.Print("quem troca e o |cffffd100clique no botao Carregar|r da janela do "
                     .. "addon, que carrega a acao segura de aparencia.")
             end
 
-            -- "SO TROCOU A APARENCIA DA ARMA" foi o relato de 06/09, e ele nao se explica por
-            -- nenhuma das portas: elas sao tudo-ou-nada. Explica-se por peca -- ha um enum
-            -- inteiro de erro POR PECA (`TransmogOutfitSlotError`: NoItem, NotSoulbound,
+            -- "SO TROCOU A APARENCIA DA ARMA" was the report of 06/09, and none of the doors explains
+            -- it: they are all-or-nothing. It is explained by piece -- there is a whole
+            -- enum of errors PER PIECE (`TransmogOutfitSlotError`: NoItem, NotSoulbound,
             -- Legendary, InvalidItemType, Mismatch, CannotUseItem, InvalidSlotForRace...) --
-            -- ou pelo jogo ter trocado sozinho por situacao. Os dois aparecem aqui.
+            -- or by the game having switched by itself per situation. Both show here.
             local sit = Situacoes()
             if sit then ns.Print("situacoes: " .. sit) end
 
@@ -535,9 +534,9 @@ commands["transmog"] = function(rest)
     end)
 end
 
--- Instrumentacao, pelo mesmo motivo do `/rs gear`: `FROM_GAME` depende de globais do cliente, e
--- global que nao existe nao avisa nada — o rotulo apenas continua em ingles, o que e
--- indistinguivel de "esta certo assim". Uma linha de saida encerra a duvida.
+-- Instrumentation, for the same reason as `/rs gear`: `FROM_GAME` depends on the client's globals, and
+-- a global that does not exist warns nothing -- the label just stays in English, which cannot be
+-- told from "that is right". One line of output settles it.
 commands["i18n"] = function()
     local report = ns.CheckGameStrings()
     ns.Print(format(L["locale %s, %d game label(s):"], GetLocale(), #report))
@@ -557,13 +556,13 @@ commands["i18n"] = function()
     end
 end
 
--- O DIARIO DA TROCA. Pergunta literal do usuario depois de a troca falhar de novo: "tu ta
--- salvando logs para poder entender os problemas?". A resposta era nao, e por isso as rodadas
--- anteriores foram eu adivinhando qual passo falhou e ele me contando por escrito.
+-- THE SWAP'S LOG. The user's literal question after the swap failed again: "tu ta
+-- salvando logs para poder entender os problemas?". The answer was no, and that is why the rounds
+-- before were me guessing which step failed and him telling me in writing.
 --
--- `/rs log` mostra as ultimas linhas no chat -- resolve o caso simples sem sair do jogo. O
--- arquivo em SavedVariables e quem responde o caso dificil, e ele so e escrito no `/reload` ou
--- no logout: por isso a mensagem diz isso em vez de deixar o jogador procurar um arquivo vazio.
+-- `/rs log` shows the last lines in the chat -- it settles the simple case without leaving the game.
+-- The file in SavedVariables answers the hard case, and it is only written on `/reload` or on
+-- logout: that is why the message says so instead of letting the player hunt an empty file.
 commands["log"] = function(rest)
     -- So existe fora do pacote (ver Core.lua).
     if not ns.Log.enabled then
@@ -579,8 +578,8 @@ commands["log"] = function(rest)
         return
     end
 
-    -- OS ERROS PRIMEIRO, e no chat. Ler o arquivo exige `/reload` e sair do jogo; a contagem
-    -- aqui responde "aconteceu alguma coisa?" sem nada disso.
+    -- THE ERRORS FIRST, and in the chat. Reading the file needs `/reload` and leaving the game; the
+    -- count here answers "did anything happen?" without any of that.
     ns.PrintErrorSummary()
 
     local linhas = ns.Log.Tail(14)
@@ -627,7 +626,7 @@ SlashCmdList["ROCKETSWAP"] = function(msg)
     if handler then
         handler(rest)
     else
-        -- "/rs mitica" e atalho para "/rs load mitica": o caso comum nao merece verbo.
+        -- "/rs mitica" is a shortcut for "/rs load mitica": the common case deserves no verb.
         commands["load"](msg)
     end
 end

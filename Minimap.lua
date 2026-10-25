@@ -1,9 +1,9 @@
 -- RocketSwap | Minimap.lua
--- Botão no minimapa, sem biblioteca externa.
+-- The minimap button, with no external library.
 --
--- Por que não a biblioteca comum de botão de minimapa: ela resolve arrastar,
--- salvar ângulo e integração com barras de dados. Aqui só o primeiro item importa, e ele cabe em 30 linhas — uma dependência que
--- precisa ser empacotada e atualizada não se paga por isso.
+-- Why not the common minimap-button library: it handles dragging, saving the angle and the
+-- integration with data bars. Only the first matters here, and it fits in 30 lines -- a dependency
+-- that has to be packaged and kept up to date does not pay for that.
 local ADDON, ns = ...
 local L = ns.L
 
@@ -22,15 +22,15 @@ local function Radius()
 end
 local button
 
--- Candidatos de ícone, do preferido para o último recurso. Quem escolhe é o CLIENTE, via
--- `ns.FirstIcon` → `GetFileIDFromPath`: caminho de textura que não existe falha em silêncio,
--- e nome de ícone é justamente o que não dá para conferir em disco (as texturas moram no
--- CASC, não na pasta de addons).
+-- Icon candidates, from the preferred one to the last resort. The CLIENT chooses, through
+-- `ns.FirstIcon` -> `GetFileIDFromPath`: a texture path that does not exist fails silently,
+-- and an icon name is exactly what cannot be checked on disk (the textures live in the
+-- CASC, not in the addons folder).
 --
--- O último da lista é o do RocketMeter — o único nome que eu SEI existir neste cliente,
--- porque o usuário o vê na lista de addons hoje. Se todos os outros falharem, cai nele.
+-- The last one in the list is RocketMeter's -- the only name I KNOW exists in this client,
+-- because the user sees it in the addon list today. If every other one fails, it falls on that.
 --
--- `/rs icon` imprime quais resolveram: se você preferir outro, é trocar uma linha.
+-- `/rs icon` prints which ones resolved: to prefer another, change one line.
 local ICON_CANDIDATES = {
     "Interface\\Icons\\INV_Misc_EnggizmosCog",
     "Interface\\Icons\\INV_Misc_Gear_01",
@@ -217,13 +217,13 @@ function Minimap_.Create()
     button:RegisterForDrag("LeftButton")
     button:SetMovable(true)
 
-    -- O ícone É o conjunto que você está vestindo agora.
+    -- The icon IS the set you are wearing now.
     --
-    -- Dois motivos. O bom: o botão vira indicador — de relance dá para saber se está de Frost
-    -- ou de PvP sem abrir nada, que é exatamente a informação que se perde. O honesto: nenhum
-    -- nome de ícone bonito pôde ser CONFIRMADO em disco (o dump da Blizzard só entrega
-    -- `INV_Misc_QuestionMark` e `INV_Misc_Coin_17`), e ícone inexistente falha em silêncio.
-    -- O ícone do conjunto vem da API, então é sempre real.
+    -- Two reasons. The good one: the button becomes an indicator -- at a glance you can tell Frost
+    -- from PvP without opening anything, which is exactly the information that gets lost. The honest
+    -- one: no nice icon name could be CONFIRMED on disk (Blizzard's dump only gives
+    -- `INV_Misc_QuestionMark` and `INV_Misc_Coin_17`), and an icon that does not exist fails silently.
+    -- The set's icon comes from the API, so it is always real.
     -- (!) THE GAME'S RING AND THE ICON, AT THE NUMBERS EVERY OTHER BUTTON USES (06/10). Reported
     -- with a screenshot: our drawing sat off-centre inside the gold ring. The button had the ring
     -- at 53 and the icon at 19, shifted (-1, 1) -- numbers of the OLD clients. On retail the
@@ -251,24 +251,24 @@ function Minimap_.Create()
 
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
-    -- (!) O BOTAO DIREITO LISTA OS CONJUNTOS. ELE NAO TROCA NADA SOZINHO.
+    -- (!) THE RIGHT BUTTON LISTS THE SETS. IT SWITCHES NOTHING ON ITS OWN.
     --
-    -- Ele chamava `ns.LoadLast()`, e um usuario reportou em video que o clique direito "trocava
-    -- a spec sozinha". Estava certo, e o codigo fazia exatamente isso.
+    -- It called `ns.LoadLast()`, and a user reported on video that the right click "switched
+    -- the spec by itself". He was right, and the code did exactly that.
     --
-    -- Dois motivos para tirar:
+    -- Two reasons to take it out:
     --
-    --   * BOTAO DIREITO EM ICONE DE MINIMAPA ABRE MENU. E a convencao do jogo inteiro, e e o
-    --     que os outros dois addons Rocket fazem (nos dois, o direito abre as opcoes). Este era
-    --     o unico que divergia -- e o unico em que a acao divergente era destrutiva. Quem clica
-    --     esperando um menu leva uma troca de spec, talentos e itens.
-    --   * A DICA NAO SALVA NINGUEM. Ela dizia "Right click: load the last preset", mas dica
-    --     exige passar o mouse e ler, e ninguem le dica antes de clicar com o direito.
+    --   * A RIGHT CLICK ON A MINIMAP ICON OPENS A MENU. It is the convention of the whole game, and it
+    --     is what the other two Rocket addons do (in both, the right click opens the options). This one
+    --     was the only one that differed -- and the only one where the different action was destructive.
+    --     Whoever clicks expecting a menu gets a switch of spec, talents and items.
+    --   * THE TOOLTIP SAVES NO ONE. It said "Right click: load the last preset", but a tooltip
+    --     needs hovering and reading, and nobody reads a tooltip before right-clicking.
     --
-    -- POR QUE ISSO NAO APARECIA AQUI: todos os conjuntos deste desenvolvedor tem aparencia, e
-    -- conjunto com aparencia cai no ramo do `LoadPreset` que ABRE A JANELA em vez de aplicar.
-    -- O dado dele impedia o defeito de acontecer. Os conjuntos do usuario que reportou nao tem
-    -- aparencia, entao caiam direto no `Data.Apply`. Confirmado nos dois SavedVariables.
+    -- WHY IT DID NOT SHOW HERE: every set of this developer has an appearance, and a set with an
+    -- appearance takes the `LoadPreset` branch that OPENS THE WINDOW instead of applying.
+    -- His data kept the defect from happening. The sets of the user who reported it have no
+    -- appearance, so they went straight to `Data.Apply`. Confirmed in both SavedVariables.
     button:SetScript("OnClick", function(self, mouseButton)
         if mouseButton == "RightButton" then
             Minimap_.Menu(self)
@@ -292,8 +292,8 @@ function Minimap_.Create()
     end)
     button:SetScript("OnLeave", GameTooltip_Hide)
 
-    -- Arrastar: o ângulo sai da posição do cursor em relação ao centro do minimapa, o que
-    -- faz o botão seguir a borda em vez de sair flutuando pela tela.
+    -- Dragging: the angle comes from the cursor's position relative to the minimap's centre, which
+    -- makes the button follow the edge instead of floating across the screen.
     button:SetScript("OnDragStart", function(self)
         self:SetScript("OnUpdate", function()
             local mx, my = Minimap:GetCenter()
@@ -316,12 +316,12 @@ function Minimap_.Create()
     return button
 end
 
----Ícone do botão: FIXO e genérico.
+--- The button's icon: FIXED and generic.
 ---
----A primeira versão mostrava o ícone do conjunto vestido, com a ideia de virar indicador. Na
----prática o botão passou a parecer ícone de classe — o usuário viu um Cavaleiro da Morte
----Sangue no minimapa, não o addon. Botão de addon precisa dizer QUAL addon ele é; qual
----conjunto está ativo já é dito na janela, pelo ✓.
+--- The first version showed the worn set's icon, meant as an indicator. In practice the
+--- button started to look like a class icon -- the user saw a Blood Death Knight on the
+--- minimap, not the addon. An addon's button has to say WHICH addon it is; which set is
+--- active the window already says, with the check mark.
 function Minimap_.Refresh()
     if not button then return end
     button.icon:SetTexture(ns.LOGO_MINIMAP)

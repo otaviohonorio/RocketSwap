@@ -13,8 +13,8 @@ ns.LOGO = "Interface\\AddOns\\" .. ADDON .. "\\Textures\\Logo.png"
 ns.LOGO_MINIMAP = "Interface\\AddOns\\" .. ADDON .. "\\Textures\\Minimap.png"
 local L = ns.L
 
--- A versao vem do .toc, nunca de uma constante aqui: numero em dois lugares vira numero
--- errado em um deles. (Padronizado com o RocketMeter em 05/09/2026.)
+-- The version comes from the .toc, never from a constant here: a number in two places becomes a
+-- wrong number in one of them. (Standardised with RocketMeter on 05/09/2026.)
 ns.version = C_AddOns.GetAddOnMetadata(ADDON, "Version") or "0.0.0"
 
 ns.defaults = {
@@ -23,42 +23,42 @@ ns.defaults = {
     minimap = { angle = 210 },
     pos = nil,
 
-    -- Os dois avisos, ligados por padrao: eles sao o que o addon faz por quem nunca criar
-    -- um conjunto. Desligaveis por /rs warn e /rs ready.
-    -- (!) UM POR CONTEXTO (22/09). Era uma chave so (`warn`) para os dois conteudos, e o
-    -- pedido foi separar: *"tem como separar os avisos para PVP e PVE?"*. Faz sentido porque as
-    -- duas situacoes nao andam juntas -- quem faz mitica+ toda noite e PvP de vez em quando quer
-    -- o aviso ligado num e calado no outro, e com uma chave so tinha que escolher.
+    -- The two warnings, on by default: they are what the addon does for whoever never makes
+    -- a set. They are turned off with /rs warn and /rs ready.
+    -- (!) ONE PER CONTEXT (22/09). It was a single key (`warn`) for both contents, and the
+    -- request was to split it: *"tem como separar os avisos para PVP e PVE?"*. It makes sense because
+    -- the two situations do not go together -- whoever does mythic+ every night and PvP now and then
+    -- wants the warning on in one and quiet in the other, and with one key had to choose.
     --
-    -- A chave velha continua lida uma vez, na migracao (ver `Core.lua`, ADDON_LOADED): quem
-    -- tinha desligado o aviso nao pode ver ele voltar sozinho.
+    -- The old key is still read once, in the migration (see `Core.lua`, ADDON_LOADED): whoever
+    -- had turned the warning off cannot see it come back by itself.
     warnPvE = true,       -- equipamento de PvP em masmorra ou raide
     warnPvP = true,       -- equipamento de PvE em arena ou campo de batalha
     readyCheck = true,    -- resumo do que voce esta usando, no ready check
     queuePop = true,      -- o mesmo resumo quando a fila de PvP chama (convite na tela)
 
-    -- ⚑ MODO GUERRA NASCE CALADO (pedido de 12/09: *"tira o alerta dos itens de pvp em mundo
+    -- ⚑ WAR MODE STARTS QUIET (request of 12/09: *"tira o alerta dos itens de pvp em mundo
     -- aberto no war mode, ou transforma em opcao por padrao desmarcada"*).
     --
-    -- O contexto FICA -- ele existe por pedido dele mesmo, de 08/09 (*"inclusive quando seto para
-    -- pvp, habilitando o war mode on, sem avisos"*) --, mas o aviso dele passa a ser opt-in. A
-    -- razao esta na diferenca entre as duas situacoes: partida de PvP e uma janela fechada em que
-    -- o equipamento errado custa a partida; modo guerra e o mundo aberto, onde a maior parte do
-    -- tempo e missao e farm, e o aviso aparece sem que nada esteja acontecendo.
+    -- The context STAYS -- it exists by his own request, of 08/09 (*"inclusive quando seto para
+    -- pvp, habilitando o war mode on, sem avisos"*) --, but its warning becomes opt-in. The
+    -- reason is the difference between the two situations: a PvP match is a closed window where
+    -- the wrong gear costs the match; War Mode is the open world, where most of the time is
+    -- quests and farming, and the warning shows with nothing going on.
     warnWarMode = false,  -- avisar tambem com Modo Guerra ligado, no mundo aberto
     muted = {},           -- situacoes que o usuario mandou calar
     mutedSlots = {},      -- slots que o usuario mandou calar
 }
 
--- O DIARIO E FERRAMENTA DE DESENVOLVIMENTO, E NAO VAI NO PACOTE. Regra do usuario (23/09):
+-- THE LOG IS A DEVELOPMENT TOOL, AND IT DOES NOT GO IN THE PACKAGE. The user's rule (23/09):
 -- *"quando forem publicados não devem gerar os logs, por que vai ficar consumindo espaço e disco
--- do usuário, apenas aqui para desenvolvimento"*. `Log.lua` e o `RocketSwapLogDB` ficam em
--- `#@debug@` no .toc, que o empacotador remove de TODO build (alpha inclusive), e o `.pkgmeta`
--- tira o arquivo do zip.
+-- do usuário, apenas aqui para desenvolvimento"*. `Log.lua` and `RocketSwapLogDB` sit in
+-- `#@debug@` in the .toc, which the packager removes from EVERY build (alpha included), and the
+-- `.pkgmeta` takes the file out of the zip.
 --
--- Este substituto e o que o jogador recebe: toda chamada responde nada, entao as ~30 chamadas
--- ao diario espalhadas pelo addon nao precisam de guarda, e esquecer uma nao quebra a versao
--- publicada. Em desenvolvimento o `Log.lua`, carregado depois deste arquivo, troca pelo real.
+-- This stand-in is what the player gets: every call answers nothing, so the ~30 calls to the
+-- log spread over the addon need no guard, and forgetting one does not break the published
+-- version. In development `Log.lua`, loaded after this file, swaps it for the real one.
 ns.Log = setmetatable({ enabled = false }, {
     __index = function() return function() end end,
 })
@@ -101,17 +101,17 @@ end
 --------------------------------------------------------------------------------
 -- Icone: escolher sem chutar
 --------------------------------------------------------------------------------
----Devolve o primeiro caminho de textura da lista que EXISTE neste cliente.
+--- Returns the first texture path of the list that EXISTS in this client.
 ---
----`SetTexture` com caminho inexistente falha em SILENCIO — o botao fica vazio e nada avisa.
----Nome de icone e o tipo de coisa que eu nao consigo confirmar em disco (as texturas moram
----no CASC, nao na pasta de addons), entao ate aqui eu estava torcendo.
+--- `SetTexture` with a path that does not exist fails SILENTLY -- the button stays empty and nothing
+--- warns. An icon name is the kind of thing I cannot confirm on disk (the textures live in the
+--- CASC, not in the addons folder), so up to here I was hoping.
 ---
----`GetFileIDFromPath` resolve isso: devolve o id do arquivo, ou nil se o caminho nao existe.
----E API documentada do 12.1.0 (`ClientDocumentation.lua:29`), e serve exatamente como teste de
----existencia.
----@param paths string[] candidatos, do preferido para o ultimo recurso
----@return string|nil caminho, boolean verificado
+--- `GetFileIDFromPath` solves it: it returns the file's id, or nil if the path does not exist.
+--- It is documented API of 12.1.0 (`ClientDocumentation.lua:29`), and works exactly as an
+--- existence test.
+--- @param paths string[] candidates, from the preferred one to the last resort
+--- @return string|nil path, boolean checked
 function ns.FirstIcon(paths)
     if type(GetFileIDFromPath) ~= "function" then
         return paths[#paths], false     -- sem como verificar: usa o ultimo recurso
@@ -125,20 +125,20 @@ function ns.FirstIcon(paths)
 end
 
 --------------------------------------------------------------------------------
----Aplica um atlas SO SE ele existir neste cliente, e diz se conseguiu.
+--- Applies an atlas ONLY IF it exists in this client, and says whether it worked.
 ---
----Esta funcao ja era chamada em dois lugares (`UI.lua:365` e `:472`) e **nunca existiu**: a
----guarda `if not ns.SetAtlasSafe` sempre caia no plano B, entao o divisor da coluna nunca chegou
----a tentar a arte da Blizzard. Codigo que se le como "tenta o atlas, senao usa a cor" fazendo
----so a segunda metade -- e sem nada acusando, porque a guarda estava certa.
+--- This function was already called in two places (`UI.lua:365` and `:472`) and **never existed**:
+--- the guard `if not ns.SetAtlasSafe` always fell to plan B, so the column's divider never even
+--- tried Blizzard's art. Code that reads as "try the atlas, else use the colour" doing only the
+--- second half -- and with nothing flagging it, because the guard was right.
 ---
----`SetAtlas` com nome inexistente falha em SILENCIO e deixa a textura em branco, que e o
----sintoma mais dificil de diagnosticar: nao ha erro, so um retangulo vazio. `GetAtlasInfo`
----devolve nil para atlas que nao existe, e `GetAtlas()` depois do `SetAtlas` confirma que
----pegou -- as duas conferencias, porque uma sozinha ja deixou passar um cabecalho azul aqui.
----@param texture table
----@param atlas string
----@return boolean aplicou
+--- `SetAtlas` with a name that does not exist fails SILENTLY and leaves the texture blank, the
+--- hardest symptom to diagnose: there is no error, only an empty rectangle. `GetAtlasInfo`
+--- returns nil for an atlas that does not exist, and `GetAtlas()` after `SetAtlas` confirms it
+--- took -- both checks, because one alone already let a blue header through here.
+--- @param texture table
+--- @param atlas string
+--- @return boolean applied
 function ns.SetAtlasSafe(texture, atlas)
     if not texture or not atlas or not texture.SetAtlas then return false end
 
@@ -153,30 +153,30 @@ function ns.SetAtlasSafe(texture, atlas)
 end
 
 --------------------------------------------------------------------------------
----A janela, sem fechar a que ja esta aberta.
+--- The window, without closing the one already open.
 ---
----`UI.Toggle` alterna, entao chamar ela com a janela aberta FECHA -- e o atalho que deveria
----mostrar um conjunto acabava escondendo tudo.
+--- `UI.Toggle` toggles, so calling it with the window open CLOSES it -- and the shortcut meant to
+--- show a set ended up hiding everything.
 local function Abrir()
     if ns.UI.IsShown and ns.UI.IsShown() then return end
     ns.UI.Toggle()
 end
 
----Carrega um conjunto pelo caminho do ATALHO: menu do minimapa ou `/rs load`.
+--- Loads a set by the SHORTCUT path: the minimap menu or `/rs load`.
 ---
----(!) ATALHO NAO E CLIQUE SEGURO, e essa diferenca decide o que da para fazer aqui.
+--- (!) A SHORTCUT IS NOT A SECURE CLICK, and that difference decides what can be done here.
 ---
----CONJUNTO COM APARENCIA NAO SE APLICA POR ESTE CAMINHO. A troca de aparencia so acontece no
----clique do BOTAO SEGURO, e o que acontecia era pior que nao funcionar:
+--- A SET WITH AN APPEARANCE IS NOT APPLIED THIS WAY. The appearance swap only happens on the
+--- SECURE BUTTON's click, and what happened was worse than not working:
 ---
----  1. a aparencia nunca entrava, entao `IsLoaded` nunca dava verdadeiro;
----  2. com `IsLoaded` falso, o atalho REAPLICAVA tudo a cada uso -- e o jogador via "do nada ele
----     seta o item que ja deveria estar setado", que foi o relato;
----  3. e ainda era uma troca parcial, que e o pior dos dois mundos.
+---  1. the appearance never went in, so `IsLoaded` never came out true;
+---  2. with `IsLoaded` false, the shortcut APPLIED everything AGAIN at every use -- and the player saw
+---     "do nada ele seta o item que ja deveria estar setado", which was the report;
+---  3. and it was still a partial swap, the worst of both worlds.
 ---
----Entao o atalho abre a janela com esse conjunto selecionado. Um clique a mais, e o clique
----certo -- o que faz a troca INTEIRA.
----@return boolean trocou de verdade
+--- So the shortcut opens the window with that set selected. One click more, and the right
+--- click -- the one that makes the WHOLE swap.
+--- @return boolean really switched
 function ns.LoadPreset(preset)
     if not preset then return false end
 
@@ -204,8 +204,8 @@ function ns.LoadPreset(preset)
     return true
 end
 
----O conjunto usado por ultimo, por nome. Sobrou para o `/rs load` sem argumento e para quem
----chamava de fora; o minimapa NAO usa mais isto -- ver o comentario em `Minimap.lua`.
+--- The set used last, by name. It is left for `/rs load` with no argument and for whoever
+--- called from outside; the minimap does NOT use this any more -- see the comment in `Minimap.lua`.
 function ns.LoadLast()
     local wanted = ns.db and ns.db.last
     if not wanted then
@@ -231,11 +231,11 @@ function handlers:ADDON_LOADED(addon)
 
     -- SavedVariables so existem a partir daqui.
     RocketSwapDB = RocketSwapDB or {}
-    -- (!) MIGRACAO DA CHAVE UNICA `warn` PARA AS DUAS POR CONTEXTO (0.35.0).
+    -- (!) MIGRATION OF THE SINGLE KEY `warn` TO THE TWO PER CONTEXT (0.35.0).
     --
-    -- Roda ANTES dos defaults, de proposito: depois deles, `warnPvE`/`warnPvP` ja teriam nascido
-    -- `true` e a escolha de quem tinha DESLIGADO o aviso estaria perdida -- uma opcao que volta
-    -- sozinha e a pior forma de quebrar confianca numa opcao.
+    -- It runs BEFORE the defaults, on purpose: after them, `warnPvE`/`warnPvP` would already be born
+    -- `true` and the choice of whoever had TURNED the warning OFF would be lost -- an option that comes
+    -- back by itself is the worst way to break trust in an option.
     if RocketSwapDB and RocketSwapDB.warn ~= nil then
         if RocketSwapDB.warnPvE == nil then RocketSwapDB.warnPvE = RocketSwapDB.warn end
         if RocketSwapDB.warnPvP == nil then RocketSwapDB.warnPvP = RocketSwapDB.warn end
@@ -249,9 +249,9 @@ function handlers:ADDON_LOADED(addon)
     end
     ns.db = RocketSwapDB
 
-    -- O CABECALHO DO DIARIO: versao, idioma e quando comecou. Sem isto o arquivo chegava sem
-    -- dizer de que build ele e -- e a primeira coisa que se pergunta ao ler um log e "de quando
-    -- e isso?". `Log.Init` existia e nao tinha chamador.
+    -- THE LOG'S HEADER: version, language and when it started. Without it the file arrived without
+    -- saying which build it is from -- and the first thing asked when reading a log is "when is
+    -- this from?". `Log.Init` existed and had no caller.
     if ns.Log then ns.Log.Init() end
 end
 
@@ -268,8 +268,8 @@ function handlers:PLAYER_REGEN_ENABLED()
     if ns.Macro then ns.Macro.CombatEnded() end
 end
 
--- Trocas feitas a mao (pela ficha ou pela janela de talentos) mudam qual conjunto esta
--- ativo. A janela precisa acompanhar, senao o "check" fica mentindo.
+-- Swaps made by hand (from the character sheet or the talents window) change which set is
+-- active. The window has to follow, or the check mark lies.
 function handlers:EQUIPMENT_SETS_CHANGED()
     ns.UI.Refresh()
     ns.Minimap.Refresh()
@@ -281,26 +281,26 @@ end
 function handlers:TRAIT_CONFIG_UPDATED() ns.UI.Refresh() end
 function handlers:ACTIVE_PLAYER_SPECIALIZATION_CHANGED() ns.UI.Refresh() end
 
--- OS EVENTOS QUE MUDAM "DA PARA TROCAR DE SPEC AGORA?".
+-- THE EVENTS THAT CHANGE "CAN THE SPEC BE SWITCHED NOW?".
 --
--- O botao Carregar fica apagado enquanto o jogo nao deixa, e apagado sem reavaliar seria pior que
--- nao apagar: o jogador ficaria com um botao morto sem saber quando volta. Estes tres sao os que
--- a propria janela de talentos escuta para reabilitar o botao dela
--- (`Blizzard_ClassSpecializationsFrame.lua:69-73`), mais o fim de combate, que ja esta acima.
+-- The Load button stays dimmed while the game does not allow it, and dimmed without re-checking
+-- would be worse than not dimming: the player would be left with a dead button not knowing when it
+-- comes back. These three are the ones the talents window itself listens to in order to enable its
+-- button again (`Blizzard_ClassSpecializationsFrame.lua:69-73`), plus the end of combat, above.
 --
--- `PLAYER_SPECIALIZATION_CHANGED` alem do `ACTIVE_...`: o primeiro cobre o processo INTEIRO da
--- troca (a Blizzard registra os dois, e o comentario dela diz que este "needs to always be
+-- `PLAYER_SPECIALIZATION_CHANGED` besides `ACTIVE_...`: the first covers the WHOLE process of the
+-- switch (Blizzard registers both, and its comment says this one "needs to always be
 -- registered so that the entire spec change process is always captured").
 function handlers:PLAYER_SPECIALIZATION_CHANGED() ns.UI.Refresh() end
 
--- Andar cancela o cast de troca de spec, e `SPECIALIZATION_CHANGE_CAST_FAILED` nao cobre isso --
--- e por isso que a janela nativa escuta estes dois.
--- APRENDE A MAGIA DE TROCAR DE SPEC. Nao ha constante para ela na documentacao do cliente -- o
--- que ha e o predicado `IsSpecializationActivateSpell`, que a janela de talentos usa para
--- reconhecer o cast dela. Entao o addon pergunta ao jogo, uma vez, e guarda.
+-- Walking cancels the spec switch's cast, and `SPECIALIZATION_CHANGE_CAST_FAILED` does not cover
+-- it -- which is why the native window listens to these two.
+-- LEARNS THE SPEC SWITCH SPELL. There is no constant for it in the client's documentation -- what
+-- there is is the predicate `IsSpecializationActivateSpell`, which the talents window uses to
+-- recognise its cast. So the addon asks the game, once, and keeps it.
 --
--- Sem isso nao da para saber quando a troca volta a ser possivel, e o botao ou fica apagado de
--- menos (o caso relatado) ou apagado demais.
+-- Without it there is no knowing when the switch becomes possible again, and the button is either
+-- dimmed too little (the reported case) or too much.
 function handlers:UNIT_SPELLCAST_SUCCEEDED(unit, _castGUID, spellID)
     if unit ~= "player" then return end
     ns.Data.NoteSpellCast(spellID)
@@ -310,9 +310,9 @@ end
 function handlers:UNIT_SPELLCAST_FAILED() ns.UI.Refresh() end
 function handlers:UNIT_SPELLCAST_INTERRUPTED() ns.UI.Refresh() end
 
--- E o fim do prazo/recarga nao dispara evento proprio: `SPELL_UPDATE_COOLDOWN` e o que avisa que
--- alguma recarga andou, e e o gancho que o medidor nativo usa para redesenhar o cooldown do botao
--- de conjunto de aparencia (`Blizzard_TransmogTemplates.lua:57-61`).
+-- And the end of the deadline/cooldown fires no event of its own: `SPELL_UPDATE_COOLDOWN` is what
+-- says some cooldown moved, and it is the hook the native frame uses to redraw the cooldown of the
+-- appearance set button (`Blizzard_TransmogTemplates.lua:57-61`).
 function handlers:SPELL_UPDATE_COOLDOWN() ns.UI.Refresh() end
 
 local frame = CreateFrame("Frame", ADDON .. "EventFrame")
