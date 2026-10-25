@@ -209,6 +209,7 @@ local function Build()
     if ui.SetTitle then ui:SetTitle(ns.NAME) end
     if ui.SetPortraitToAsset then ui:SetPortraitToAsset(ns.LOGO) end
     if ui.Inset then ui.Inset:Hide() end
+    ns.DarkBody(ui, 1, ui.Bg)                       -- (25/10) the dark body, as every Rocket window (Core.lua)
 
     ui.headline = ui:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     ui.headline:SetPoint("TOPLEFT", 60, -30)

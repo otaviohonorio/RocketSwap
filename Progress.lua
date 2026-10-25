@@ -111,7 +111,9 @@ end
 -- Montagem
 --------------------------------------------------------------------------------
 local function Build()
-    frame = CreateFrame("Frame", ADDON .. "Progress", UIParent, "BackdropTemplate")
+    -- (25/10) the game's tooltip border (TooltipBorderBackdropTemplate: its NineSlice, an empty centre) around the dark
+    -- art, instead of a flat WHITE8X8 backdrop with a 1-pixel black edge (the workspace rules: no hand-painted panel)
+    frame = CreateFrame("Frame", ADDON .. "Progress", UIParent, "TooltipBorderBackdropTemplate")
     frame:SetWidth(WIDTH)
     frame:SetHeight(80)
     frame:SetFrameStrata("HIGH")
@@ -120,15 +122,6 @@ local function Build()
     frame:RegisterForDrag("LeftButton")
     frame:SetClampedToScreen(true)
 
-    if frame.SetBackdrop then
-        frame:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
-        })
-        frame:SetBackdropColor(0.04, 0.04, 0.05, 0.92)
-        frame:SetBackdropBorderColor(0, 0, 0, 1)
-    end
     -- (13/10) THE VISUAL IDENTITY of every Rocket addon (the workspace rules, "Skin"): a panel is the
     -- game's panel stone (UI-Background-Rock, tiled, untinted -- DefaultPanelTemplate's, the RocketMeter
     -- settings window's); a LIST sits on the dark inset. This is a panel: the stone, over the backdrop's
@@ -136,11 +129,7 @@ local function Build()
     -- (25/10) DARK EVERYWHERE: the user chose the app's look as the reference and "escuro em tudo" -- the panel wears
     -- the Specialization tab's dark art (spec-background), as RocketLab's tabs; an atlas, never tiled (one texture
     -- tiled and then given an atlas showed the whole atlas file: RocketLab, 13/10)
-    frame.art = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
-    frame.art:SetPoint("TOPLEFT", 1, -1)
-    frame.art:SetPoint("BOTTOMRIGHT", -1, 1)
-    frame.art:SetAtlas("spec-background")
-    frame.art:SetAlpha(0.92)
+    frame.art = ns.DarkBody(frame, 0.92)
 
     local pos = ns.db and ns.db.progressPos
     if pos then

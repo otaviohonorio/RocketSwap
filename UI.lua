@@ -1378,6 +1378,7 @@ local function Create()
         frame:SetPortraitToAsset(ns.LOGO)
     end
     tinsert(UISpecialFrames, frame:GetName())
+    ns.DarkBody(frame, 1, frame.Bg)                    -- (25/10) the dark body, as every Rocket window (Core.lua); the list keeps the inset
 
     -- O inset do template cobre a largura toda; aqui ele passa a cobrir só a coluna da lista.
     -- A coluna direita fica sobre o fundo da janela de propósito: o mármore do inset é fundo
