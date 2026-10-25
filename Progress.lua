@@ -133,12 +133,13 @@ local function Build()
     -- game's panel stone (UI-Background-Rock, tiled, untinted -- DefaultPanelTemplate's, the RocketMeter
     -- settings window's); a LIST sits on the dark inset. This is a panel: the stone, over the backdrop's
     -- flat centre (its BACKGROUND -8), at the same 0.92, so it stays as see-through.
+    -- (25/10) DARK EVERYWHERE: the user chose the app's look as the reference and "escuro em tudo" -- the panel wears
+    -- the Specialization tab's dark art (spec-background), as RocketLab's tabs; an atlas, never tiled (one texture
+    -- tiled and then given an atlas showed the whole atlas file: RocketLab, 13/10)
     frame.art = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
     frame.art:SetPoint("TOPLEFT", 1, -1)
     frame.art:SetPoint("BOTTOMRIGHT", -1, 1)
-    frame.art:SetTexture("Interface\\FrameGeneral\\UI-Background-Rock", "REPEAT", "REPEAT")
-    frame.art:SetHorizTile(true)
-    frame.art:SetVertTile(true)
+    frame.art:SetAtlas("spec-background")
     frame.art:SetAlpha(0.92)
 
     local pos = ns.db and ns.db.progressPos
