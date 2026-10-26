@@ -193,3 +193,15 @@ L["Talents"] = "天賦"  -- the game's TALENTS
 L["Appearance"] = "外觀"  -- the game's APPEARANCE_LABEL
 L["Delete"] = "刪除"  -- the game's DELETE
 L["version"] = "版本"  -- the game's GAME_VERSION_LABEL
+
+-- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["PvP queue is up"] = "PvP排隊確認"
+L["Ready check"] = "準備確認"  -- the game's READY_CHECK
+L["%d of %d pieces"] = "%d/%d件"
+L["Not the set's: %s"] = "不屬於裝備設定：%s"
+L["Swapped on purpose? Save the gear set in the %s."] = "是故意更換的嗎？請在%s中儲存裝備設定。"
+L["The preset %s uses: %s"] = "預設%s使用：%s"
+L["Inside the match you can't switch."] = "比賽中無法更換。"
+L["Does not match the preset %s."] = "與預設%s不符。"
+L["The preset %s: the gear is not complete."] = "預設%s：裝備不完整。"
+L["Matches the preset %s."] = "與預設%s一致。"

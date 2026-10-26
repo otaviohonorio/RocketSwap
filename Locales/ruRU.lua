@@ -193,3 +193,15 @@ L["Talents"] = "Таланты"  -- the game's TALENTS
 L["Appearance"] = "Внешность"  -- the game's APPEARANCE_LABEL
 L["Delete"] = "Удалить"  -- the game's DELETE
 L["version"] = "Версия"  -- the game's GAME_VERSION_LABEL
+
+-- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["PvP queue is up"] = "Очередь PvP готова"
+L["Ready check"] = "Готовность"  -- the game's READY_CHECK
+L["%d of %d pieces"] = "%d из %d предметов"
+L["Not the set's: %s"] = "Не из комплекта экипировки: %s"
+L["Swapped on purpose? Save the gear set in the %s."] = "Заменили специально? Сохраните комплект экипировки в окне «%s»."
+L["The preset %s uses: %s"] = "Пресет %s использует: %s"
+L["Inside the match you can't switch."] = "Во время матча сменить нельзя."
+L["Does not match the preset %s."] = "Не совпадает с пресетом %s."
+L["The preset %s: the gear is not complete."] = "Пресет %s: экипировка не полная."
+L["Matches the preset %s."] = "Совпадает с пресетом %s."

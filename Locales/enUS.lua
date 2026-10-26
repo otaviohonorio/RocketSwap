@@ -37,6 +37,8 @@ local FROM_GAME = {
     ["Appearance"]     = "APPEARANCE_LABEL",
     ["Delete"]         = "DELETE",
     ["version"]        = "GAME_VERSION_LABEL",
+    -- (26/10) the summary card's subtitle, alone on its line: there the question ("Todos prontos?") reads right
+    ["Ready check"]    = "READY_CHECK",
 }
 
 -- What did NOT come in, and why -- all checked against build 12.1.0.69587:

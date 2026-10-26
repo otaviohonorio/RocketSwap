@@ -281,18 +281,19 @@ local function WantsPvP(context)
     return context == "pvp" or context == "warmode"
 end
 
+--- Does the preset's name say PvP? A set fits if, applied, it would solve it: we use its very name as a clue when
+--- simulating is not possible (it is not -- the set's pieces are not worn). A name is a heuristic, which is why it is
+--- only a button suggestion, never an automatic action.
+local function LooksPvP(preset)
+    local name = (preset.name or ""):lower()
+    return (name:find("pvp") or name:find("arena") or name:find("bg") or name:find("campo")) ~= nil
+end
+
 local function PresetFor(context)
     for _, preset in ipairs(ns.db.presets or {}) do
         if preset.gear then
             local wrong, read = ns.Gear.Wrong(WantsPvP(context))
-            -- A set fits if, applied, it would solve it: we use its very name as a
-            -- clue when simulating is not possible (it is not -- the set's pieces are not
-            -- worn). A name is a heuristic, which is why it is only a button suggestion, never an
-            -- automatic action.
-            local name = (preset.name or ""):lower()
-            local looksPvP = name:find("pvp") or name:find("arena") or name:find("bg")
-                or name:find("campo")
-            if WantsPvP(context) == (looksPvP ~= nil) then
+            if WantsPvP(context) == LooksPvP(preset) then
                 return preset, wrong, read
             end
         end
@@ -310,6 +311,27 @@ local function WarnEnabled(context)
     if context == "pve" then return ns.db.warnPvE ~= false end
     if context == "pvp" or context == "warmode" then return ns.db.warnPvP ~= false end
     return false
+end
+
+--- The warning's headline. THE WORDING IS THE CONTEXT'S, and War Mode has its own: with War Mode on most of the time is
+--- PvE -- quests, world quests, farming. Saying "PvE gear in a PvP match" there would be false (there is no match) and
+--- would become noise for whoever only wants the experience bonus. The text warns that he is EXPOSED, which is the fact.
+local function Headline(context)
+    if context == "pvp" then return L["PvE gear in a PvP match."] end
+    if context == "warmode" then return L["PvE gear with War Mode on."] end
+    return L["PvP gear in PvE content."]
+end
+
+--- The wrong-content gear with every gate of the warning (on for this context, War Mode opt-in, a reliable reading,
+--- not muted): the headline and the pieces, or nil. (26/10) The summary card says it on its gear row, with the same
+--- gates -- a card that warned where the warning keeps quiet would undo every "don't warn here".
+local function GearIssue(context)
+    if not ns.db or not context or not WarnEnabled(context) then return nil end
+    if context == "warmode" and ns.db.warnWarMode ~= true then return nil end
+    local wrong, read = ns.Gear.Wrong(WantsPvP(context), ns.db.mutedSlots)
+    if #wrong == 0 or not ns.Gear.LooksReliable(wrong, read) then return nil end
+    if ns.db.muted and ns.db.muted[context .. ":gear"] then return nil end
+    return Headline(context), wrong
 end
 
 function Alert.Check(reason)
@@ -356,19 +378,17 @@ function Alert.Check(reason)
     if key == lastKey and ui and ui:IsShown() then return end
     lastKey = key
 
+    -- (26/10) THE SUMMARY CARD ON SCREEN SAYS IT, on its gear row: a second box over the first (and the yellow line in
+    -- the middle of the screen) would be the same news three times. The card is redrawn with the new reading -- this
+    -- runs 2 s after the queue's invite and when an item's data arrives, both later than the card.
+    if Alert.CardShown() then
+        Alert.RefreshCard()
+        return
+    end
+
     -- The game's text, in the game's place: a yellow warning below the centre. It is where Blizzard
     -- puts a message of this kind, and the helper already handles colour and repetition.
-    -- THE WORDING IS THE CONTEXT'S, and War Mode has its own.
-    --
-    -- With War Mode on most of the time is PvE -- quests, world quests, farming. Saying
-    -- "PvE gear in a PvP match" there would be false (there is no match) and would become noise
-    -- for whoever only wants the experience bonus. The text warns that he is EXPOSED, which is the fact.
-    local titulo = L["PvP gear in PvE content."]
-    if context == "pvp" then
-        titulo = L["PvE gear in a PvP match."]
-    elseif context == "warmode" then
-        titulo = L["PvE gear with War Mode on."]
-    end
+    local titulo = Headline(context)
 
     if UIErrorsFrame and UIErrorsFrame.AddExternalWarningMessage then
         pcall(UIErrorsFrame.AddExternalWarningMessage, UIErrorsFrame, titulo)
@@ -482,6 +502,505 @@ function Alert.Summary(separator)
 end
 
 --------------------------------------------------------------------------------
+-- O cartao do resumo: uma linha por campo
+--------------------------------------------------------------------------------
+-- (26/10) THE SUMMARY AS A CARD. The user, looking at the text box: *"tem como deixar mais bonito? e mais claro para que
+-- o jogador entenda de fato o que tá usando?"*, and on the mockup (`mockup/PREVIA aviso do RocketSwap na conferencia e
+-- na fila de PvP`): *"pode fazer, gostei"*. What the text box could not say, the card says:
+--   * one row per field: the game's icon (the spec's, the hero tree's, the gear set's own), the label in the secondary
+--     grey, the value in white, and a mark at the right -- right, warning, wrong;
+--   * the talents carry the HERO TREE (`C_ClassTalents.GetActiveHeroTalentSpec` + `C_Traits.GetSubTreeInfo`, whose
+--     `TraitSubTreeInfo` has `name` and `iconElementID`, an atlas -- the 12.1.5 API documentation);
+--   * a gear set with a piece swapped says WHICH slot is not the set's, and what to do if it was on purpose;
+--   * the fields are compared with the player's preset that matches best (in the PvP queue, the PvP one): a field that
+--     differs says what the preset uses, and the button loads it;
+--   * the wrong-content gear warning is a note of the gear row, not a second box over the first.
+--
+-- WHERE (the user's choice, 26/10: "colado embaixo"): right under the game's own box of the moment -- the ready
+-- check's, the PvP queue's --, never replacing it. Answering the ready check is `C_PartyInfo.ConfirmReadyCheck`, which
+-- the 12.1.5 documentation marks `HasRestrictions` (refused while an addon restriction is on), and hiding a frame of
+-- the game is the kind of touch that once got this addon blamed for a protected call (Dialog.lua). The card reads
+-- where the game's box is (its edges) and never anchors to it. It closes when the player answers or the check ends.
+--
+-- THE SHELL is the one of the addon's box (`StaticPopupBaseTemplate`: the game's dialog border, never the game's
+-- dialog LIST -- see Dialog.lua), with the dark body of every Rocket window (`ns.DarkBody`, 25/10).
+
+-- The game's measures where it has them: the dialog's 16 above and below and its 22-tall button (Dialog.lua); the
+-- Settings panel's 25 to the left of its content is too wide for a card, the game's own dialogs use 20 at the sides
+-- (EditModeDialogs.xml:260). The row: a 32 icon (the size of the talent loadout's icon in the game's dropdown), 10 to
+-- the text, the mark at 18 (`common-icon-checkmark` is 22, drawn smaller to sit beside a 12 text).
+local CARD = { width = 360, side = 20, top = 16, bottom = 16, icon = 32, iconGap = 10, mark = 18, markGap = 6,
+               rowGap = 10, button = 22, fixWidth = 150, okWidth = 128, buttonGap = 10, fromScreenTop = 135 }
+CARD.text = CARD.width - 2 * CARD.side - CARD.icon - CARD.iconGap - CARD.mark - CARD.markGap
+Alert.CARD = CARD
+
+-- The marks: the game's own (checked with tools/ver_atlas.py, 12.1.5): the check of the game's lists, the small
+-- warning sign of the Trading Post, the red X of the game's close buttons.
+-- (one name per line and the brace at the start: the shape tools/ver_atlas.py --check reads as a table of atlases)
+local MARK_ATLAS = {
+    ok = "common-icon-checkmark", warn = "perks-warning-small", bad = "common-icon-redx",
+}
+local WORSE = { ok = 1, warn = 2, bad = 3 }
+-- The talents with no hero tree yet (below its level): the talents' micro-menu art, the game's picture of "talents"
+local TALENT_ICON_ATLAS = "ui-hud-micromenu-spectalents-up-2x"
+-- No gear set: the empty chest slot of the character sheet
+local NO_GEAR_TEXTURE = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Chest"
+local DIVIDER_ATLAS = "options_horizontaldivider"    -- the Settings panel's divider: white fading at the ends
+
+local card, cardKind, cardInitiatorIsMe, cardRefreshing
+
+-- A colour object of the game, with its method (`ColorMixin:WrapTextInColorCode`); plain text if it is missing.
+local function Wrap(colour, text)
+    if colour and colour.WrapTextInColorCode then return colour:WrapTextInColorCode(text) end
+    return text
+end
+local function White(text) return Wrap(HIGHLIGHT_FONT_COLOR, text) end
+
+--- The active hero tree: { name, atlas } or nil (below its level, or the API not there).
+local function HeroTree()
+    if not (C_ClassTalents and C_ClassTalents.GetActiveHeroTalentSpec and C_ClassTalents.GetActiveConfigID
+        and C_Traits and C_Traits.GetSubTreeInfo) then return nil end
+    local ok, subTreeID = pcall(C_ClassTalents.GetActiveHeroTalentSpec)
+    if not ok or type(subTreeID) ~= "number" then return nil end
+    local okC, configID = pcall(C_ClassTalents.GetActiveConfigID)
+    if not okC or type(configID) ~= "number" then return nil end
+    local okI, info = pcall(C_Traits.GetSubTreeInfo, configID, subTreeID)
+    if not okI or type(info) ~= "table" or type(info.name) ~= "string" or info.name == "" then return nil end
+    return { name = info.name, atlas = info.iconElementID }
+end
+Alert.HeroTree = HeroTree
+
+--- The slots whose piece is not the set's: what the set saved (`C_EquipmentSet.GetItemIDs`, by slot) against what is
+--- worn (`GetInventoryItemID`). A slot the set ignores (`GetIgnoredSlots`, by slot, as PaperDollFrame.lua reads it) or
+--- keeps empty does not count. The id is compared, not the copy: two copies of the same item in the bags read as the
+--- set's -- then the count says a piece is off and no slot is named, which is the honest answer.
+function Alert.OffSetSlots(setID)
+    local out = {}
+    if not (setID and C_EquipmentSet and C_EquipmentSet.GetItemIDs and GetInventoryItemID) then return out end
+    local ok, ids = pcall(C_EquipmentSet.GetItemIDs, setID)
+    if not ok or type(ids) ~= "table" then return out end
+    local ignored
+    if C_EquipmentSet.GetIgnoredSlots then
+        local okI, t = pcall(C_EquipmentSet.GetIgnoredSlots, setID)
+        if okI and type(t) == "table" then ignored = t end
+    end
+    for _, slot in ipairs(ns.Gear.SLOTS) do
+        local want = ids[slot]
+        -- 0, 1 and -1 are the set's marks for an empty, an ignored and a lost slot, not items
+        if type(want) == "number" and want > 1 and not (ignored and ignored[slot]) then
+            if GetInventoryItemID("player", slot) ~= want then out[#out + 1] = slot end
+        end
+    end
+    return out
+end
+
+local function Current()
+    local cur = { specIndex = ns.Data.GetCurrentSpecIndex() }
+    cur.spec = ns.Data.GetSpecByIndex(cur.specIndex)
+    if cur.spec then cur.talent = ns.Data.GetActiveLoadoutID(cur.spec.id) end
+    cur.gearSet = ns.Data.GetEquippedSetID()
+    if not cur.gearSet then
+        cur.partialSet, cur.worn, cur.items = ns.Data.PartialGearSet()
+    end
+    return cur
+end
+
+--- THE PRESET TO COMPARE WITH. In the PvP queue: a PvP one (by its name, as the fix button always did), the one of the
+--- current spec first. On the ready check: among the presets of the current spec, the one that matches most of what is
+--- on (talents, gear -- a gear set almost on counts); none matching anything, or a tie, and there is no comparison --
+--- picking "the first" would be drawing lots for which name the player reads (the rule of `Data.PartialGearSet`).
+function Alert.ComparePreset(cur, kind)
+    local best, bestScore, tie = nil, 0, false
+    for _, preset in ipairs(ns.db and ns.db.presets or {}) do
+        if preset.talent or preset.gear then
+            local sameSpec = preset.spec == nil or preset.spec == cur.specIndex
+            local score = 0
+            if sameSpec and preset.talent and preset.talent == cur.talent then score = score + 1 end
+            if preset.gear and (preset.gear == cur.gearSet or preset.gear == cur.partialSet) then score = score + 1 end
+            if kind == "queue" then
+                if LooksPvP(preset) then
+                    score = score + (sameSpec and 10 or 5)
+                    if score > bestScore then best, bestScore = preset, score end
+                end
+            elseif sameSpec and score > 0 then
+                if score > bestScore then best, bestScore, tie = preset, score, false
+                elseif score == bestScore then tie = true end
+            end
+        end
+    end
+    if tie then return nil end
+    return best
+end
+
+local function Uses(preset, value)
+    return format(L["The preset %s uses: %s"], White(preset.name or "?"), White(value or L["(none)"]))
+end
+
+--- What the card shows, as data (the harness reads it; the drawing only lays it out).
+--- @param kind string "readycheck" or "queue"
+--- @return table { rows = { {label, value, extra, icon, atlas, state, notes} x3 }, verdict = {state, text}|nil,
+---               preset = the compared preset|nil, fix = the preset of the button|nil }
+function Alert.CardModel(kind)
+    local context = kind == "queue" and "pvp" or Alert.Context()
+    local cur = Current()
+    local preset = Alert.ComparePreset(cur, kind)
+    local differs = false
+
+    -- 1. THE SPECIALIZATION, with the class beside it: "Gélido" is a Mage's and a Death Knight's.
+    local spec = cur.spec
+    local specRow = { label = L["Specialization"], value = spec and spec.name or L["(none)"], icon = spec and spec.icon,
+                      notes = {} }
+    if UnitClass then
+        local okC, className = pcall(UnitClass, "player")
+        if okC and type(className) == "string" then specRow.extra = className end
+    end
+    if preset and preset.spec then
+        if preset.spec == cur.specIndex then
+            specRow.state = "ok"
+        else
+            specRow.state, differs = "bad", true
+            local want = ns.Data.GetSpecByIndex(preset.spec)
+            specRow.notes[#specRow.notes + 1] = Uses(preset, want and want.name)
+        end
+    end
+
+    -- 2. THE TALENTS: the loadout's name and the hero tree, with the hero tree's own art.
+    local hero = HeroTree()
+    local talentRow = { label = L["Talents"], notes = {},
+                        value = spec and ns.Data.LoadoutName(spec.id, cur.talent) or L["(none)"],
+                        extra = hero and hero.name, atlas = hero and hero.atlas or TALENT_ICON_ATLAS }
+    if preset and preset.talent then
+        if preset.talent == cur.talent and (preset.spec == nil or preset.spec == cur.specIndex) then
+            talentRow.state = "ok"
+        else
+            talentRow.state, differs = "bad", true
+            local wantSpec = ns.Data.GetSpecByIndex(preset.spec or cur.specIndex)
+            talentRow.notes[#talentRow.notes + 1] = Uses(preset, wantSpec and ns.Data.LoadoutName(wantSpec.id, preset.talent))
+        end
+    end
+
+    -- 3. THE GEAR: the set, its count, the piece that is off -- and the wrong-content warning.
+    local gearRow = { label = L["Gear"], notes = {} }
+    if cur.gearSet then
+        local name, icon = ns.Data.GearSetName(cur.gearSet)
+        gearRow.value, gearRow.icon, gearRow.state = name or "?", icon, "ok"
+        local c = ns.Data.GearSetCounts(cur.gearSet)
+        if c and type(c.vestidas) == "number" and type(c.itens) == "number" and c.itens > 0 then
+            gearRow.extra = format(L["%d of %d pieces"], c.vestidas, c.itens)
+        end
+    elseif cur.partialSet then
+        local name, icon = ns.Data.GearSetName(cur.partialSet)
+        gearRow.value, gearRow.icon, gearRow.state = name or "?", icon, "warn"
+        gearRow.extra = format(L["%d of %d pieces"], cur.worn, cur.items)
+        local names = {}
+        for _, slot in ipairs(Alert.OffSetSlots(cur.partialSet)) do names[#names + 1] = White(ns.Gear.SlotName(slot)) end
+        if #names > 0 then gearRow.notes[#gearRow.notes + 1] = format(L["Not the set's: %s"], table.concat(names, ", ")) end
+        -- the game's own name for the window where a set is saved
+        local manager = type(EQUIPMENT_MANAGER) == "string" and EQUIPMENT_MANAGER or L["Equipment Manager"]
+        gearRow.notes[#gearRow.notes + 1] = format(L["Swapped on purpose? Save the gear set in the %s."], manager)
+    else
+        gearRow.value, gearRow.texture = L["(none)"], NO_GEAR_TEXTURE
+    end
+    if preset and preset.gear and preset.gear ~= cur.gearSet and preset.gear ~= cur.partialSet then
+        gearRow.state, differs = "bad", true
+        gearRow.notes[#gearRow.notes + 1] = Uses(preset, ns.Data.GearSetName(preset.gear))
+    end
+    local issue = GearIssue(context)
+    if issue then
+        gearRow.state = "bad"
+        table.insert(gearRow.notes, 1, Wrap(RED_FONT_COLOR, issue))
+    end
+
+    local rows = { specRow, talentRow, gearRow }
+    local worst
+    for _, r in ipairs(rows) do
+        if r.state and (not worst or WORSE[r.state] > WORSE[worst]) then worst = r.state end
+    end
+
+    -- THE VERDICT, one line: against the preset when there is one; and in the queue, that the match closes the swap.
+    local verdict
+    local presetName = preset and White(preset.name or "?")
+    if kind == "queue" and worst == "bad" then
+        verdict = { state = "bad", text = L["Inside the match you can't switch."] }
+    elseif preset and differs then
+        verdict = { state = "bad", text = format(L["Does not match the preset %s."], presetName) }
+    elseif preset and worst == "warn" then
+        verdict = { state = "warn", text = format(L["The preset %s: the gear is not complete."], presetName) }
+    elseif preset and worst ~= "bad" then
+        verdict = { state = "ok", text = format(L["Matches the preset %s."], presetName) }
+    end
+
+    -- THE BUTTON: the compared preset when it is not all on; with none, the one that fixes the wrong-content gear (the
+    -- warning's own button). Only when it can be done now -- a button that does nothing is worse than none.
+    local fix
+    if preset and not ns.Data.IsLoaded(preset) then
+        fix = preset
+    elseif issue and not preset then
+        fix = PresetFor(context)
+    end
+    if fix and not CanFix() then fix = nil end
+
+    return { rows = rows, verdict = verdict, preset = preset, fix = fix, context = context }
+end
+
+local function NewRow(f)
+    local r = {}
+    r.icon = f:CreateTexture(nil, "ARTWORK")
+    r.icon:SetSize(CARD.icon, CARD.icon)
+    r.label = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    r.label:SetTextColor(LIGHTGRAY_FONT_COLOR:GetRGB())
+    r.label:SetJustifyH("LEFT")
+    r.label:SetWidth(CARD.text)
+    r.value = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    r.value:SetJustifyH("LEFT")
+    r.value:SetWidth(CARD.text)
+    r.notes = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    r.notes:SetTextColor(LIGHTGRAY_FONT_COLOR:GetRGB())
+    r.notes:SetJustifyH("LEFT")
+    r.notes:SetWidth(CARD.text)
+    r.notes:SetSpacing(2)
+    r.mark = f:CreateTexture(nil, "ARTWORK")
+    return r
+end
+
+local function BuildCard()
+    if card then return card end
+    local ok, f = pcall(CreateFrame, "Frame", ADDON .. "SummaryCard", UIParent, "StaticPopupBaseTemplate")
+    if not ok or not f then return nil end
+    f:EnableKeyboard(false)            -- the shell is born taking the keyboard (Dialog.lua)
+    f:SetFrameStrata("DIALOG")
+    f:SetClampedToScreen(true)
+    f:SetWidth(CARD.width)
+    f:Hide()
+    ns.DarkBody(f, 1, f.BG and f.BG.Bottom)
+
+    f.brand = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    f.brand:SetJustifyH("LEFT")
+    f.brand:SetWidth(CARD.width - 2 * CARD.side)
+    f.title = f:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    f.title:SetJustifyH("LEFT")
+    f.title:SetWidth(CARD.width - 2 * CARD.side)
+    f.lines = {}
+    for i = 1, 2 do
+        local d = f:CreateTexture(nil, "ARTWORK")
+        d:SetAtlas(DIVIDER_ATLAS)
+        d:SetHeight(1)
+        f.lines[i] = d
+    end
+    f.rows = { NewRow(f), NewRow(f), NewRow(f) }
+    f.verdictMark = f:CreateTexture(nil, "ARTWORK")
+    f.verdict = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    f.verdict:SetJustifyH("LEFT")
+    f.verdict:SetWidth(CARD.width - 2 * CARD.side - 20)
+
+    f.fix = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.fix:SetSize(CARD.fixWidth, CARD.button)
+    f.ok = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.ok:SetSize(CARD.okWidth, CARD.button)
+    f.ok:SetText(OKAY)
+    f.ok:SetScript("OnClick", function() f:Hide() end)
+    f:SetScript("OnHide", function() cardKind = nil end)
+
+    if UISpecialFrames and tinsert then tinsert(UISpecialFrames, f:GetName()) end
+    card = f
+    return f
+end
+
+local function SetMark(tex, state, size)
+    if not state then tex:Hide() return end
+    tex:SetAtlas(MARK_ATLAS[state])
+    -- the warning sign is 22 x 20, the others square
+    tex:SetSize(size, state == "warn" and math.floor(size * 20 / 22 + 0.5) or size)
+    tex:Show()
+end
+
+local function DrawCard(f, model, title, subtitle)
+    local x, y = CARD.side, CARD.top
+    f.brand:SetText(ns.TITLE .. Wrap(LIGHTGRAY_FONT_COLOR, "  ·  " .. subtitle))
+    f.brand:ClearAllPoints()
+    f.brand:SetPoint("TOPLEFT", x, -y)
+    y = y + f.brand:GetStringHeight() + 4
+    f.title:SetText(title)
+    f.title:ClearAllPoints()
+    f.title:SetPoint("TOPLEFT", x, -y)
+    y = y + f.title:GetStringHeight() + 10
+
+    local function Line(i)
+        local d = f.lines[i]
+        d:ClearAllPoints()
+        d:SetPoint("TOPLEFT", 14, -y)
+        d:SetPoint("TOPRIGHT", -14, -y)
+        d:Show()
+    end
+    Line(1)
+    y = y + 1 + 12
+
+    local tx = x + CARD.icon + CARD.iconGap
+    for i, data in ipairs(model.rows) do
+        local r = f.rows[i]
+        local top = y
+        if data.atlas then
+            r.icon:SetAtlas(data.atlas)
+            r.icon:SetTexCoord(0, 1, 0, 1)              -- after SetAtlas: the whole art (ui-design skill)
+        else
+            r.icon:SetTexture(data.icon or data.texture or NO_GEAR_TEXTURE)
+            -- a spell/item icon carries a 8% frame of its own; the game's lists cut it
+            if data.icon then r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) else r.icon:SetTexCoord(0, 1, 0, 1) end
+        end
+        r.icon:ClearAllPoints()
+        r.icon:SetPoint("TOPLEFT", x, -top)
+        r.label:SetText(data.label)
+        r.label:ClearAllPoints()
+        r.label:SetPoint("TOPLEFT", tx, -top)
+        local ty = top + r.label:GetStringHeight() + 2
+        r.value:SetText(data.extra and (data.value .. Wrap(LIGHTGRAY_FONT_COLOR, "  ·  " .. data.extra)) or data.value)
+        r.value:ClearAllPoints()
+        r.value:SetPoint("TOPLEFT", tx, -ty)
+        ty = ty + r.value:GetStringHeight()
+        if #data.notes > 0 then
+            r.notes:SetText(table.concat(data.notes, "\n"))
+            r.notes:ClearAllPoints()
+            r.notes:SetPoint("TOPLEFT", tx, -(ty + 4))
+            r.notes:Show()
+            ty = ty + 4 + r.notes:GetStringHeight()
+        else
+            r.notes:Hide()
+        end
+        SetMark(r.mark, data.state, CARD.mark)
+        r.mark:ClearAllPoints()
+        r.mark:SetPoint("TOPRIGHT", -CARD.side, -(top + 7))
+        y = math.max(top + CARD.icon, ty) + CARD.rowGap
+    end
+
+    if model.verdict then
+        Line(2)
+        y = y + 1 + 10
+        SetMark(f.verdictMark, model.verdict.state, 14)
+        f.verdictMark:ClearAllPoints()
+        f.verdictMark:SetPoint("TOPLEFT", x, -(y + 1))
+        f.verdict:SetText(model.verdict.text)
+        f.verdict:ClearAllPoints()
+        f.verdict:SetPoint("TOPLEFT", x + 20, -y)
+        f.verdict:Show()
+        y = y + f.verdict:GetStringHeight() + 14
+    else
+        f.lines[2]:Hide()
+        f.verdictMark:Hide()
+        f.verdict:Hide()
+        y = y + 4
+    end
+
+    f.ok:ClearAllPoints()
+    if model.fix then
+        -- THE PRESET'S NAME IS THE PLAYER'S, of any length, and a button cuts with "..." (no text cut, CLAUDE.md): the
+        -- button grows with its text as the game's do (text + 40, SecureUIPanelTemplates.xml), up to what the row has;
+        -- past that it says only "Load" -- the verdict line above already names the preset.
+        local room = CARD.width - 2 * CARD.side - CARD.okWidth - CARD.buttonGap
+        f.fix:SetText(format(L["Load %s"], model.fix.name or "?"))
+        local tw = f.fix.GetTextWidth and f.fix:GetTextWidth()
+        tw = type(tw) == "number" and tw or 0
+        if tw + 40 > room then
+            f.fix:SetText(L["Load"])
+            tw = f.fix:GetTextWidth()
+            tw = type(tw) == "number" and tw or 0
+        end
+        local fixWidth = math.min(room, math.max(CARD.fixWidth, tw + 40))
+        f.fix:SetWidth(fixWidth)
+        local preset = model.fix
+        f.fix:SetScript("OnClick", function()
+            ns.Data.Apply(preset, function(text) ns.Print(text) end)
+        end)
+        local total = fixWidth + CARD.buttonGap + CARD.okWidth
+        f.fix:ClearAllPoints()
+        f.fix:SetPoint("TOPLEFT", (CARD.width - total) / 2, -y)
+        f.ok:SetPoint("LEFT", f.fix, "RIGHT", CARD.buttonGap, 0)
+        f.fix:Show()
+    else
+        f.fix:Hide()
+        f.ok:SetPoint("TOP", 0, -y)
+    end
+    f:SetHeight(y + CARD.button + CARD.bottom)
+    f.__title, f.__subtitle = title, subtitle
+end
+
+--- Under the game's box of the moment, read from its edges (never anchored to it); else where the game's first dialog
+--- hangs.
+local function PlaceCard(f, kind)
+    f:ClearAllPoints()
+    local game = kind == "readycheck" and _G.ReadyCheckListenerFrame or _G.PVPReadyDialog
+    local ok, bottom, cx, s = false, nil, nil, nil
+    if type(game) == "table" and game.IsShown and game:IsShown() then
+        ok, bottom = pcall(game.GetBottom, game)
+        local okC, centerX = pcall(game.GetCenter, game)
+        local okS, scale = pcall(game.GetEffectiveScale, game)
+        if ok and okC and okS then cx, s = centerX, scale end
+    end
+    if type(bottom) == "number" and type(cx) == "number" and type(s) == "number" then
+        local mine = UIParent:GetEffectiveScale()
+        f:SetPoint("TOP", UIParent, "BOTTOMLEFT", cx * s / mine, bottom * s / mine - 4)
+    else
+        f:SetPoint("TOP", UIParent, "TOP", 0, -CARD.fromScreenTop)
+    end
+end
+
+--- Opens the card. @return boolean shown
+function Alert.ShowCard(kind, title, subtitle)
+    local f = BuildCard()
+    if not f then return false end
+    local ok, model = pcall(Alert.CardModel, kind)
+    if not ok or not model then
+        ns.Log.Add("popup", { which = kind, action = "model", erro = tostring(model) })
+        return false
+    end
+    local okD, err = pcall(DrawCard, f, model, title, subtitle)
+    if not okD then
+        ns.Log.Add("popup", { which = kind, action = "draw", erro = tostring(err) })
+        return false
+    end
+    cardKind = kind
+    f.__model = model
+    PlaceCard(f, kind)
+    -- AND AGAIN ON THE NEXT FRAME. The game's box opens on the same event as ours (READY_CHECK, UPDATE_BATTLEFIELD_STATUS),
+    -- in an order nobody promises: read first, it is not on screen yet, and the card goes to the fallback spot -- which
+    -- for the queue is exactly where the game hangs its invite (`StaticPopupSpecial_Show`, PVPHelper.lua).
+    C_Timer.After(0, function()
+        if Alert.CardShown(kind) then PlaceCard(f, kind) end
+    end)
+    f:Show()
+    f:Raise()
+    if PlaySound and SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPEN then pcall(PlaySound, SOUNDKIT.IG_MAINMENU_OPEN) end
+    return true
+end
+
+--- Redraws what is on screen with what is on now (after a swap, a loaded item, the 2 s gear reading). Coalesced:
+--- a swap fires a burst of events.
+function Alert.RefreshCard()
+    if not Alert.CardShown() or cardRefreshing then return end
+    cardRefreshing = true
+    C_Timer.After(0.3, function()
+        cardRefreshing = false
+        if not Alert.CardShown() then return end
+        local kind, f = cardKind, card
+        local ok, model = pcall(Alert.CardModel, kind)
+        if ok and model and pcall(DrawCard, f, model, f.__title, f.__subtitle) then f.__model = model end
+    end)
+end
+
+function Alert.HideCard(kind)
+    if card and card:IsShown() and (kind == nil or kind == cardKind) then
+        card:Hide()
+        return true
+    end
+    return false
+end
+
+function Alert.CardShown(kind)
+    return card ~= nil and card:IsShown() and (kind == nil or kind == cardKind)
+end
+
+function Alert.__card() return card end
+
+--------------------------------------------------------------------------------
 -- A fila chamou: o resumo antes de aceitar
 --------------------------------------------------------------------------------
 --- The PvP queue's invite -- the moment when it can be fixed, and the last one.
@@ -534,6 +1053,7 @@ function Alert.OnQueuePop()
         -- lock frees the next invite. Without this, the box would hang inside the match,
         -- where it is no use any more.
         queueShown = false
+        Alert.HideCard("queue")
         if ns.Dialog then ns.Dialog.Hide("summary") end
         ns.Log.Add("popup", { which = "queue", action = "hide" })
     end
@@ -556,12 +1076,18 @@ function Alert.ShowQueueSummary(mapa, teamSize)
 
     ns.Print(L["PvP queue is up:"] .. " " .. resumo)
 
-    -- The box is OURS, not the game's `StaticPopup` (05/10: a box of the game opened by an addon
-    -- marks the game's own dialog code, and the game then refuses a protected call of its own
-    -- and blames the addon -- `Dialog.lua` has the whole story).
-    local ok, shown = pcall(ns.Dialog.Show, "summary", titulo .. "\n\n" .. Alert.Summary("\n"))
-    ok = ok and shown == true
-    ns.Log.Add("popup", { which = "queue", action = "show", ok = ok })
+    -- (26/10) THE CARD, under the game's invite: the map in gold, the moment in the line above it.
+    local cardTitle = titulo ~= L["PvP queue is up — check before you enter"] and titulo or L["What you are using"]
+    local ok = Alert.ShowCard("queue", cardTitle, L["PvP queue is up"])
+    local shownCard = ok
+    if not ok then
+        -- The box is OURS, not the game's `StaticPopup` (05/10: a box of the game opened by an addon
+        -- marks the game's own dialog code, and the game then refuses a protected call of its own
+        -- and blames the addon -- `Dialog.lua` has the whole story).
+        local okD, shown = pcall(ns.Dialog.Show, "summary", titulo .. "\n\n" .. Alert.Summary("\n"))
+        ok = okD and shown == true
+    end
+    ns.Log.Add("popup", { which = "queue", action = "show", ok = ok, card = shownCard })
     if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
         pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
     end
@@ -614,18 +1140,34 @@ function Alert.OnReadyCheck()
         -- called the ready check -- and that is the doubt of whoever reads a line that showed up in the middle of the
         -- conversation. In the box, the player already knows why it opened; what he needs in half
         -- a second is to know **what he is looking at**.
-        local ok, shown = pcall(ns.Dialog.Show, "summary",
-            L["What you are using"] .. "\n\n" .. Alert.Summary("\n"))
-        ok = ok and shown == true
-        ns.Log.Add("popup", { which = "readycheck", action = "show", ok = ok })
+        -- (26/10) THE CARD, under the game's "Ready Check" box, and its subtitle is the game's own name for the moment
+        -- (READY_CHECK: "Todos prontos?" in pt-BR). The wrong-content gear is a row of the card now, not a second box.
+        local ok = Alert.ShowCard("readycheck", L["What you are using"], L["Ready check"])
+        local shownCard = ok
+        if not ok then
+            local okD, shown = pcall(ns.Dialog.Show, "summary",
+                L["What you are using"] .. "\n\n" .. Alert.Summary("\n"))
+            ok = okD and shown == true
+        end
+        ns.Log.Add("popup", { which = "readycheck", action = "show", ok = ok, card = shownCard })
         if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
             -- Only then the warning in the middle of the screen, as a net: a warning that goes away beats nothing.
             pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
         end
+        -- Without the card, the gear warning still comes on top, as before.
+        if not shownCard then Alert.Check("readycheck") end
     end
+end
 
-    -- And on top: if the gear is wrong for the content, this is the time to know.
-    Alert.Check("readycheck")
+--- The ready check's card closes with the check: when it ends, and when the player answers it (`READY_CHECK_CONFIRM`
+--- for "player"). The leader who started it is counted ready by the game at once -- for him only the end closes it.
+function Alert.OnReadyCheckEvent(event, unit)
+    if event == "READY_CHECK_FINISHED" then
+        Alert.HideCard("readycheck")
+    elseif event == "READY_CHECK_CONFIRM" and not cardInitiatorIsMe and type(unit) == "string"
+        and UnitIsUnit and UnitIsUnit(unit, "player") then
+        Alert.HideCard("readycheck")
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -653,6 +1195,14 @@ function Alert.Create()
     frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     frame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
     frame:RegisterEvent("READY_CHECK")
+    frame:RegisterEvent("READY_CHECK_CONFIRM")
+    frame:RegisterEvent("READY_CHECK_FINISHED")
+    -- Only to redraw the summary card while it is on screen.
+    for _, e in ipairs({ "TRAIT_CONFIG_UPDATED", "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" }) do
+        if not C_EventUtils or not C_EventUtils.IsEventValid or C_EventUtils.IsEventValid(e) then
+            frame:RegisterEvent(e)
+        end
+    end
     -- These only CANCEL: they can hide a warning, never create one.
     frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     frame:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
@@ -663,7 +1213,16 @@ function Alert.Create()
 
     frame:SetScript("OnEvent", function(_, event, a, b)
         if event == "READY_CHECK" then
+            -- `a` is the initiator's name (PartyInfoDocumentation, 12.1.5), read as the game's own box reads it
+            cardInitiatorIsMe = type(a) == "string" and UnitIsUnit and UnitIsUnit("player", a) or false
             Alert.OnReadyCheck()
+
+        elseif event == "READY_CHECK_CONFIRM" or event == "READY_CHECK_FINISHED" then
+            Alert.OnReadyCheckEvent(event, a)
+
+        elseif event == "TRAIT_CONFIG_UPDATED" or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" then
+            -- the talents or the spec changed (the card's button, or by hand): the card shows what is on now
+            Alert.RefreshCard()
 
         elseif event == "UPDATE_BATTLEFIELD_STATUS" then
             -- TWO THINGS ON THE SAME EVENT, and in the right order: first the invite's summary, which is
@@ -676,6 +1235,7 @@ function Alert.Create()
             ns.Gear.ClearCache()
             lastKey = nil
             Alert.Hide()
+            Alert.RefreshCard()
 
             -- The gear changed: asks for what is missing. Without this, a freshly equipped piece stays
             -- without data until someone hovers it -- and that is how the warning of 13/09 accused

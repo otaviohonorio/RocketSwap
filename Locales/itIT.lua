@@ -192,3 +192,15 @@ L["Talents"] = "Talenti"  -- the game's TALENTS
 L["Appearance"] = "Aspetto"  -- the game's APPEARANCE_LABEL
 L["Delete"] = "Elimina"  -- the game's DELETE
 L["version"] = "Versione"  -- the game's GAME_VERSION_LABEL
+
+-- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["PvP queue is up"] = "Coda PvP pronta"
+L["Ready check"] = "Appello"  -- the game's READY_CHECK
+L["%d of %d pieces"] = "%d su %d pezzi"
+L["Not the set's: %s"] = "Fuori dal set di equipaggiamento: %s"
+L["Swapped on purpose? Save the gear set in the %s."] = "Cambiato apposta? Salva il set di equipaggiamento nel %s."
+L["The preset %s uses: %s"] = "Il profilo %s usa: %s"
+L["Inside the match you can't switch."] = "Durante la partita non puoi cambiare."
+L["Does not match the preset %s."] = "Non corrisponde al profilo %s."
+L["The preset %s: the gear is not complete."] = "Profilo %s: l'equipaggiamento non è completo."
+L["Matches the preset %s."] = "Corrisponde al profilo %s."

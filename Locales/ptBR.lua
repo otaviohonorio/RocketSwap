@@ -337,3 +337,15 @@ L["Click: create or update the presets"] = "Clique: criar ou atualizar os conjun
 L["The game has no talents and items of Rocket SBA Lab yet."] = "O jogo ainda não tem talentos e itens do Rocket SBA Lab."
 L["The Rocket SBA Lab presets are already up to date."] = "Os conjuntos do Rocket SBA Lab já estão em dia."
 L["Rocket SBA Lab: %d preset(s) created, %d updated."] = "Rocket SBA Lab: %d conjunto(s) criado(s), %d atualizado(s)."
+
+-- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["PvP queue is up"] = "A fila de PvP chamou"
+L["Ready check"] = "Todos prontos?"  -- the game's READY_CHECK
+L["%d of %d pieces"] = "%d de %d peças"
+L["Not the set's: %s"] = "Fora do conjunto de itens: %s"
+L["Swapped on purpose? Save the gear set in the %s."] = "Trocou de propósito? Salve o conjunto de itens no %s."
+L["The preset %s uses: %s"] = "O conjunto %s usa: %s"
+L["Inside the match you can't switch."] = "Dentro da partida não dá para trocar."
+L["Does not match the preset %s."] = "Não confere com o conjunto %s."
+L["The preset %s: the gear is not complete."] = "Conjunto %s: o equipamento não está completo."
+L["Matches the preset %s."] = "Confere com o conjunto %s."

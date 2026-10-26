@@ -193,3 +193,15 @@ L["Talents"] = "특성"  -- the game's TALENTS
 L["Appearance"] = "모양"  -- the game's APPEARANCE_LABEL
 L["Delete"] = "삭제"  -- the game's DELETE
 L["version"] = "Version"  -- the game's GAME_VERSION_LABEL
+
+-- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["PvP queue is up"] = "PvP 대기열 잡힘"
+L["Ready check"] = "전투 준비"  -- the game's READY_CHECK
+L["%d of %d pieces"] = "%d/%d개 장비"
+L["Not the set's: %s"] = "장비 구성에 없는 장비: %s"
+L["Swapped on purpose? Save the gear set in the %s."] = "일부러 바꿨나요? %s에서 장비 구성을 저장하세요."
+L["The preset %s uses: %s"] = "%s 프리셋 사용: %s"
+L["Inside the match you can't switch."] = "경기 중에는 바꿀 수 없습니다."
+L["Does not match the preset %s."] = "%s 프리셋과 일치하지 않습니다."
+L["The preset %s: the gear is not complete."] = "%s 프리셋: 장비가 다 갖춰지지 않았습니다."
+L["Matches the preset %s."] = "%s 프리셋과 일치합니다."

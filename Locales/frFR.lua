@@ -193,3 +193,15 @@ L["Click: create or update the presets"] = "Clic : créer ou mettre à jour les 
 L["The game has no talents and items of Rocket SBA Lab yet."] = "Le jeu n'a encore aucun talent ni objet de Rocket SBA Lab."
 L["The Rocket SBA Lab presets are already up to date."] = "Les préréglages de Rocket SBA Lab sont déjà à jour."
 L["Rocket SBA Lab: %d preset(s) created, %d updated."] = "Rocket SBA Lab : %d préréglage(s) créé(s), %d mis à jour."
+
+-- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["PvP queue is up"] = "File JcJ prête"
+L["Ready check"] = "Appel"  -- the game's READY_CHECK
+L["%d of %d pieces"] = "%d pièces sur %d"
+L["Not the set's: %s"] = "Hors de l'ensemble d'équipement : %s"
+L["Swapped on purpose? Save the gear set in the %s."] = "Changé exprès ? Enregistrez l'ensemble d'équipement dans le %s."
+L["The preset %s uses: %s"] = "Le préréglage %s utilise : %s"
+L["Inside the match you can't switch."] = "Impossible de changer pendant le match."
+L["Does not match the preset %s."] = "Ne correspond pas au préréglage %s."
+L["The preset %s: the gear is not complete."] = "Préréglage %s : l'équipement n'est pas complet."
+L["Matches the preset %s."] = "Correspond au préréglage %s."
