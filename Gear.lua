@@ -1,79 +1,79 @@
 -- RocketSwap | Gear.lua
--- Descobre, peça por peça, se o que você está vestindo é de PvP ou de PvE.
+-- Finds out, piece by piece, whether what you are wearing is PvP or PvE.
 --
--- NÃO EXISTE API QUE RESPONDA ISSO. Nem `C_Item`, nem `C_PaperDollInfo`, nem `C_PvP`. O único
--- sinal por peça é uma LINHA DE TOOLTIP, cujo texto vem da global `PVP_ITEM_LEVEL_TOOLTIP`:
+-- NO API ANSWERS THAT. Not `C_Item`, not `C_PaperDollInfo`, not `C_PvP`. The only per-piece
+-- signal is a TOOLTIP LINE, whose text comes from the global `PVP_ITEM_LEVEL_TOOLTIP`:
 --
 --   enUS  "Equip: Increases item level to a minimum of %d in Arenas, Battlegrounds, and War Mode."
 --   ptBR  "Equipar: aumenta o nível do item para um mínimo de %d em Arenas, Campos de Batalha
 --          e no Modo de Guerra."
 --
--- Quatro decisões, cada uma contra um erro fácil de cometer aqui:
+-- Four decisions, each against a mistake easy to make here:
 --
---   1. LER PELO SLOT, NÃO PELO LINK. `C_TooltipInfo.GetInventoryItem("player", slot)` em vez de
---      `GetHyperlink(link)`. Todos os getters de `C_TooltipInfo` têm
---      `SecretArguments = "AllowedWhenUntainted"`: passar um link SECRET a partir de código de
---      addon **levanta erro**, não devolve nil. E link de item não é categoricamente não-secret
---      no 12.x. Os
---      contextos onde isso morderia são justamente arena, encontro e M+, que é onde este
---      recurso trabalha.
+--   1. READ BY SLOT, NOT BY LINK. `C_TooltipInfo.GetInventoryItem("player", slot)` instead of
+--      `GetHyperlink(link)`. Every getter of `C_TooltipInfo` has
+--      `SecretArguments = "AllowedWhenUntainted"`: passing a SECRET link from addon code
+--      **raises an error**, it does not return nil. And an item link is not categorically
+--      non-secret in 12.x. The
+--      contexts where that would bite are exactly arena, encounter and M+, which is where this
+--      feature works.
 --
---   2. PADRÃO SEM ÂNCORA. Montado como `"^" .. pat .. "$"`, o padrão
---      **não casa** quando a linha vem embrulhada em
---      código de cor (`|cffffffff...|r`). Reproduzido em LuaJIT: com âncora dá miss, sem
---      âncora dá match nos dois casos.
+--   2. A PATTERN WITHOUT ANCHORS. Built as `"^" .. pat .. "$"`, the pattern
+--      **does not match** when the line comes wrapped in a
+--      colour code (`|cffffffff...|r`). Reproduced in LuaJIT: with anchors it misses, without
+--      anchors it matches in both cases.
 --
---   3. NÃO FILTRAR POR `line.type`. O enum `TooltipDataLineType` tem 50 valores e **nenhum é
---      de PvP**.
+--   3. DO NOT FILTER BY `line.type`. The enum `TooltipDataLineType` has 50 values and **none is
+--      PvP's**.
 --
---   4. TRÊS ESTADOS, NÃO DOIS. `true` (é de PvP), `false` (não é), `nil` (**não sei**). Em
---      coreano a string traz uma diretiva gramatical (`%d|1으로;로;`) que nenhum padrão
---      derivado casa — ali "não achei a linha" NÃO significa "não é peça de PvP". Um addon
---      que confunde os dois grita em 16 slots de uma vez.
+--   4. THREE STATES, NOT TWO. `true` (it is PvP), `false` (it is not), `nil` (**I do not know**). In
+--      Korean the string carries a grammar directive (`%d|1으로;로;`) that no derived pattern
+--      matches -- there "I did not find the line" does NOT mean "it is not a PvP piece". An addon
+--      that mixes the two shouts over 16 slots at once.
 local ADDON, ns = ...
 
 local Gear = {}
 ns.Gear = Gear
 
--- Os slots que valem. `INVSLOT_FIRST_EQUIPPED..LAST` é 1..19 e inclui camisa (4) e tabardo
--- (19), que não têm atributo nem versão de PvP — avisar sobre eles seria avisar sobre peça
--- que não existe. A Blizzard não expõe uma tabela dos 16 úteis; esta é nossa.
+-- The slots that count. `INVSLOT_FIRST_EQUIPPED..LAST` is 1..19 and includes the shirt (4) and the
+-- tabard (19), which have no stats nor a PvP version -- warning about them would be warning about a
+-- piece that does not exist. Blizzard exposes no table of the 16 useful ones; this one is ours.
 local SLOTS = {
-    1,  2,  3,      -- cabeça, pescoço, ombros
-    5,  6,  7,  8,  -- peito, cintura, pernas, pés
-    9,  10, 11, 12, -- pulsos, mãos, anel 1, anel 2
+    1,  2,  3,      -- head, neck, shoulders
+    5,  6,  7,  8,  -- chest, waist, legs, feet
+    9,  10, 11, 12, -- wrists, hands, ring 1, ring 2
     13, 14,         -- berloque 1, berloque 2
     15,             -- costas
-    16, 17,         -- mão principal, mão secundária
+    16, 17,         -- main hand, off hand
 }
 
 Gear.SLOTS = SLOTS
 
 --------------------------------------------------------------------------------
----Monta o padrão a partir da global, sem âncora.
+--- Builds the pattern from the global, without anchors.
 ---
----Escapa os mágicos, troca `%d` por `%d+` e `%s` por `.+`, e transforma a **diretiva
----gramatical** (`|1forma1;forma2;`) em coringa.
+--- Escapes the magic characters, turns `%d` into `%d+` and `%s` into `.+`, and turns the **grammar
+--- directive** (`|1form1;form2;`) into a wildcard.
 ---
----⚑ O COMENTÁRIO E O CÓDIGO SE CONTRADIZIAM AQUI, e o comentário é que estava certo: ele dizia
----"a diretiva vira coringa" e o código a **removia**.
+--- ⚑ THE COMMENT AND THE CODE CONTRADICTED EACH OTHER HERE, and the comment was the right one: it said
+--- "the directive becomes a wildcard" and the code **removed** it.
 ---
----O ALCANCE, MEDIDO — e é menor do que parece à primeira vista, então vale registrar o número em
----vez da impressão. Remover só quebra quando a diretiva está no **meio** da string; quando está
----no fim, o casamento não é ancorado e o prefixo já basta:
+--- THE REACH, MEASURED -- and it is smaller than it looks at first, so the number is worth recording
+--- instead of the impression. Removing only breaks when the directive is in the **middle** of the
+--- string; when it is at the end, the match is not anchored and the prefix is enough:
 ---
----     global                      remover   coringa
----     diretiva no FIM             casa      casa
----     diretiva no MEIO            NÃO casa  casa
+---     global                      remove    wildcard
+---     directive at the END        matches   matches
+---     directive in the MIDDLE     NO match  matches
 ---
----A forma coreana conhecida (`PvP 장비 레벨 %d|1으로;로;`) tem a diretiva no fim — ou seja, o
----defeito **não** estava quebrando o cliente coreano hoje. O que estava errado era a regra: a
----diretiva não é texto literal, e apagá-la só funcionava por acidente de posição.
+--- The known Korean form (`PvP 장비 레벨 %d|1으로;로;`) has the directive at the end -- that is, the
+--- defect was **not** breaking the Korean client today. What was wrong was the rule: the
+--- directive is not literal text, and erasing it only worked by an accident of position.
 local function BuildPattern(text)
     if type(text) ~= "string" or text == "" then return nil end
 
-    -- A diretiva vira coringa: o que vem depois do número muda COM o número, então não dá para
-    -- fixar uma das formas nem para apagar as duas.
+    -- The directive becomes a wildcard: what comes after the number changes WITH the number, so one
+    -- of the forms cannot be fixed nor both erased.
     local clean = text:gsub("|%d+[^;]*;[^;]*;", "\1")
 
     local pattern = clean:gsub("([%%%^%$%(%)%.%[%]%*%+%-%?])", "%%%1")
@@ -92,78 +92,78 @@ local function Pattern()
     return pvpPattern or nil
 end
 
----O padrão, para o despejo de `/rs gear <slot>` poder dizer QUAL linha casa.
+--- The pattern, so the dump of `/rs gear <slot>` can say WHICH line matches.
 ---
----`Debug` no nome porque produção não usa: quem decide é `IsPvPItem`. É a mesma regra que já
----governa os outros ganchos deste projeto — código que sobrevive ao único consumidor vira
----armadilha para a próxima leitura.
+--- `Debug` in the name because production does not use it: `IsPvPItem` decides. It is the same rule
+--- that already governs this project's other hooks -- code that outlives its only consumer becomes
+--- a trap for the next reading.
 function Gear.DebugPattern()
     return Pattern()
 end
 
----Esquece o padrao e o autoteste dele.
+--- Forgets the pattern and its self-test.
 ---
----Existe para o teste poder trocar a global do jogo e conferir o comportamento em outro idioma:
----o padrao e memorizado na primeira leitura, entao sem isto o segundo idioma nunca seria montado.
----In-game nada chama isto -- a global nao muda no meio da sessao.
+--- It exists so the test can swap the game's global and check the behaviour in another language:
+--- the pattern is memorised at the first reading, so without this the second language would never
+--- be built. In the game nothing calls this -- the global does not change mid-session.
 function Gear.__ResetPattern()
     pvpPattern = nil
     Gear.__patternWorksReset()
 end
 
 --------------------------------------------------------------------------------
--- Cache por link. A leitura de tooltip é cara demais para rodar a cada evento.
+-- A cache by link. Reading a tooltip is too expensive to run at every event.
 --
--- A armadilha aqui: guardar `{nil, nil}` quando a tooltip volta vazia e depois fazer
--- `if cached then return cached[1], cached[2] end` — a tabela é truthy, então o falso negativo fica gravado para sempre.
--- Aqui, resultado desconhecido **não entra no cache**.
+-- The trap here: keeping `{nil, nil}` when the tooltip comes back empty and then doing
+-- `if cached then return cached[1], cached[2] end` -- the table is truthy, so the false negative is kept forever.
+-- Here, an unknown result **does not go into the cache**.
 local cache = {}
 
--- Itens cujo carregamento já foi pedido. Sem esta lista, cada varredura (e são várias: entrar em
--- zona, ready check, troca de equipamento) pediria de novo o mesmo item.
+-- Items whose loading was already asked for. Without this list, each sweep (and there are several:
+-- entering a zone, a ready check, a gear swap) would ask again for the same item.
 local pendingLoads = {}
 
 function Gear.ClearCache()
     cache = {}
 end
 
----Esquece também os pedidos em curso. Só o harness usa: no jogo, um pedido pendente que sobrevive
----a uma troca de equipamento é justamente o que evita pedir duas vezes.
+--- Forgets the requests under way too. Only the harness uses it: in the game, a pending request that
+--- survives a gear swap is exactly what avoids asking twice.
 function Gear.__ResetPending()
     pendingLoads = {}
 end
 
----A deteccao esta viva neste cliente?
+--- Is the detection alive in this client?
 ---
----`Pattern()` sai de uma global do jogo (`PVP_ITEM_LEVEL_TOOLTIP`). Se ela nao existir ou nao
----render padrao, TODA peca volta `nil` e o addon cala pelos dois lados -- sem erro, sem log,
----sem nada a que se agarrar. Perguntar isso e a primeira coisa que um diagnostico faz.
+--- `Pattern()` comes from a game global (`PVP_ITEM_LEVEL_TOOLTIP`). If it does not exist or yields
+--- no pattern, EVERY piece comes back `nil` and the addon stays quiet on both sides -- no error, no
+--- log, nothing to hold on to. Asking this is the first thing a diagnosis does.
 function Gear.PatternReady()
     return Pattern() ~= nil
 end
 
----O padrão CASA com a linha que ele foi feito para achar?
+--- Does the pattern MATCH the line it was made to find?
 ---
----⚑ ESTE É O SINAL QUE FALTAVA, e ele é o que permite desarmar a comporta `LooksReliable` sem
----transformar o addon num gritador.
+--- ⚑ THIS IS THE SIGNAL THAT WAS MISSING, and it is what lets the `LooksReliable` gate be removed
+--- without turning the addon into a shouter.
 ---
----O problema que ela tentava resolver é real e é assimétrico. Um `true` só nasce de
----`text:match(pattern)`; nenhum modo de falha de leitura sabe fabricar um `true` — só um
----`false`. Logo:
+--- The problem it tried to solve is real and lopsided. A `true` is only born from
+--- `text:match(pattern)`; no way of failing to read can make up a `true` -- only a
+--- `false`. So:
 ---
----  * em PvE, "todas erradas" = 16 casamentos genuínos. Nunca é ambíguo.
----  * em PvP, "todas erradas" = nenhum casamento — que é **exatamente** o que a falha produz.
+---  * in PvE, "all wrong" = 16 genuine matches. It is never ambiguous.
+---  * in PvP, "all wrong" = no match -- which is **exactly** what the failure produces.
 ---
----Por isso a comporta só mordia de um lado, e mordia justamente o caso comum: quem entra numa
----arena vindo do PvE está com o equipamento inteiro de PvE.
+--- That is why the gate only bit on one side, and bit exactly the common case: whoever enters an
+--- arena coming from PvE is wearing all PvE gear.
 ---
----A saída é não perguntar ao equipamento, e sim **ao próprio padrão**: montar uma linha
----sintética a partir da mesma global de onde ele saiu e ver se ele a encontra. Se encontra, a
----detecção está provada e "todas erradas" é leitura, não falha. Se não encontra, o padrão está
----quebrado neste cliente e o silêncio continua sendo a resposta certa.
+--- The way out is to ask not the gear, but **the pattern itself**: build a synthetic line from the
+--- same global it came from and see whether it finds it. If it does, the detection is proven and
+--- "all wrong" is a reading, not a failure. If it does not, the pattern is broken in this client and
+--- silence is still the right answer.
 ---
----Não depende de o jogador possuir uma peça de PvP sequer — que é o furo de qualquer heurística
----baseada no que ele está vestindo.
+--- It does not depend on the player owning a single PvP piece -- the hole of any heuristic based
+--- on what he is wearing.
 local patternWorks
 
 function Gear.__patternWorksReset()
@@ -179,24 +179,24 @@ function Gear.PatternWorks()
         return false
     end
 
-    -- A LINHA SINTÉTICA sai da mesma global, com um número no lugar do `%d`. É o mesmo texto que
-    -- o jogo escreve na tooltip, montado por `format` em vez de lido de um item.
+    -- THE SYNTHETIC LINE comes from the same global, with a number in place of `%d`. It is the same
+    -- text the game writes in the tooltip, built by `format` instead of read from an item.
     local ok, linha = pcall(format, PVP_ITEM_LEVEL_TOOLTIP, 684)
     if not ok or type(linha) ~= "string" then
         patternWorks = false
         return false
     end
 
-    -- A diretiva gramatical não passa por `format`: ela é resolvida pelo cliente ao desenhar.
-    -- Aqui ela vira o texto cru, e o coringa do padrão é justamente o que a atravessa.
+    -- The grammar directive does not go through `format`: the client resolves it when drawing.
+    -- Here it becomes the raw text, and the pattern's wildcard is exactly what crosses it.
     patternWorks = linha:match(pattern) ~= nil
     return patternWorks
 end
 
 --------------------------------------------------------------------------------
----A tooltip veio com os dados do item, ou é só o marcador de "estou buscando"?
+--- Did the tooltip come with the item's data, or is it only the "I am fetching" placeholder?
 ---
----⚑ ESTA FUNÇÃO É A CAUSA DO DEFEITO DE 13/09, E A PROVA VEIO DO DESPEJO DE `/rs gear 5`:
+--- ⚑ THIS FUNCTION IS THE CAUSE OF THE DEFECT OF 13/09, AND THE PROOF CAME FROM THE DUMP OF `/rs gear 5`:
 ---
 ---     slot 5 (Torso): link: [Peitoral do Necrocavaleiro Pernicioso]
 ---     padrão montado: sim | padrão se prova: sim
@@ -204,17 +204,17 @@ end
 ---     1 linha(s):
 ---       1  tipo=41  Recuperando informações do item
 ---
----O cliente devolve UMA linha, de recado, enquanto busca os dados no servidor. A guarda que
----existia (`#data.lines == 0`) não pega isso: **há** uma linha. Nenhuma casa com o padrão, então a
----peça virava `false` — e ia para o cache. Peça de PvP marcada como PvE, de forma estável.
+--- The client returns ONE line, a placeholder, while it fetches the data from the server. The guard
+--- there was (`#data.lines == 0`) does not catch it: there **is** a line. None matches the pattern, so
+--- the piece became `false` -- and went into the cache. A PvP piece marked PvE, for good.
 ---
----E o link do slot 3 saiu `[]`, sem nome: o mesmo sintoma pelo outro lado.
+--- And the link of slot 3 came out `[]`, with no name: the same symptom from the other side.
 ---
----⚑ E ISSO NÃO SE RESOLVE ESPERANDO: o cliente só busca os dados de um item quando alguém pede.
----O addon nunca pedia — por isso sobreviveu à troca de personagem, onde o cache nasce vazio.
+--- ⚑ AND WAITING DOES NOT SOLVE IT: the client only fetches an item's data when someone asks.
+--- The addon never asked -- which is why it survived the character switch, where the cache starts empty.
 ---
----A detecção usa a global do próprio jogo (`RETRIEVING_ITEM_INFO`), e não o número 41 do enum:
----número de enum muda de patch, a global é a mesma que o cliente escreve na linha.
+--- The detection uses the game's own global (`RETRIEVING_ITEM_INFO`), not the enum's number 41:
+--- an enum number changes between patches, the global is the same the client writes in the line.
 local function TooltipNotReady(data)
     if #data.lines == 0 then return true end
 
@@ -230,18 +230,18 @@ local function TooltipNotReady(data)
     return false
 end
 
----Pede ao cliente os dados do item daquele slot, e avisa quem se interessar quando chegarem.
+--- Asks the client for the data of that slot's item, and tells whoever cares when it arrives.
 ---
----`ContinueOnItemLoad` é o caminho do próprio jogo (o mixin `Item`). O
----`RequestLoadItemDataByID` fica como reserva para o cliente que não tenha o mixin.
+--- `ContinueOnItemLoad` is the game's own way (the `Item` mixin).
+--- `RequestLoadItemDataByID` stays as a fallback for a client without the mixin.
 ---
----⚑ O CACHE É LIMPO NA VOLTA. Sem isso, a peça continuaria respondendo pelo valor lido enquanto a
----tooltip era um recado — e o pedido não teria servido para nada.
+--- ⚑ THE CACHE IS CLEARED ON THE WAY BACK. Without it, the piece would keep answering with the value read
+--- while the tooltip was a placeholder -- and the request would have been for nothing.
 function Gear.RequestLoad(slot)
     local id = GetInventoryItemID and GetInventoryItemID("player", slot)
     if type(id) ~= "number" then return false end
 
-    if pendingLoads[id] then return true end     -- já pedimos; não pedir de novo a cada varredura
+    if pendingLoads[id] then return true end     -- already asked; do not ask again at every sweep
     pendingLoads[id] = true
 
     if C_Item and C_Item.RequestLoadItemDataByID then
@@ -253,8 +253,8 @@ function Gear.RequestLoad(slot)
         if ok and obj and obj.ContinueOnItemLoad then
             pcall(obj.ContinueOnItemLoad, obj, function()
                 Gear.ClearCache()
-                -- Quem quiser reagir se inscreve. O `Gear` não conhece o aviso de equipamento: se
-                -- chamasse `ns.Alert` direto, a camada de leitura passaria a depender da de tela.
+                -- Whoever wants to react subscribes. `Gear` does not know the equipment warning: if it
+                -- called `ns.Alert` directly, the reading layer would start depending on the screen's.
                 if type(Gear.onItemLoaded) == "function" then
                     pcall(Gear.onItemLoaded, id)
                 end
@@ -275,8 +275,8 @@ function Gear.RequestLoad(slot)
     return false
 end
 
----Esta peça é de PvP?
----@return boolean|nil  true = é, false = não é, nil = não deu para saber
+--- Is this piece PvP?
+--- @return boolean|nil  true = it is, false = it is not, nil = could not tell
 function Gear.IsPvPItem(slot)
     local link = GetInventoryItemLink("player", slot)
     if link == nil or issecretvalue(link) then return nil end
@@ -289,13 +289,13 @@ function Gear.IsPvPItem(slot)
 
     if not C_TooltipInfo or not C_TooltipInfo.GetInventoryItem then return nil end
 
-    -- Pelo SLOT, e dentro de pcall: ver a decisão 1 no topo do arquivo.
+    -- By SLOT, and inside pcall: see decision 1 at the top of the file.
     local ok, data = pcall(C_TooltipInfo.GetInventoryItem, "player", slot)
     if not ok or type(data) ~= "table" or type(data.lines) ~= "table" then return nil end
 
-    -- ⚑ DADOS AINDA NÃO CHEGARAM: "não sei", e **não vai para o cache**. Era aqui que uma peça de
-    -- PvP virava PvE em definitivo (13/09). E pede o carregamento, porque o cliente não busca
-    -- sozinho — sem o pedido, a leitura erraria de novo na próxima varredura, e na seguinte.
+    -- ⚑ THE DATA HAS NOT ARRIVED YET: "I do not know", and it **does not go into the cache**. This is where a
+    -- PvP piece became PvE for good (13/09). And it asks for the load, because the client does not fetch
+    -- by itself -- without the request, the reading would be wrong again at the next sweep, and the next.
     if TooltipNotReady(data) then
         Gear.RequestLoad(slot)
         return nil
@@ -318,14 +318,14 @@ function Gear.IsPvPItem(slot)
 end
 
 --------------------------------------------------------------------------------
----Varre o equipamento e devolve o que está fora do lugar.
+--- Sweeps the gear and returns what is out of place.
 ---
----@param wantPvP boolean true = estamos em PvP (peça sem a linha é erro);
----                       false = estamos em PvE (peça com a linha é erro)
----@param ignored table|nil slots que o usuário mandou calar
----@return table erros  lista de { slot = n, link = "..." }
----@return number lidos  quantos slots deram resposta (nem nil, nem vazios)
----@return number vestidos quantos slots têm peça
+--- @param wantPvP boolean true = we are in PvP (a piece without the line is an error);
+---                       false = we are in PvE (a piece with the line is an error)
+--- @param ignored table|nil slots the user told to keep quiet
+--- @return table errors  list of { slot = n, link = "..." }
+--- @return number read  how many slots gave an answer (neither nil nor empty)
+--- @return number worn how many slots have a piece
 function Gear.Wrong(wantPvP, ignored)
     local wrong, read, worn = {}, 0, 0
 
@@ -337,8 +337,8 @@ function Gear.Wrong(wantPvP, ignored)
             local isPvP = Gear.IsPvPItem(slot)
             if isPvP ~= nil then
                 read = read + 1
-                -- Desconhecido nunca conta como errado: é a diferença entre um lembrete e
-                -- um addon que grita quando a leitura falha.
+                -- Unknown never counts as wrong: it is the difference between a reminder and
+                -- an addon that shouts when the reading fails.
                 if isPvP ~= wantPvP and not (ignored and ignored[slot]) then
                     wrong[#wrong + 1] = { slot = slot, link = link }
                 end
@@ -349,42 +349,42 @@ function Gear.Wrong(wantPvP, ignored)
     return wrong, read, worn
 end
 
----A leitura é confiável nesta varredura?
+--- Is the reading reliable in this sweep?
 ---
----⚑ ESTA COMPORTA CALAVA O CASO MAIS COMUM DO PvP. Relato do usuário, 08/09/2026: *"o de pve no
----pvp, ainda não vi funcionar, quando dou fila em BG, arena, ele não avisa nada sobre meus
----itens"*.
+--- ⚑ THIS GATE SILENCED THE MOST COMMON PvP CASE. The user's report, 08/09/2026: *"o de pve no
+--- pvp, ainda não vi funcionar, quando dou fila em BG, arena, ele não avisa nada sobre meus
+--- itens"*.
 ---
----A regra antiga era `#wrong < read`: se TODOS os slots lidos deram errado, presumia falha de
----detecção. Medido varrendo de 0 a 16 peças de PvP, ela cala **exatamente uma** das 17
----configurações de cada lado — e no lado do PvP essa uma é `n = 0`, equipamento de PvE inteiro,
----que é precisamente quem entra numa arena vindo do PvE. Não era um filtro de ruído: era um
----recorte em cima do caso comum.
+--- The old rule was `#wrong < read`: if ALL the slots read came out wrong, it assumed a detection
+--- failure. Measured sweeping from 0 to 16 PvP pieces, it silences **exactly one** of the 17
+--- configurations on each side -- and on the PvP side that one is `n = 0`, all PvE gear,
+--- which is precisely whoever enters an arena coming from PvE. It was not a noise filter: it was a
+--- cut right on the common case.
 ---
----A ambiguidade que ela tentava resolver é real, mas só existe de um lado (ver
----`Gear.PatternWorks`, que explica por quê). E ela se desfaz sem perguntar ao equipamento:
----**o padrão testa a si mesmo**. Se ele acha a linha que foi feito para achar, "todas erradas" é
----leitura boa; se não acha, o silêncio continua certo.
+--- The ambiguity it tried to solve is real, but it only exists on one side (see
+--- `Gear.PatternWorks`, which explains why). And it goes away without asking the gear:
+--- **the pattern tests itself**. If it finds the line it was made to find, "all wrong" is a
+--- good reading; if it does not, silence is still right.
 ---
----O que NÃO é coberto, e vale registrar em vez de fingir: tooltip **não carregada** também
----produz `false` em todo slot, e uma tooltip parcial tem linhas (só não a de PvP), então passa
----pela guarda de `#data.lines == 0` e conta como leitura. A mitigação é a que já existe —
----resultado desconhecido não entra no cache — mais o fato de a checagem se repetir em vários
----eventos. Uma janela no login segue possível.
+--- What is NOT covered, and worth recording instead of pretending: a tooltip **not loaded** also
+--- gives `false` in every slot, and a partial tooltip has lines (just not the PvP one), so it passes
+--- the `#data.lines == 0` guard and counts as a reading. The mitigation is the one already there --
+--- an unknown result does not go into the cache -- plus the check repeating at several
+--- events. A window at login is still possible.
 function Gear.LooksReliable(wrong, read)
     if read < 3 then return false end
     if #wrong < read then return true end
 
-    -- TODAS ERRADAS: só é leitura de verdade se a detecção provar que sabe achar a linha.
+    -- ALL WRONG: it is only a real reading if the detection proves it can find the line.
     return Gear.PatternWorks()
 end
 
 --------------------------------------------------------------------------------
----Nome legível de um slot, para o aviso dizer ONDE está o problema.
+--- A readable name of a slot, so the warning says WHERE the problem is.
 ---
----`_G` é consultado porque as globais de slot (`INVTYPE_*` não servem; as certas são as
----`..._SLOT`) variam de nome por peça, e um nome que não existe vira o número do slot em vez
----de quebrar.
+--- `_G` is asked because the slot globals (`INVTYPE_*` will not do; the right ones are the
+--- `..._SLOT`) vary in name per piece, and a name that does not exist becomes the slot's number instead
+--- of breaking.
 local SLOT_GLOBAL = {
     [1] = "HEADSLOT",     [2] = "NECKSLOT",      [3] = "SHOULDERSLOT",
     [5] = "CHESTSLOT",    [6] = "WAISTSLOT",     [7] = "LEGSSLOT",

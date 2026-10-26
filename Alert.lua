@@ -1,37 +1,37 @@
 -- RocketSwap | Alert.lua
--- Três avisos, e os três funcionam SEM que o jogador crie um conjunto:
+-- Three warnings, and all three work WITHOUT the player making a set:
 --
---   1. Equipamento errado para o conteúdo — de PvE em arena, de PvP em masmorra.
---   2. No ready check, um resumo do que você está usando, para o grupo conferir antes de puxar.
---   3. No convite da fila de PvP, o mesmo resumo — e ali ele vale mais: dentro da partida a
---      restrição de addon fecha a troca do começo ao fim, então o convite é a última janela.
+--   1. The wrong gear for the content -- PvE in an arena, PvP in a dungeon.
+--   2. On the ready check, a summary of what you are using, for the group to check before pulling.
+--   3. On the PvP queue's invite, the same summary -- and there it is worth more: inside the match the
+--      addon restriction closes the swap from start to end, so the invite is the last window.
 --
--- ⛑ O AVISO 3 É SÓ DE PvP, E O RÓTULO TEM QUE DIZER ISSO (22/09). Ele pendura em
--- `UPDATE_BATTLEFIELD_STATUS` e lê `GetBattlefieldStatus`, que cobrem **campo de batalha e
--- arena, e nada mais**. Fila de PvE é outro sistema inteiro (`LFG_PROPOSAL_SHOW` /
--- `GetLFGProposal`) e não passa por aqui.
+-- ⛑ WARNING 3 IS PvP ONLY, AND THE LABEL HAS TO SAY SO (22/09). It hangs on
+-- `UPDATE_BATTLEFIELD_STATUS` and reads `GetBattlefieldStatus`, which cover **battleground and
+-- arena, and nothing else**. The PvE queue is a whole other system (`LFG_PROPOSAL_SHOW` /
+-- `GetLFGProposal`) and does not go through here.
 --
--- O usuário perguntou exatamente isso ao ler "Resumo quando a fila chamar": *"é para PvP certo?
--- ou vai funcionar para outros localizadores também?"*. Rótulo que levanta essa pergunta já
--- falhou — por isso todos passaram a dizer **fila de PvP**.
+-- The user asked exactly that reading "Resumo quando a fila chamar": *"é para PvP certo?
+-- ou vai funcionar para outros localizadores também?"*. A label that raises that question already
+-- failed -- that is why all of them now say **PvP queue**.
 --
--- E a assimetria não é esquecimento: em masmorra você AINDA pode trocar depois de entrar, então
--- o convite não é a última janela como é na arena. Estender para PvE é possível; só vale menos.
+-- And the lopsidedness is no oversight: in a dungeon you CAN still switch after entering, so the
+-- invite is not the last window as it is in an arena. Extending it to PvE is possible; it is just worth less.
 --
--- O MODO DE FALHA DESTE ARQUIVO NÃO É ERRO DE LUA — é o usuário desligar porque encheu o saco.
--- O critério de aceitação é: quem fez tudo certo por duas semanas viu o addon zero vezes.
--- Daí as quatro comportas antes de qualquer pixel:
+-- THIS FILE'S FAILURE MODE IS NOT A LUA ERROR -- it is the user turning it off because he got fed up.
+-- The acceptance criterion is: whoever did everything right for two weeks saw the addon zero times.
+-- Hence the four gates before any pixel:
 --
---   a) DÁ PARA CONSERTAR? Em combate, ou com a restrição já ativa, o aviso cala. Aviso sobre o
---      que não tem mais conserto é ruído puro.
---   b) A LEITURA É CONFIÁVEL? Se todo slot lido deu errado, é a detecção que falhou, não o
---      jogador que errou dezesseis peças (ver `Gear.LooksReliable`).
---   c) JÁ AVISEI ISSO? Mesma situação, mesma natureza: cala.
---   d) O USUÁRIO MANDOU CALAR? Silêncio persistido, por slot e por situação.
+--   a) CAN IT BE FIXED? In combat, or with the restriction already on, the warning stays quiet. A
+--      warning about what can no longer be fixed is pure noise.
+--   b) IS THE READING RELIABLE? If every slot read came out wrong, it is the detection that failed,
+--      not the player who got sixteen pieces wrong (see `Gear.LooksReliable`).
+--   c) DID I ALREADY WARN ABOUT IT? Same situation, same kind: quiet.
+--   d) DID THE USER SAY TO KEEP QUIET? A kept silence, per slot and per situation.
 --
--- `ADDON_RESTRICTION_STATE_CHANGED` é a última chamada: a documentação da Blizzard diz que ele
--- dispara **antes** da restrição ativar. E `IsAddOnRestrictionActive` "will always return false
--- during dispatch" desse evento — por isso lemos o `state` do payload, nunca a função.
+-- `ADDON_RESTRICTION_STATE_CHANGED` is the last call: Blizzard's documentation says it fires
+-- **before** the restriction turns on. And `IsAddOnRestrictionActive` "will always return false
+-- during dispatch" of that event -- so we read the payload's `state`, never the function.
 local ADDON, ns = ...
 local L = ns.L
 
@@ -39,12 +39,12 @@ local Alert = {}
 ns.Alert = Alert
 
 local frame, ui
-local lastKey            -- a última situação avisada, para não repetir
+local lastKey            -- the last situation warned about, so it does not repeat
 
 --------------------------------------------------------------------------------
 -- Contexto
 --------------------------------------------------------------------------------
----Onde estamos? "pvp", "pve" ou nil (mundo aberto: o addon não opina).
+--- Where are we? "pvp", "pve" or nil (open world: the addon has no opinion).
 function Alert.Context()
     local inInstance, instanceType = IsInInstance()
     if inInstance then
@@ -53,17 +53,17 @@ function Alert.Context()
         return nil
     end
 
-    -- FILA DE PvP: qualquer uma conta, inclusive a espera.
+    -- PvP QUEUE: any of them counts, the wait included.
     --
-    -- ⚑ ANTES SÓ VALIAM `"confirm"` E `"active"`, e `"confirm"` **não é a espera** — é a chamada
-    -- da fila, o convite com contagem para aceitar. (Um addon de alertas de encontro prova: ele só cria a barra de "tempo
-    -- restante para aceitar uma fila" quando o status vira `"confirm"`, medindo-a com
-    -- `GetBattlefieldPortExpiration`.) Então, no momento literal do pedido do usuário — *"quando
-    -- dou fila em BG, arena"* — o contexto era `nil` e o aviso morria antes de ler uma peça.
+    -- ⚑ BEFORE, ONLY `"confirm"` AND `"active"` COUNTED, and `"confirm"` **is not the wait** -- it is the
+    -- queue's call, the invite with a countdown to accept. (An encounter-alerts addon proves it: it only creates the
+    -- "time left to accept a queue" bar when the status becomes `"confirm"`, measuring it with
+    -- `GetBattlefieldPortExpiration`.) So, at the literal moment of the user's request -- *"quando
+    -- dou fila em BG, arena"* -- the context was `nil` and the warning died before reading a piece.
     --
-    -- A lista agora é a do que NÃO vale, e isso é de propósito: o nome literal do status de
-    -- espera não deu para provar de disco, e um teste
-    -- positivo dependeria de acertar esse nome. O negativo não depende.
+    -- The list is now of what does NOT count, on purpose: the literal name of the waiting status
+    -- could not be proven from disk, and a positive test would depend on getting that name right.
+    -- The negative one does not.
     if GetMaxBattlefieldID and GetBattlefieldStatus then
         for i = 1, (GetMaxBattlefieldID() or 0) do
             local status = GetBattlefieldStatus(i)
@@ -73,17 +73,17 @@ function Alert.Context()
         end
     end
 
-    -- MODO GUERRA: pedido do usuário — *"inclusive quando seto para pvp, habilitando o war mode
+    -- WAR MODE: the user's request -- *"inclusive quando seto para pvp, habilitando o war mode
     -- on, sem avisos"*.
     --
-    -- O mundo aberto era excluído de propósito ("o addon não opina"), e War Mode não era
-    -- consultado em lugar nenhum. Mas com ele ligado o jogador está aberto a PvP, e é isso que
-    -- ele quis dizer com "seto para pvp".
+    -- The open world was left out on purpose ("the addon has no opinion"), and War Mode was not
+    -- checked anywhere. But with it on the player is open to PvP, and that is what
+    -- he meant by "seto para pvp".
     --
-    -- Devolve um contexto PRÓPRIO, e não `"pvp"`, porque a situação é outra: com War Mode ligado
-    -- a maior parte do tempo é PvE (missões, world quests). Tratá-lo como arena faria o aviso
-    -- gritar "equipamento de PvE numa partida de PvP" para quem está farmando — e o mesmo texto
-    -- para duas situações diferentes é o que transforma aviso em ruído.
+    -- It returns a context of ITS OWN, and not `"pvp"`, because the situation is different: with War Mode
+    -- on most of the time is PvE (quests, world quests). Treating it as an arena would make the warning
+    -- shout "PvE gear in a PvP match" at whoever is farming -- and the same text for two different
+    -- situations is what turns a warning into noise.
     if C_PvP and C_PvP.IsWarModeDesired then
         local ok, ligado = pcall(C_PvP.IsWarModeDesired)
         if ok and ligado then return "warmode" end
@@ -92,7 +92,7 @@ function Alert.Context()
     return nil
 end
 
----Dá para consertar agora?
+--- Can it be fixed now?
 local function CanFix()
     if InCombatLockdown() then return false end
 
@@ -108,26 +108,26 @@ local function CanFix()
     return true
 end
 
----TODA COMPORTA DO CAMINHO DO AVISO, num retrato so.
+--- EVERY GATE OF THE WARNING'S PATH, in one picture.
 ---
----⚑ POR QUE ISTO EXISTE. O usuario relatou, em 08/09/2026: *"o aviso de item pvp para conteudo
----pve ta funcionando. porem o de pve no pvp, ainda nao vi funcionar, quando dou fila em BG,
----arena, ele nao avisa nada sobre meus itens"* -- e depois *"inclusive quando seto para pvp,
----habilitando o war mode on, sem avisos"*.
+--- ⚑ WHY THIS EXISTS. The user reported, on 08/09/2026: *"o aviso de item pvp para conteudo
+--- pve ta funcionando. porem o de pve no pvp, ainda nao vi funcionar, quando dou fila em BG,
+--- arena, ele nao avisa nada sobre meus itens"* -- and then *"inclusive quando seto para pvp,
+--- habilitando o war mode on, sem avisos"*.
 ---
----O caminho ate o aviso tem SEIS portas, e cada uma fecha em silencio:
+--- The path to the warning has SIX doors, and each one closes silently:
 ---
----  1. `warnPvE`/`warnPvP` desligado    -- desligado pelo jogador, para ESTE contexto
----  2. `Alert.Context()` devolve nil    -- o addon nao opina aqui
----  3. `CanFix()` devolve false         -- combate, ou restricao de addon ativa
----  4. `Gear.PatternReady()` false      -- a deteccao nao funciona neste idioma
----  5. `#wrong == 0`                    -- nao ha o que avisar
----  6. `Gear.LooksReliable()` false     -- todos errados = leitura suspeita
+---  1. `warnPvE`/`warnPvP` off           -- turned off by the player, for THIS context
+---  2. `Alert.Context()` returns nil    -- the addon has no opinion here
+---  3. `CanFix()` returns false         -- combat, or an addon restriction on
+---  4. `Gear.PatternReady()` false      -- the detection does not work in this language
+---  5. `#wrong == 0`                    -- there is nothing to warn about
+---  6. `Gear.LooksReliable()` false     -- all wrong = a suspicious reading
 ---
----Nenhuma delas escreve nada em lugar nenhum. Com seis portas mudas, adivinhar qual fechou custa
----uma ida ao jogo por palpite; este retrato custa uma.
+--- None of them writes anything anywhere. With six silent doors, guessing which one closed costs
+--- a trip to the game per guess; this picture costs one.
 ---
----@return table estado
+--- @return table state
 function Alert.Diagnose()
     local contexto = Alert.Context()
     local inInstance, instanceType = IsInInstance()
@@ -142,8 +142,8 @@ function Alert.Diagnose()
         end
     end
 
-    -- WAR MODE. O addon nao consulta isto em lugar nenhum hoje -- e justamente por isso o
-    -- diagnostico consulta: para o retrato mostrar o que o addon esta ignorando.
+    -- WAR MODE. The addon checks this nowhere today -- and that is exactly why the
+    -- diagnosis does: for the picture to show what the addon is ignoring.
     local guerra
     if C_PvP and C_PvP.IsWarModeDesired then
         local ok, ativo = pcall(C_PvP.IsWarModeDesired)
@@ -161,8 +161,8 @@ function Alert.Diagnose()
         end
     end
 
-    -- AS DUAS DIRECOES, sempre. Perguntar so a do contexto atual esconde o caso em que o
-    -- contexto e que esta errado -- que e exatamente uma das suspeitas.
+    -- BOTH DIRECTIONS, always. Asking only the current context's hides the case where the
+    -- context is what is wrong -- which is exactly one of the suspects.
     local erradoPvP, lidoPvP, vestido = ns.Gear.Wrong(true, ns.db and ns.db.mutedSlots)
     local erradoPvE, lidoPvE = ns.Gear.Wrong(false, ns.db and ns.db.mutedSlots)
 
@@ -176,9 +176,9 @@ function Alert.Diagnose()
         podeConsertar = CanFix(),
         avisoPvE = not (ns.db and ns.db.warnPvE == false),
         avisoPvP = not (ns.db and ns.db.warnPvP == false),
-        -- A SÉTIMA PORTA, e ela é nova: com Modo Guerra ligado o aviso só sai se o jogador tiver
-        -- marcado a opção. Sem esta linha o retrato diria "tudo pronto para avisar" e o aviso não
-        -- sairia — que é o tipo de silêncio que este diagnóstico existe para não ter.
+        -- THE SEVENTH DOOR, and it is new: with War Mode on the warning only comes out if the player
+        -- ticked the option. Without this line the picture would say "all set to warn" and the warning would
+        -- not come out -- the kind of silence this diagnosis exists to avoid.
         avisoModoGuerra = ns.db and ns.db.warnWarMode == true or false,
         deteccaoViva = ns.Gear.PatternReady(),
         vestido = vestido,
@@ -243,12 +243,12 @@ local function Build()
     return ui
 end
 
----O aviso esta na tela? E o que ele esta dizendo?
+--- Is the warning on screen? And what is it saying?
 ---
----⚑ EXISTEM PORQUE O TESTE ANTERIOR NAO TESTAVA NADA. Ele afirmava
----`ns.Alert.__shown ~= true` -- e `__shown` nunca era escrito em `Alert`, so nos frames do
----simulador. A comparacao era `nil ~= true`, verdadeira sempre: o check passava com o aviso
----aparecendo ou nao. Um teste que nao pode reprovar e um comentario com sintaxe de teste.
+--- ⚑ THEY EXIST BECAUSE THE TEST BEFORE TESTED NOTHING. It asserted
+--- `ns.Alert.__shown ~= true` -- and `__shown` was never written in `Alert`, only in the
+--- simulator's frames. The comparison was `nil ~= true`, always true: the check passed with the warning
+--- showing or not. A test that cannot fail is a comment with a test's syntax.
 function Alert.__Shown()
     return ui ~= nil and ui:IsShown() and true or false
 end
@@ -270,13 +270,13 @@ end
 --------------------------------------------------------------------------------
 -- Aviso de equipamento errado
 --------------------------------------------------------------------------------
----Um conjunto que sirva para o contexto, se o jogador tiver criado algum. É o que transforma
----o aviso de "você errou" em "quer que eu conserte?". Sem conjuntos, o aviso só aponta.
----Este contexto pede equipamento de PvP?
+--- A set that fits the context, if the player made one. It is what turns
+--- the warning from "you got it wrong" into "shall I fix it?". Without sets, the warning only points.
+--- Does this context ask for PvP gear?
 ---
----São TRÊS contextos agora ("pvp", "warmode", "pve") e dois deles pedem PvP. Perguntar
----`context == "pvp"` em cada lugar deixaria o modo guerra silenciosamente do lado do PvE — que é
----o oposto do que ele significa.
+--- There are THREE contexts now ("pvp", "warmode", "pve") and two of them ask for PvP. Asking
+--- `context == "pvp"` in each place would quietly leave War Mode on the PvE side -- the
+--- opposite of what it means.
 local function WantsPvP(context)
     return context == "pvp" or context == "warmode"
 end
@@ -285,10 +285,10 @@ local function PresetFor(context)
     for _, preset in ipairs(ns.db.presets or {}) do
         if preset.gear then
             local wrong, read = ns.Gear.Wrong(WantsPvP(context))
-            -- Um conjunto serve se, aplicado, ele resolveria: usamos o próprio nome como
-            -- pista quando não dá para simular (não dá — as peças do conjunto não estão
-            -- vestidas). Nome é heurística, e por isso é só sugestão de botão, nunca ação
-            -- automática.
+            -- A set fits if, applied, it would solve it: we use its very name as a
+            -- clue when simulating is not possible (it is not -- the set's pieces are not
+            -- worn). A name is a heuristic, which is why it is only a button suggestion, never an
+            -- automatic action.
             local name = (preset.name or ""):lower()
             local looksPvP = name:find("pvp") or name:find("arena") or name:find("bg")
                 or name:find("campo")
@@ -300,12 +300,12 @@ local function PresetFor(context)
     return nil
 end
 
----O aviso de equipamento esta ligado PARA ESTE contexto?
+--- Is the equipment warning on FOR THIS context?
 ---
----(!) Uma chave por contexto desde 0.35.0. Quem faz mitica+ toda noite e PvP de vez em quando
----quer o aviso ligado num e calado no outro; com `warn` unico tinha que escolher os dois juntos.
----Modo Guerra e mundo aberto com PvP ligado, entao ele segue a chave de PvP -- mais a comporta
----propria (`warnWarMode`), que e opt-in por pedido de 12/09.
+--- (!) One key per context since 0.35.0. Whoever does mythic+ every night and PvP now and then
+--- wants the warning on in one and quiet in the other; with a single `warn` he had to pick both together.
+--- War Mode is the open world with PvP on, so it follows the PvP key -- plus its own
+--- gate (`warnWarMode`), which is opt-in by the request of 12/09.
 local function WarnEnabled(context)
     if context == "pve" then return ns.db.warnPvE ~= false end
     if context == "pvp" or context == "warmode" then return ns.db.warnPvP ~= false end
@@ -319,29 +319,29 @@ function Alert.Check(reason)
     if not context then return end
     if not WarnEnabled(context) then return end
 
-    -- ⚑ O AVISO DE MODO GUERRA É OPT-IN (`warnWarMode`, padrão desligado). Pedido de 12/09:
+    -- ⚑ THE WAR MODE WARNING IS OPT-IN (`warnWarMode`, off by default). The request of 12/09:
     -- *"tira o alerta dos itens de pvp em mundo aberto no war mode, ou transforma em opção por
     -- padrão desmarcada"*.
     --
-    -- A COMPORTA FICA AQUI, E NÃO EM `Alert.Context()`, de propósito: o contexto continua sendo
-    -- "warmode" para `/rs gear` (o diagnóstico precisa dizer onde o jogador está) e para o resumo
-    -- do ready check. Quem cala é o aviso, que é o que incomodava. Mexer no contexto apagaria
-    -- também as duas coisas que ninguém pediu para apagar.
+    -- THE GATE STAYS HERE, AND NOT IN `Alert.Context()`, on purpose: the context is still
+    -- "warmode" for `/rs gear` (the diagnosis has to say where the player is) and for the ready check's
+    -- summary. What goes quiet is the warning, which is what bothered him. Touching the context would
+    -- also erase the two things nobody asked to erase.
     if context == "warmode" and ns.db.warnWarMode ~= true then return end
 
-    -- ⚑ EM COMBATE O AVISO CALA, e só em combate. Antes a comporta era `CanFix()`, que também
-    -- fecha quando a **restrição de addon** está ativa — e a documentação de API deste cliente
-    -- (12.1.0.69587) define `Enum.AddOnRestrictionType.PvPMatch` como *"the player is in an
-    -- active and incomplete PvP match"*: uma janela fechada do começo ao fim da partida.
+    -- ⚑ IN COMBAT THE WARNING STAYS QUIET, and only in combat. The gate used to be `CanFix()`, which also
+    -- closes when the **addon restriction** is on -- and this client's API documentation
+    -- (12.1.0.69587) defines `Enum.AddOnRestrictionType.PvPMatch` as *"the player is in an
+    -- active and incomplete PvP match"*: a window closed from the start to the end of the match.
     --
-    -- Isso desligava o aviso durante TODA arena e TODO campo de batalha, e é parte da assimetria
-    -- que o usuário relatou: em PvE as restrições equivalentes (`Encounter`, `ChallengeMode`)
-    -- deixam janelas livres — masmorra fora de encontro, raide entre bosses — enquanto uma
-    -- partida de PvP não deixa nenhuma.
+    -- That turned the warning off during EVERY arena and EVERY battleground, and it is part of the
+    -- lopsidedness the user reported: in PvE the matching restrictions (`Encounter`, `ChallengeMode`)
+    -- leave free windows -- a dungeon outside an encounter, a raid between bosses -- while a
+    -- PvP match leaves none.
     --
-    -- E a dependência era errada de origem: **saber não depende de poder consertar**. Quem
-    -- descobre no meio da partida que está de PvE ao menos sai e volta certo. O que depende de
-    -- poder consertar é o BOTÃO, e ele já sabe se esconder.
+    -- And the dependency was wrong from the start: **knowing does not depend on being able to fix**. Whoever
+    -- finds out mid-match that he is in PvE gear at least leaves and comes back right. What depends on
+    -- being able to fix is the BUTTON, and it already knows how to hide.
     if InCombatLockdown() then return end
 
     local wrong, read = ns.Gear.Wrong(WantsPvP(context), ns.db.mutedSlots)
@@ -356,13 +356,13 @@ function Alert.Check(reason)
     if key == lastKey and ui and ui:IsShown() then return end
     lastKey = key
 
-    -- O texto do jogo, no lugar do jogo: aviso amarelo abaixo do centro. É onde a Blizzard
-    -- põe recado desta natureza, e o helper já cuida de cor e de repetição.
-    -- A REDAÇÃO É DO CONTEXTO, e o modo guerra tem a dele.
+    -- The game's text, in the game's place: a yellow warning below the centre. It is where Blizzard
+    -- puts a message of this kind, and the helper already handles colour and repetition.
+    -- THE WORDING IS THE CONTEXT'S, and War Mode has its own.
     --
-    -- Com War Mode ligado a maior parte do tempo é PvE — missão, world quest, farm. Dizer
-    -- "equipamento de PvE numa partida de PvP" ali seria falso (não há partida) e viraria ruído
-    -- em quem só quer o bônus de experiência. O texto avisa que ele está EXPOSTO, que é o fato.
+    -- With War Mode on most of the time is PvE -- quests, world quests, farming. Saying
+    -- "PvE gear in a PvP match" there would be false (there is no match) and would become noise
+    -- for whoever only wants the experience bonus. The text warns that he is EXPOSED, which is the fact.
     local titulo = L["PvP gear in PvE content."]
     if context == "pvp" then
         titulo = L["PvE gear in a PvP match."]
@@ -387,8 +387,8 @@ function Alert.Check(reason)
     end
     ui.body:SetText(table.concat(lines, "\n"))
 
-    -- O BOTÃO, sim, depende de poder consertar: oferecer "Carregar <conjunto>" no meio de uma
-    -- partida, onde a troca é recusada, seria um botão que não faz nada.
+    -- The BUTTON, yes, depends on being able to fix: offering "Load <set>" in the middle of a
+    -- match, where the swap is refused, would be a button that does nothing.
     local preset = CanFix() and PresetFor(context) or nil
     if preset then
         ui.fix:SetText(format(L["Load %s"], preset.name))
@@ -408,39 +408,39 @@ end
 --------------------------------------------------------------------------------
 -- Ready check: o resumo antes de puxar
 --------------------------------------------------------------------------------
----O que você está usando agora: os três campos, com o RÓTULO de cada um.
+--- What you are using now: the three fields, each with its LABEL.
 ---
----Não é aviso e não julga nada: é a conferência que o líder pede quando manda o ready check.
+--- It is not a warning and judges nothing: it is the check the leader asks for with the ready check.
 ---
----OS RÓTULOS SÃO OS DA PRÓPRIA JANELA DO ADDON — `Especialização`, `Talentos`, `Itens` — e essa
----é a razão de eles serem esses e não outros. O jogador que abre `/rs` lê exatamente essas três
----palavras ao lado dos três combos; o resumo usando outras o obrigaria a aprender dois
----vocabulários para a mesma coisa. Nenhuma chave nova: `L["Specialization"]`, `L["Talents"]` e
----`L["Gear"]` já existem e já são o que o editor mostra.
+--- THE LABELS ARE THE ADDON'S OWN WINDOW'S -- `Especialização`, `Talentos`, `Itens` -- and that is the
+--- reason they are these and no others. The player who opens `/rs` reads exactly these three
+--- words next to the three combos; a summary using others would make him learn two
+--- vocabularies for the same thing. No new key: `L["Specialization"]`, `L["Talents"]` and
+--- `L["Gear"]` already exist and are already what the editor shows.
 ---
----E é por isso que o terceiro NÃO vem do jogo. As duas primeiras vêm (`SPECIALIZATION` e
----`TALENTS`, via `FROM_GAME`), mas para itens não há global limpa e há uma armadilha registrada
----em `Locales/enUS.lua`: em pt-BR o jogo chama **loadout de talentos** de "equipamento" e
----**conjunto de itens** de "conjunto". Este addon foge das duas de propósito, porque ele existe
----justamente para quem já confunde as duas coisas — e o pedido que trouxe estes rótulos
----("não sei o que é o que") é essa confusão em pessoa.
+--- And that is why the third does NOT come from the game. The first two do (`SPECIALIZATION` and
+--- `TALENTS`, through `FROM_GAME`), but for items there is no clean global and there is a trap recorded
+--- in `Locales/enUS.lua`: in pt-BR the game calls a **talent loadout** "equipamento" and an
+--- **equipment set** "conjunto". This addon avoids both on purpose, because it exists
+--- precisely for whoever already mixes the two things up -- and the request that brought these labels
+--- ("não sei o que é o que") is that confusion in person.
 ---
----@param separator string|nil `nil` = uma linha (chat); `"\n"` = uma por linha (caixa)
+--- @param separator string|nil `nil` = one line (chat); `"\n"` = one per line (box)
 function Alert.Summary(separator)
     local parts = {}
 
-    ---Um campo do resumo. `rótulo: valor`, e o rótulo é o mesmo do editor.
+    --- One field of the summary. `label: value`, and the label is the editor's.
     ---
-    ---VAZIO É `(nenhum)`, e não mais "(sem conjunto de itens)". As frases longas existiam porque
-    ---**elas eram o único contexto** — sem rótulo, "(sem conjunto de itens)" era a única forma de
-    ---saber de que campo se tratava. Com o rótulo na frente elas passaram a repetir a própria
-    ---etiqueta ("Itens: (sem conjunto de itens)") e ainda arrastavam duas palavras que este addon
-    ---evita: **"loadout"**, que o cliente traduz como "equipamento" em pt-BR, e **"conjunto"**,
-    ---que aqui é o nome dos PRESETS (`L["Presets"] = "Conjuntos"`) — o campo e o contêiner
-    ---passavam a dividir o nome.
+    --- EMPTY IS `(nenhum)`, and no longer "(sem conjunto de itens)". The long phrases existed because
+    --- **they were the only context** -- with no label, "(sem conjunto de itens)" was the only way to
+    --- know which field it was. With the label in front they started to repeat their own
+    --- tag ("Itens: (sem conjunto de itens)") and still dragged two words this addon
+    --- avoids: **"loadout"**, which the client translates as "equipamento" in pt-BR, and **"conjunto"**,
+    --- which here is the name of the PRESETS (`L["Presets"] = "Conjuntos"`) -- the field and the container
+    --- came to share the name.
     ---
-    ---`L["(none)"]` já existe e já é o que os combos do editor mostram no mesmo caso. Mesmo
-    ---vocabulário, de novo.
+    --- `L["(none)"]` already exists and is already what the editor's combos show in the same case. Same
+    --- vocabulary, again.
     local function Add(label, value)
         parts[#parts + 1] = label .. ": " .. value
     end
@@ -455,14 +455,14 @@ function Alert.Summary(separator)
         Add(L["Talents"], name or L["(none)"])
     end
 
-    -- ⚑ `(nenhum)` SÓ QUANDO NÃO HÁ NADA. `isEquipped` é tudo-ou-nada: trocar UMA peça de um
-    -- conjunto de 14 apaga a flag, e o resumo dizia "Itens: (nenhum)" para quem estava com o
-    -- conjunto quase inteiro no corpo. Relato do usuário: *"fica com a mensagem de (nenhum), uma
+    -- ⚑ `(nenhum)` ONLY WHEN THERE IS NOTHING. `isEquipped` is all-or-nothing: swapping ONE piece of a
+    -- 14-piece set clears the flag, and the summary said "Itens: (nenhum)" to whoever had the
+    -- set almost whole on. The user's report: *"fica com a mensagem de (nenhum), uma
     -- mensagem errada, porque ele tá com os itens só que um ou mais não estão salvos"*.
     --
-    -- Dizer o nome com a contagem é o que separa os dois casos que a frase antiga fundia: quem
-    -- esqueceu de carregar conjunto nenhum e quem trocou uma peça e não salvou. O primeiro precisa
-    -- carregar; o segundo precisa SALVAR — e é o segundo que aparece no ready check.
+    -- Saying the name with the count is what tells apart the two cases the old phrase merged: whoever
+    -- forgot to load any set and whoever swapped a piece and did not save. The first has to
+    -- load; the second has to SAVE -- and it is the second that shows on the ready check.
     local setID = ns.Data.GetEquippedSetID()
     if setID then
         Add(L["Gear"], ns.Data.GearSetName(setID))
@@ -475,38 +475,38 @@ function Alert.Summary(separator)
         end
     end
 
-    -- UMA FUNÇÃO SÓ, com um separador, e não duas funções. A regra vem de tropeço próprio neste
-    -- projeto: duas fontes de verdade para a mesma informação divergem na primeira mudança —
-    -- foi assim que a lista de contornos do configurador ficou sem o "médio".
+    -- ONE FUNCTION ONLY, with a separator, and not two functions. The rule comes from our own stumble in
+    -- this project: two sources of truth for the same information drift apart at the first change --
+    -- that is how the configurator's list of outlines lost the "medium".
     return table.concat(parts, separator or "  ·  ")
 end
 
 --------------------------------------------------------------------------------
 -- A fila chamou: o resumo antes de aceitar
 --------------------------------------------------------------------------------
----O convite da fila de PvP — o momento em que dá para consertar, e o último.
+--- The PvP queue's invite -- the moment when it can be fixed, and the last one.
 ---
----Pedido do usuário (18/09/2026): *"quando chama para entrar na arena após ter esperado na fila,
----tem como dar o aviso de qual build tá setado?"*.
+--- The user's request (18/09/2026): *"quando chama para entrar na arena após ter esperado na fila,
+--- tem como dar o aviso de qual build tá setado?"*.
 ---
----É a mesma pergunta do ready check, num instante em que ela vale mais: dentro da arena a troca
----de talentos é recusada pela restrição de addon, e a partida inteira é uma janela fechada (ver
----o comentário de `Alert.Check`). Quem descobre depois de aceitar, descobre tarde.
+--- It is the ready check's same question, at a moment when it is worth more: inside the arena the
+--- talent swap is refused by the addon restriction, and the whole match is a closed window (see
+--- the comment of `Alert.Check`). Whoever finds out after accepting finds out late.
 ---
----`GetBattlefieldStatus(i)` devolve `"confirm"` exatamente enquanto o convite está na tela
----(documentada no cliente 12.1.5). O 2º retorno é o nome do mapa e o 3º, o tamanho do time
----da arena — 0 em campo de batalha.
+--- `GetBattlefieldStatus(i)` returns `"confirm"` exactly while the invite is on screen
+--- (documented in client 12.1.5). The 2nd return is the map's name and the 3rd, the arena team's
+--- size -- 0 in a battleground.
 ---
----UMA VEZ POR CONVITE. `UPDATE_BATTLEFIELD_STATUS` dispara várias vezes com o mesmo `"confirm"`
----(o relógio do convite anda), e a caixa espera OK: sem trava, cada disparo empilharia a mesma
----caixa por cima da anterior.
+--- ONCE PER INVITE. `UPDATE_BATTLEFIELD_STATUS` fires several times with the same `"confirm"`
+--- (the invite's clock moves), and the box waits for OK: without a lock, each firing would stack the
+--- same box over the one before.
 local queueShown = false
 
 function Alert.OnQueuePop()
     if not GetBattlefieldStatus then return end
 
-    -- `GetMaxBattlefieldID` é quem diz quantas filas existem. Sem ela, duas — que é o teto
-    -- histórico.
+    -- `GetMaxBattlefieldID` says how many queues exist. Without it, two -- the historical
+    -- ceiling.
     local quantas = (GetMaxBattlefieldID and GetMaxBattlefieldID()) or 2
 
     local mapa, teamSize
@@ -518,31 +518,31 @@ function Alert.OnQueuePop()
         end
     end
 
-    -- ⚑ UM AVISO ENQUANTO HOUVER CONVITE, e não um por fila. O resumo fala da SUA build, que é a
-    -- mesma para as duas filas — com uma trava por índice, duas filas chamando juntas abriam a
-    -- mesma caixa duas vezes, e a segunda só substituía a primeira (a chave do diálogo é uma só).
+    -- ⚑ ONE WARNING WHILE THERE IS AN INVITE, and not one per queue. The summary is about YOUR build, which is
+    -- the same for both queues -- with a lock per index, two queues calling together opened the
+    -- same box twice, and the second only replaced the first (the dialog's key is one only).
     --
-    -- E uma vez por convite, não por disparo: `UPDATE_BATTLEFIELD_STATUS` dispara várias vezes
-    -- com o mesmo convite na tela, porque o relógio dele anda.
+    -- And once per invite, not per firing: `UPDATE_BATTLEFIELD_STATUS` fires several times
+    -- with the same invite on screen, because its clock moves.
     if mapa ~= nil or teamSize ~= nil then
         if not queueShown and ns.db and ns.db.queuePop ~= false then
             queueShown = true
             Alert.ShowQueueSummary(mapa, teamSize)
         end
     elseif queueShown then
-        -- Saiu do convite (aceitou, recusou ou expirou): a caixa perde o assunto e some, e a
-        -- trava libera o próximo convite. Sem isto, a caixa ficaria pendurada dentro da partida,
-        -- que é onde ela não serve para mais nada.
+        -- Left the invite (accepted, declined or expired): the box loses its subject and goes away, and the
+        -- lock frees the next invite. Without this, the box would hang inside the match,
+        -- where it is no use any more.
         queueShown = false
         if ns.Dialog then ns.Dialog.Hide("summary") end
         ns.Log.Add("popup", { which = "queue", action = "hide" })
     end
 end
 
----A caixa do convite. Mesmo formato do ready check — um rótulo por linha, esperando OK.
+--- The invite's box. The same shape as the ready check's -- one label per line, waiting for OK.
 ---
----O TÍTULO DIZ O MAPA quando o jogo informa: "Nagrand Arena" responde *por que isto apareceu* sem
----gastar uma frase explicando. Sem o nome, a frase genérica.
+--- THE TITLE SAYS THE MAP when the game tells it: "Nagrand Arena" answers *why did this show up* without
+--- spending a phrase explaining. Without the name, the generic phrase.
 function Alert.ShowQueueSummary(mapa, teamSize)
     local resumo = Alert.Summary()
     local titulo = L["PvP queue is up — check before you enter"]
@@ -567,24 +567,24 @@ function Alert.ShowQueueSummary(mapa, teamSize)
     end
 end
 
--- A CAIXA DE CONFIRMAÇÃO DO RESUMO.
+-- THE SUMMARY'S CONFIRMATION BOX.
 --
--- O resumo era chat + aviso de raide, e os dois SOMEM sozinhos. Pedido do usuário: *"como mostra
--- o aviso e some, o usuário pode nem ver"*. Ele tem razão, e o ready check é justamente o momento
--- em que a pessoa está olhando para outra coisa — para o botão de "Pronto".
+-- The summary was chat + a raid warning, and both GO AWAY by themselves. The user's request: *"como mostra
+-- o aviso e some, o usuário pode nem ver"*. He is right, and the ready check is exactly the moment
+-- when the person is looking at something else -- at the "Ready" button.
 --
--- Espera um OK, e é o ponto: a caixa fica até alguém a fechar, então o resumo não depende de o
--- jogador estar olhando na hora certa.
+-- It waits for an OK, and that is the point: the box stays until someone closes it, so the summary does
+-- not depend on the player looking at the right time.
 --
--- `timeout = 0` — não fecha sozinha, pelo mesmo motivo de existir.
--- `whileDead = 1` — morto no meio de uma tentativa é exatamente quando se pede ready check.
--- `hideOnEscape = 1` — Esc fecha, como em toda caixa do jogo; obrigar o clique seria birra.
+-- `timeout = 0` -- it does not close by itself, for the same reason it exists.
+-- `whileDead = 1` -- dead mid-attempt is exactly when a ready check is asked for.
+-- `hideOnEscape = 1` -- Esc closes, as in every box of the game; forcing the click would be spite.
 --
--- O nome tem prefixo do addon porque `StaticPopupDialogs` é uma tabela GLOBAL, compartilhada com
--- o jogo e com todos os addons: uma chave genérica sobrescreveria a de outro.
--- Dentro do `if`: `StaticPopupDialogs` é global do jogo e sempre existe, mas indexar global nula
--- em escopo de ARQUIVO derruba o addon inteiro no carregamento — e perder o addon por causa de
--- uma caixa de aviso é troca ruim.
+-- The name has the addon's prefix because `StaticPopupDialogs` is a GLOBAL table, shared with
+-- the game and every addon: a generic key would overwrite another's.
+-- Inside the `if`: `StaticPopupDialogs` is a game global and always exists, but indexing a nil global
+-- at FILE scope brings the whole addon down at load -- and losing the addon over
+-- a warning box is a bad trade.
 -- (05/10) The definition of a game dialog that was here is gone: the box is the addon's own
 -- (`Dialog.lua`), with the same behaviour -- it waits for the OK, shows while dead, Esc closes.
 
@@ -594,37 +594,37 @@ function Alert.OnReadyCheck()
     local resumo = Alert.Summary()
     ns.Print(L["ready check:"] .. " " .. resumo)
 
-    -- A CAIXA É A PRINCIPAL, e o chat vira registro. O aviso de raide saiu: ele também some, e
-    -- somado à caixa seria a mesma informação em dois lugares, um deles inútil.
+    -- THE BOX IS THE MAIN ONE, and the chat becomes the record. The raid warning went: it also goes away, and
+    -- added to the box it would be the same information in two places, one of them useless.
     --
-    -- `pcall` porque `StaticPopup_Show` **dá erro** quando o diálogo não existe
-    -- (`StaticPopup.lua:302-304`, `error("Dialog "..which.." does not exist.")`) — e não existir é
-    -- possível se outro addon limpar a tabela global.
+    -- `pcall` because `StaticPopup_Show` **raises an error** when the dialog does not exist
+    -- (`StaticPopup.lua:302-304`, `error("Dialog "..which.." does not exist.")`) -- and not existing is
+    -- possible if another addon clears the global table.
     -- (05/10) The box is now the addon's own (`Dialog.lua`); the net below stays.
     do
-        -- UMA LINHA POR CAMPO na caixa, e tudo numa só no chat. A caixa tem altura livre e o
-        -- chat não; e é na caixa que o jogador vai parar para ler.
-        -- TÍTULO SEM DOIS-PONTOS. `L["ready check:"]` é PREFIXO de linha de chat, e lá o
-        -- dois-pontos está certo; como título de caixa, seguido de linha em branco, ele fica
-        -- pendurado. A linha de chat chegava a ter três: "RocketSwap: conferência: Especialização:
+        -- ONE LINE PER FIELD in the box, and all in one in the chat. The box has free height and the
+        -- chat does not; and the box is where the player stops to read.
+        -- A TITLE WITHOUT A COLON. `L["ready check:"]` is a chat line's PREFIX, and there the
+        -- colon is right; as a box's title, followed by a blank line, it hangs
+        -- loose. The chat line got to have three: "RocketSwap: conferência: Especialização:
         -- Gelido".
         --
-        -- E O TÍTULO NOMEIA O CONTEÚDO, não o ritual. O prefixo do chat continua dizendo
-        -- "conferência" de propósito: lá ele responde *por que o addon falou sozinho* — alguém
-        -- mandou o ready check — e essa é a dúvida de quem lê uma linha que apareceu no meio da
-        -- conversa. Na caixa, o jogador já sabe por que ela abriu; o que ele precisa em meio
-        -- segundo é saber **o que está olhando**.
+        -- AND THE TITLE NAMES THE CONTENT, not the ritual. The chat's prefix still says
+        -- "conferência" on purpose: there it answers *why the addon spoke by itself* -- someone
+        -- called the ready check -- and that is the doubt of whoever reads a line that showed up in the middle of the
+        -- conversation. In the box, the player already knows why it opened; what he needs in half
+        -- a second is to know **what he is looking at**.
         local ok, shown = pcall(ns.Dialog.Show, "summary",
             L["What you are using"] .. "\n\n" .. Alert.Summary("\n"))
         ok = ok and shown == true
         ns.Log.Add("popup", { which = "readycheck", action = "show", ok = ok })
         if not ok and RaidWarningUtil and RaidWarningUtil.AddMessage then
-            -- Só então o aviso do meio da tela, como rede: melhor um aviso que some do que nada.
+            -- Only then the warning in the middle of the screen, as a net: a warning that goes away beats nothing.
             pcall(RaidWarningUtil.AddMessage, resumo, NORMAL_FONT_COLOR, 5)
         end
     end
 
-    -- E de quebra: se o equipamento estiver errado para o conteúdo, é a hora de saber.
+    -- And on top: if the gear is wrong for the content, this is the time to know.
     Alert.Check("readycheck")
 end
 
@@ -634,12 +634,12 @@ end
 function Alert.Create()
     if frame then return frame end
 
-    -- ⚑ QUANDO OS DADOS DO ITEM CHEGAM, A CONTA REFAZ. `Gear` pede o carregamento do que leu como
-    -- "não sei" e avisa por aqui; sem esta inscrição o pedido não serviria para nada -- o aviso
-    -- ficaria com a leitura incompleta até o próximo gatilho, que pode não vir.
+    -- ⚑ WHEN THE ITEM'S DATA ARRIVES, THE SUM IS REDONE. `Gear` asks for the load of what it read as
+    -- "I do not know" and tells us here; without this subscription the request would be for nothing -- the warning
+    -- would stay with the incomplete reading until the next trigger, which may never come.
     --
-    -- `lastKey = nil` porque o aviso recusa repetir a mesma chave enquanto está na tela: sem
-    -- zerar, a reavaliação seria descartada justamente quando ela tem algo novo a dizer.
+    -- `lastKey = nil` because the warning refuses to repeat the same key while on screen: without
+    -- clearing it, the new evaluation would be thrown away exactly when it has something new to say.
     ns.Gear.onItemLoaded = function()
         lastKey = nil
         Alert.Check("item carregado")
@@ -647,13 +647,13 @@ function Alert.Create()
 
     frame = CreateFrame("Frame", ADDON .. "AlertEvents")
 
-    -- Entrar em instância: `PLAYER_ENTERING_WORLD` sozinho é cedo demais — o equipamento
-    -- ainda não está carregado. Dois segundos dão essa margem.
+    -- Entering an instance: `PLAYER_ENTERING_WORLD` alone is too early -- the gear
+    -- is not loaded yet. Two seconds give that margin.
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
     frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     frame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
     frame:RegisterEvent("READY_CHECK")
-    -- Estes só CANCELAM: podem esconder um aviso, nunca criar um.
+    -- These only CANCEL: they can hide a warning, never create one.
     frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     frame:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
     if C_EventUtils and C_EventUtils.IsEventValid
@@ -666,9 +666,9 @@ function Alert.Create()
             Alert.OnReadyCheck()
 
         elseif event == "UPDATE_BATTLEFIELD_STATUS" then
-            -- DUAS COISAS NO MESMO EVENTO, e na ordem certa: primeiro o resumo do convite, que é
-            -- imediato e tem prazo (o convite expira), e só depois a checagem de equipamento, que
-            -- espera os 2 segundos de sempre porque depende da tooltip ter carregado.
+            -- TWO THINGS ON THE SAME EVENT, and in the right order: first the invite's summary, which is
+            -- immediate and has a deadline (the invite expires), and only then the gear check, which
+            -- waits the usual 2 seconds because it depends on the tooltip having loaded.
             Alert.OnQueuePop()
             C_Timer.After(2, function() Alert.Check(event) end)
 
@@ -677,15 +677,15 @@ function Alert.Create()
             lastKey = nil
             Alert.Hide()
 
-            -- Mudou o equipamento: pede o que faltar. Sem isto, uma peça recém-equipada continua
-            -- sem dados até alguém passar o mouse nela -- e foi assim que o aviso de 13/09 acusou
-            -- duas peças de PvP de serem PvE.
+            -- The gear changed: asks for what is missing. Without this, a freshly equipped piece stays
+            -- without data until someone hovers it -- and that is how the warning of 13/09 accused
+            -- two PvP pieces of being PvE.
             for _, slot in ipairs(ns.Gear.SLOTS) do
                 ns.Gear.RequestLoad(slot)
             end
 
         elseif event == "ADDON_RESTRICTION_STATE_CHANGED" then
-            -- `b` é o estado. `Activating` é a última chamada: ainda dá para trocar.
+            -- `b` is the state. `Activating` is the last call: it can still be switched.
             if Enum and Enum.AddOnRestrictionState and b == Enum.AddOnRestrictionState.Activating then
                 Alert.Check("restriction")
             end
