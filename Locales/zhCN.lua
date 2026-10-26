@@ -185,3 +185,11 @@ L["Click: create or update the presets"] = "点击：创建或更新预设"
 L["The game has no talents and items of Rocket SBA Lab yet."] = "游戏中还没有Rocket SBA Lab的天赋和装备。"
 L["The Rocket SBA Lab presets are already up to date."] = "Rocket SBA Lab的预设已是最新。"
 L["Rocket SBA Lab: %d preset(s) created, %d updated."] = "Rocket SBA Lab：已创建%d个预设，更新%d个。"
+
+-- (25/10) the game's own words (FROM_GAME), written here as the game gives them in this
+-- language (GlobalStrings.zhCN): the same as at runtime, and checked by tests/locales.lua
+L["Specialization"] = "专精"  -- the game's SPECIALIZATION
+L["Talents"] = "天赋"  -- the game's TALENTS
+L["Appearance"] = "外观"  -- the game's APPEARANCE_LABEL
+L["Delete"] = "删除"  -- the game's DELETE
+L["version"] = "版本"  -- the game's GAME_VERSION_LABEL

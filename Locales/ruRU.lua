@@ -185,3 +185,11 @@ L["Click: create or update the presets"] = "Нажмите: создать ил�
 L["The game has no talents and items of Rocket SBA Lab yet."] = "В игре пока нет талантов и предметов Rocket SBA Lab."
 L["The Rocket SBA Lab presets are already up to date."] = "Пресеты Rocket SBA Lab уже актуальны."
 L["Rocket SBA Lab: %d preset(s) created, %d updated."] = "Rocket SBA Lab: создано пресетов: %d, обновлено: %d."
+
+-- (25/10) the game's own words (FROM_GAME), written here as the game gives them in this
+-- language (GlobalStrings.ruRU): the same as at runtime, and checked by tests/locales.lua
+L["Specialization"] = "Специализация"  -- the game's SPECIALIZATION
+L["Talents"] = "Таланты"  -- the game's TALENTS
+L["Appearance"] = "Внешность"  -- the game's APPEARANCE_LABEL
+L["Delete"] = "Удалить"  -- the game's DELETE
+L["version"] = "Версия"  -- the game's GAME_VERSION_LABEL

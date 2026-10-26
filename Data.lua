@@ -725,8 +725,9 @@ end
 -- specialization. The two of one build share that word, so a RocketSwap preset is made of them here, reading the game's
 -- lists only -- never RocketLab's data (the workspace rule: no addon reads another addon; the plan of 25/10, "ponte com o
 -- RocketSwap pelos conjuntos nativos (nome padronizado)"). Both languages: the player may have switched the game's.
--- RocketLab's L["Raid"] in its other languages: "Banda" (esES, esMX), "Incursione" (itIT), the game's word in each.
-local ROCKET_TAG = { ["M+"] = "mplus", ["Raid"] = "raid", ["Raide"] = "raid", ["Banda"] = "raid", ["Incursione"] = "raid" }
+-- (25/10) The content word is RocketLab's in the game's language ("M+", "Raide", "Banda", "Schlachtzug", "Рейд"...):
+-- the set and the loadout of one build carry the SAME word, so they pair by it, in any language -- a list of the
+-- words known missed every language added after it (German, French, Russian, Korean, Chinese)
 
 ---The pairs found: { { name, spec (index), talent (configID), gear (setID), tag, loadoutName, setName }, ... }.
 function Data.RocketPairs()
@@ -734,14 +735,14 @@ function Data.RocketPairs()
     if not (C_EquipmentSet and C_EquipmentSet.GetEquipmentSetAssignedSpec) then return out end
     for _, g in ipairs(Data.GetGearSets()) do
         local tag = g.name:match("^Rocket (%S+)$") or g.name:match("^Rocket (%S+) %d+$")
-        local content = tag and ROCKET_TAG[tag]
+        local content = tag
         local ok, specIndex = false, nil
         if content then ok, specIndex = pcall(C_EquipmentSet.GetEquipmentSetAssignedSpec, g.setID) end
         local spec = ok and specIndex and Data.GetSpecByIndex(specIndex)
         if spec then
             for _, l in ipairs(Data.GetLoadouts(spec.id)) do
                 local ltag = l.name:match("^Rocket SBA Lab: (%S+) ")
-                if ltag and ROCKET_TAG[ltag] == content then
+                if ltag and ltag == content then
                     out[#out + 1] = { name = spec.name .. " " .. tag, spec = specIndex, talent = l.configID,
                                       gear = g.setID, tag = tag, loadoutName = l.name, setName = g.name }
                     break

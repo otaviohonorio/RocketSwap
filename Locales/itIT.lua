@@ -184,3 +184,11 @@ L["Click: create or update the presets"] = "Clic: crea o aggiorna i profili"
 L["The game has no talents and items of Rocket SBA Lab yet."] = "Il gioco non ha ancora talenti né equipaggiamento di Rocket SBA Lab."
 L["The Rocket SBA Lab presets are already up to date."] = "I profili di Rocket SBA Lab sono già aggiornati."
 L["Rocket SBA Lab: %d preset(s) created, %d updated."] = "Rocket SBA Lab: %d profilo/i creato/i, %d aggiornato/i."
+
+-- (25/10) the game's own words (FROM_GAME), written here as the game gives them in this
+-- language (GlobalStrings.itIT): the same as at runtime, and checked by tests/locales.lua
+L["Specialization"] = "Specializzazione"  -- the game's SPECIALIZATION
+L["Talents"] = "Talenti"  -- the game's TALENTS
+L["Appearance"] = "Aspetto"  -- the game's APPEARANCE_LABEL
+L["Delete"] = "Elimina"  -- the game's DELETE
+L["version"] = "Versione"  -- the game's GAME_VERSION_LABEL

@@ -185,3 +185,11 @@ L["Click: create or update the presets"] = "클릭: 프리셋 만들기 또는 �
 L["The game has no talents and items of Rocket SBA Lab yet."] = "게임에 아직 Rocket SBA Lab의 특성과 장비가 없습니다."
 L["The Rocket SBA Lab presets are already up to date."] = "Rocket SBA Lab 프리셋이 이미 최신입니다."
 L["Rocket SBA Lab: %d preset(s) created, %d updated."] = "Rocket SBA Lab: 프리셋 %d개 만듦, %d개 갱신."
+
+-- (25/10) the game's own words (FROM_GAME), written here as the game gives them in this
+-- language (GlobalStrings.koKR): the same as at runtime, and checked by tests/locales.lua
+L["Specialization"] = "전문화"  -- the game's SPECIALIZATION
+L["Talents"] = "특성"  -- the game's TALENTS
+L["Appearance"] = "모양"  -- the game's APPEARANCE_LABEL
+L["Delete"] = "삭제"  -- the game's DELETE
+L["version"] = "Version"  -- the game's GAME_VERSION_LABEL
