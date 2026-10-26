@@ -195,10 +195,12 @@ L["Delete"] = "삭제"  -- the game's DELETE
 L["version"] = "Version"  -- the game's GAME_VERSION_LABEL
 
 -- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["complete set"] = "장비 구성 전체 착용"
+L["1 piece not from the set"] = "장비 구성에 없는 장비 1개"
+L["%d pieces not from the set"] = "장비 구성에 없는 장비 %d개"
+L["Different from the saved piece: %s"] = "저장된 장비와 다름: %s"
 L["PvP queue is up"] = "PvP 대기열 잡힘"
 L["Ready check"] = "전투 준비"  -- the game's READY_CHECK
-L["%d of %d pieces"] = "%d/%d개 장비"
-L["Not the set's: %s"] = "장비 구성에 없는 장비: %s"
 L["Swapped on purpose? Save the gear set in the %s."] = "일부러 바꿨나요? %s에서 장비 구성을 저장하세요."
 L["The preset %s uses: %s"] = "%s 프리셋 사용: %s"
 L["Inside the match you can't switch."] = "경기 중에는 바꿀 수 없습니다."

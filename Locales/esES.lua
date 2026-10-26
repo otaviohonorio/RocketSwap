@@ -194,10 +194,12 @@ L["Delete"] = "Eliminar"  -- the game's DELETE
 L["version"] = "Versión"  -- the game's GAME_VERSION_LABEL
 
 -- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["complete set"] = "conjunto completo"
+L["1 piece not from the set"] = "1 pieza fuera del conjunto"
+L["%d pieces not from the set"] = "%d piezas fuera del conjunto"
+L["Different from the saved piece: %s"] = "Distinta de la pieza guardada: %s"
 L["PvP queue is up"] = "Cola JcJ lista"
 L["Ready check"] = "Listos"  -- the game's READY_CHECK
-L["%d of %d pieces"] = "%d de %d piezas"
-L["Not the set's: %s"] = "No es del conjunto de equipamiento: %s"
 L["Swapped on purpose? Save the gear set in the %s."] = "¿Lo has cambiado a propósito? Guarda el conjunto de equipamiento en el %s."
 L["The preset %s uses: %s"] = "El perfil %s usa: %s"
 L["Inside the match you can't switch."] = "Dentro de la partida no se puede cambiar."

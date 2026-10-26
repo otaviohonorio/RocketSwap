@@ -683,18 +683,21 @@ function Alert.CardModel(kind)
     local gearRow = { label = L["Gear"], notes = {} }
     if cur.gearSet then
         local name, icon = ns.Data.GearSetName(cur.gearSet)
+        -- ⚑ NO "14 OF 14 PIECES" (the user, 26/10: *"o jogador pode achar que ele não tem item equipado (slot
+        -- vazio)"*). A count of pieces reads as slots on the body; what it meant was pieces OF THE SAVED SET. So the
+        -- whole set says so in words, and an incomplete one counts the pieces that are not the saved ones.
         gearRow.value, gearRow.icon, gearRow.state = name or "?", icon, "ok"
-        local c = ns.Data.GearSetCounts(cur.gearSet)
-        if c and type(c.vestidas) == "number" and type(c.itens) == "number" and c.itens > 0 then
-            gearRow.extra = format(L["%d of %d pieces"], c.vestidas, c.itens)
-        end
+        gearRow.extra = L["complete set"]
     elseif cur.partialSet then
         local name, icon = ns.Data.GearSetName(cur.partialSet)
         gearRow.value, gearRow.icon, gearRow.state = name or "?", icon, "warn"
-        gearRow.extra = format(L["%d of %d pieces"], cur.worn, cur.items)
+        local off = (cur.items or 0) - (cur.worn or 0)
+        gearRow.extra = off == 1 and L["1 piece not from the set"] or format(L["%d pieces not from the set"], off)
         local names = {}
         for _, slot in ipairs(Alert.OffSetSlots(cur.partialSet)) do names[#names + 1] = White(ns.Gear.SlotName(slot)) end
-        if #names > 0 then gearRow.notes[#gearRow.notes + 1] = format(L["Not the set's: %s"], table.concat(names, ", ")) end
+        if #names > 0 then
+            gearRow.notes[#gearRow.notes + 1] = format(L["Different from the saved piece: %s"], table.concat(names, ", "))
+        end
         -- the game's own name for the window where a set is saved
         local manager = type(EQUIPMENT_MANAGER) == "string" and EQUIPMENT_MANAGER or L["Equipment Manager"]
         gearRow.notes[#gearRow.notes + 1] = format(L["Swapped on purpose? Save the gear set in the %s."], manager)

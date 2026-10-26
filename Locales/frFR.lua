@@ -195,10 +195,12 @@ L["The Rocket SBA Lab presets are already up to date."] = "Les préréglages de 
 L["Rocket SBA Lab: %d preset(s) created, %d updated."] = "Rocket SBA Lab : %d préréglage(s) créé(s), %d mis à jour."
 
 -- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["complete set"] = "ensemble complet"
+L["1 piece not from the set"] = "1 pièce hors de l'ensemble"
+L["%d pieces not from the set"] = "%d pièces hors de l'ensemble"
+L["Different from the saved piece: %s"] = "Différent de la pièce enregistrée : %s"
 L["PvP queue is up"] = "File JcJ prête"
 L["Ready check"] = "Appel"  -- the game's READY_CHECK
-L["%d of %d pieces"] = "%d pièces sur %d"
-L["Not the set's: %s"] = "Hors de l'ensemble d'équipement : %s"
 L["Swapped on purpose? Save the gear set in the %s."] = "Changé exprès ? Enregistrez l'ensemble d'équipement dans le %s."
 L["The preset %s uses: %s"] = "Le préréglage %s utilise : %s"
 L["Inside the match you can't switch."] = "Impossible de changer pendant le match."

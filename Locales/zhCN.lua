@@ -195,10 +195,12 @@ L["Delete"] = "删除"  -- the game's DELETE
 L["version"] = "版本"  -- the game's GAME_VERSION_LABEL
 
 -- (26/10) The summary card of the ready check and of the PvP queue (Alert.lua)
+L["complete set"] = "方案完整"
+L["1 piece not from the set"] = "1件不属于方案"
+L["%d pieces not from the set"] = "%d件不属于方案"
+L["Different from the saved piece: %s"] = "与保存的装备不同：%s"
 L["PvP queue is up"] = "PvP排队就绪"
 L["Ready check"] = "就位确认"  -- the game's READY_CHECK
-L["%d of %d pieces"] = "%d/%d件"
-L["Not the set's: %s"] = "不属于装备方案：%s"
 L["Swapped on purpose? Save the gear set in the %s."] = "是故意更换的吗？请在%s中保存装备方案。"
 L["The preset %s uses: %s"] = "预设%s使用：%s"
 L["Inside the match you can't switch."] = "比赛中无法更换。"
