@@ -1,47 +1,47 @@
 -- RocketSwap | UI.lua
--- A janela: lista de conjuntos à esquerda, editor à direita, estado no rodapé.
+-- The window: the list of sets on the left, the editor on the right, the state in the footer.
 --
--- ESTE ARQUIVO FOI REESCRITO depois do primeiro teste in-game. O print mostrou três defeitos,
--- e os três vinham da mesma raiz: **eu ancorei conteúdo sem contar com a arte do template.**
--- A geometria abaixo foi medida no código-fonte da UI da Blizzard do 12.1.0, não estimada.
+-- THIS FILE WAS REWRITTEN after the first in-game test. The print showed three defects,
+-- and all three came from the same root: **I anchored content without counting on the template's art.**
+-- The geometry below was measured in the source code of Blizzard's 12.1.0 UI, not estimated.
 --
---   1. O RETRATO POR CIMA DO TEXTO. `PortraitFrameTemplate` desenha um disco de Ø58 com
---      centro em (26, −22) do frame. O rótulo "Conjuntos" estava em (14, −34), a
---      sqrt(12² + 12²) = 17px do centro — ou seja, 12px DENTRO do disco.
---      REGRA: nada ancorado em `frame` com x < 58 e y > −55. Nada aqui viola isso.
+--   1. THE PORTRAIT OVER THE TEXT. `PortraitFrameTemplate` draws a disc of Ø58 with its
+--      centre at (26, −22) of the frame. The "Conjuntos" label was at (14, −34),
+--      sqrt(12² + 12²) = 17px from the centre -- that is, 12px INSIDE the disc.
+--      RULE: nothing anchored on `frame` with x < 58 and y > −55. Nothing here breaks it.
 --
---   2. RÓTULOS ÓRFÃOS. Com zero conjuntos, "Nome / Especialização / Talentos / Itens"
---      apareciam sem campo embaixo: eu escondia os controles e esquecia os rótulos.
---      A correção não é um `SetShown` a mais — é que **o estado "nada selecionado" deixou de
---      existir**: com ≥1 conjunto, a lista seleciona o primeiro sozinha. Precedente da
---      Blizzard: `ClickBindingFrameMixin:OnShow` foca o primeiro item.
---      E cada rótulo agora vive DENTRO do seu grupo — esconder o grupo esconde os dois.
+--   2. ORPHAN LABELS. With zero sets, "Nome / Especialização / Talentos / Itens"
+--      showed with no field under them: I hid the controls and forgot the labels.
+--      The fix is not one more `SetShown` -- it is that **the "nothing selected" state stopped
+--      existing**: with ≥1 set, the list selects the first by itself. Blizzard's
+--      precedent: `ClickBindingFrameMixin:OnShow` focuses the first item.
+--      And each label now lives INSIDE its group -- hiding the group hides both.
 --
---   3. JANELA VAZIA. 640×452 para 2 a 5 conjuntos. Agora 520×320, derivado do conteúdo, e o
---      estado vazio é um bloco centralizado com uma frase e um botão.
+--   3. AN EMPTY WINDOW. 640×452 for 2 to 5 sets. Now 520×320, derived from the content, and the
+--      empty state is a centred block with a phrase and a button.
 --
--- O TEMPLATE MUDOU para `ButtonFrameTemplate`: é o `PortraitFrameTemplate` mais um `Inset` já
--- posicionado nos offsets oficiais (`PANEL_INSET_*` em `SharedUIPanelTemplates.lua:4-9`).
--- Ancorar na área rebaixada em vez de no frame cru torna o bug 1 impossível de repetir.
+-- THE TEMPLATE CHANGED to `ButtonFrameTemplate`: it is `PortraitFrameTemplate` plus an `Inset` already
+-- placed at the official offsets (`PANEL_INSET_*` in `SharedUIPanelTemplates.lua:4-9`).
+-- Anchoring on the recessed area instead of the bare frame makes bug 1 impossible to repeat.
 local ADDON, ns = ...
 local L = ns.L
 
 local UI = {}
 ns.UI = UI
 
--- Todos os números têm origem. Onde há citação, ela é de arquivo do cliente 12.1.0.
--- A altura subiu de 420 para 452 quando a sub-opção de modo guerra entrou na faixa de Avisos
--- (12/09). A conta é fechada, não estética: a faixa começa em −304, três caixas terminam em −112
--- dentro dela (142 de altura), e o rodapé que o `ButtonFrameTemplate` reserva come 26 px do fundo
--- ⇒ 304 + 142 + 26 = 472, mais os mesmos 4 px de folga que a janela de 420 já tinha.
--- (Era 118/452 com três caixas; a do convite de fila, 18/09, trouxe a quarta.)
--- (!) A LARGURA SUBIU DE 520 PARA 620 e depois para 680 (22/09), e o ganho vai INTEIRO para a
--- lista nas duas vezes. A coluna da direita fica pixel a pixel como estava: `FIELD_W` e `NAME_W`
--- sao medidas absolutas alinhadas com a borda, e como `COL_X` anda junto com `WIDTH`, a arte
--- continua terminando a 20 px da direita (500 com janela de 520, 660 com janela de 680).
+-- Every number has an origin. Where there is a quote, it is from a file of client 12.1.0.
+-- The height went from 420 to 452 when the War Mode sub-option came into the Warnings strip
+-- (12/09). The sum is closed, not aesthetic: the strip starts at −304, three boxes end at −112
+-- inside it (142 tall), and the footer `ButtonFrameTemplate` reserves eats 26 px of the bottom
+-- ⇒ 304 + 142 + 26 = 472, plus the same 4 px of slack the 420 window already had.
+-- (It was 118/452 with three boxes; the queue invite's, 18/09, brought the fourth.)
+-- (!) THE WIDTH WENT FROM 520 TO 620 and then to 680 (22/09), and the gain goes ENTIRELY to the
+-- list both times. The right column stays pixel for pixel as it was: `FIELD_W` and `NAME_W`
+-- are absolute measures aligned with the edge, and since `COL_X` moves along with `WIDTH`, the art
+-- still ends 20 px from the right (500 with a 520 window, 660 with a 680 one).
 --
--- Dividir o ganho entre as duas colunas obrigaria a recalcular as duas, e a da direita nunca
--- esteve apertada -- quem esta e a lista, que virou card e carrega um rotulo em cada linha.
+-- Splitting the gain between the two columns would force recomputing both, and the right one was never
+-- tight -- what is tight is the list, which became cards and carries a label on each line.
 -- (25/10) 680 -> 720, the 40 to the editor's column this time: a loadout Rocket SBA Lab makes has up to 30 letters,
 -- "Rocket SBA Lab: M+ Moldachamas" is 201 px in GameFontHighlight, and the combo of 200 shows 166 (the ruler)
 local WIDTH = 720
@@ -51,70 +51,70 @@ local GUTTER = 20             -- calha entre colunas (MountJournal)
 local COL_X = 444             -- borda esquerda da ARTE da coluna direita
 local ROW_SPACING = 2
 
--- ⛑ A LINHA VIROU CARD, e por isso a altura dela deixou de ser constante.
+-- ⛑ THE ROW BECAME A CARD, and so its height stopped being constant.
 --
--- Pedido do usuário: *"Spec: Tal (quebra linha) Talento: tal (quebra linha) Equipamento: tal"*.
--- Antes tudo isso era UMA linha com pontos separando — `Sangue · Blood M+ · Blood · Dark` — e
--- nela o jogador tinha que saber de cor qual valor era o quê. Com rótulo por linha, não tem o
--- que saber: está escrito.
+-- The user's request: *"Spec: Tal (quebra linha) Talento: tal (quebra linha) Equipamento: tal"*.
+-- Before, all that was ONE line with dots between -- `Sangue · Blood M+ · Blood · Dark` -- and
+-- on it the player had to know by heart which value was which. With a label per line, there is nothing
+-- to know: it is written.
 --
--- A altura acompanha o que o conjunto define. Reservar quatro linhas sempre deixaria três vazias
--- num conjunto só de itens, e espaço guardado para conteúdo que não existe é o que mais faz uma
--- janela parecer quebrada — a mesma regra que a `Data.GetProgress` já segue ao filtrar passos.
-local CARD_PAD = 8            -- respiro acima do nome e abaixo da última linha
+-- The height follows what the set defines. Reserving four lines always would leave three empty
+-- on an items-only set, and space kept for content that does not exist is what most makes a
+-- window look broken -- the same rule `Data.GetProgress` already follows when filtering steps.
+local CARD_PAD = 8            -- breathing room above the name and below the last line
 local CARD_NAME_INK = 16      -- `GameFontNormal` a 13pt, arredondado pela caixa da fonte
 local CARD_LINE = 15          -- passo entre linhas de detalhe (11pt de tinta + 4 de respiro)
-local CARD_WARN = 24          -- a placa do aviso: altura de botão (22) mais 2 de folga
--- O DESENHO DO CARD, escolhido pelo usuario depois de duas tentativas minhas erradas:
+local CARD_WARN = 24          -- the warning's plate: a button's height (22) plus 2 of slack
+-- THE CARD'S DESIGN, chosen by the user after two wrong attempts of mine:
 --
---   Tank                        [ Carregar ]     <- titulo sozinho, na margem
---   (icone)  Especializacao: Sangue              <- icone a esquerda do BLOCO de campos
+--   Tank                        [ Carregar ]     <- the title alone, at the margin
+--   (icon)   Especializacao: Sangue              <- the icon to the left of the BLOCK of fields
 --            Talentos: Blood M+
 --            Equipamento: Blood
 --
--- A 0.34.1 tinha posto o icone no alto como distintivo e o titulo abaixo dele. Reprovado na
--- hora: *"ficou ruim o titulo, eu gostei do icone ao lado no comeco"*. O icone volta para o
--- lado -- so que ao lado dos CAMPOS, nao do titulo, que e o que libera a linha do titulo.
--- (!) O ICONE PREENCHE O BLOCO DE CAMPOS. Pedido: *"aumentar o icone para preencher o espaco
--- que falta das 4 linhas escritas"*. Com 32 fixos ele ocupava metade da altura ao lado de quatro
--- linhas, e sobrava um vazio embaixo dele -- vazio ao lado de conteudo e o que faz a lista
--- parecer meio montada.
+-- 0.34.1 had put the icon at the top as a badge and the title under it. Rejected on the
+-- spot: *"ficou ruim o titulo, eu gostei do icone ao lado no comeco"*. The icon goes back to the
+-- side -- only beside the FIELDS, not the title, which is what frees the title's line.
+-- (!) THE ICON FILLS THE BLOCK OF FIELDS. The request: *"aumentar o icone para preencher o espaco
+-- que falta das 4 linhas escritas"*. At a fixed 32 it took half the height beside four
+-- lines, and left a gap under it -- a gap beside content is what makes the list
+-- look half built.
 --
--- Ele vira o tamanho do bloco: 60 com quatro campos, e o PISO de 32 com um so, porque uma linha
--- mede 15 e um icone de 15 nao se enxerga.
+-- It takes the block's size: 60 with four fields, and the FLOOR of 32 with one, because a line
+-- measures 15 and an icon of 15 cannot be seen.
 --
--- (!) MAS O RECUO DO TEXTO NAO ACOMPANHA, e essa e a decisao que segura o desenho. Se ele
--- acompanhasse, um card de quatro campos e outro de um comecariam o texto em X diferentes, e o
--- alinhamento ENTRE cards e o que faz uma lista parecer uma lista. Entao o recuo e fixo, no
--- tamanho do maior icone, e o icone menor se centraliza nessa coluna.
+-- (!) BUT THE TEXT'S INDENT DOES NOT FOLLOW, and that is the decision holding the design. If it
+-- followed, a card of four fields and one of one would start their text at different X's, and the
+-- alignment BETWEEN cards is what makes a list look like a list. So the indent is fixed, at the
+-- size of the biggest icon, and a smaller icon centres in that column.
 local CARD_ICON_MIN = 32
 local CARD_ICON_MAX = CARD_LINE * 4       -- 60: a altura de quatro campos
 local CARD_ICON_X = 6                     -- margem esquerda da coluna do icone
 local CARD_LEFT = CARD_ICON_X + CARD_ICON_MAX + 8
 local CARD_NAME_GAP = 4       -- entre o titulo e a primeira linha de campo
 
--- TETO DE LARGURA DO TEXTO. A outra reclamacao da 0.34.1 foi *"ficou muito comprido as linhas"*:
--- numa janela de 620 elas atravessavam de borda a borda.
+-- THE TEXT'S WIDTH CEILING. The other complaint about 0.34.1 was *"ficou muito comprido as linhas"*:
+-- in a 620 window they crossed from edge to edge.
 --
--- O numero e DERIVADO, e nao escolhido: e o que sobra da largura da lista depois do recuo dos
--- campos e da barra de rolagem. Um teto fixo maior que isso nao encurtaria nada -- ele so
--- deixaria o texto transbordar a linha, que e pior que a linha comprida.
+-- The number is DERIVED, not chosen: it is what is left of the list's width after the fields'
+-- indent and the scroll bar. A fixed ceiling bigger than that would shorten nothing -- it would only
+-- let the text overflow the row, which is worse than the long line.
 local CARD_TEXT_W = LIST_W - CARD_LEFT - 30
 
--- ⛑ QUANTOS CARDS INTEIROS TÊM QUE CABER SEM ROLAR. Pedido do usuário: três.
+-- ⛑ HOW MANY WHOLE CARDS HAVE TO FIT WITHOUT SCROLLING. The user's request: three.
 --
--- O inset da lista tinha altura FIXA (de -60 a -300, 240 px) e não acompanhava a janela — por
--- isso aumentar `HEIGHT` na rodada anterior não deu um pixel a mais de lista. A altura agora é
--- DERIVADA do card mais alto, que é o de quatro campos, e o resto da janela desce junto.
+-- The list's inset had a FIXED height (from -60 to -300, 240 px) and did not follow the window -- that
+-- is why raising `HEIGHT` in the round before gave not one pixel more of list. The height is now
+-- DERIVED from the tallest card, the four-field one, and the rest of the window moves down with it.
 local CARDS_VISIVEIS = 3
--- O card de QUATRO CAMPOS, sem a faixa de aviso — e a escolha é deliberada. Com a faixa ele mede
--- 116, e dimensionar a janela por ele a deixaria 72 px mais alta **para todo mundo, o tempo
--- todo**, por causa de um estado que é erro e é para durar pouco. Com peca perdida em todos os
--- três conjuntos, a lista rola um pouco; e o certo é o jogador consertar, não a janela crescer.
--- A altura do bloco de campos e o MAIOR entre as linhas e o icone: com um campo so, as linhas
--- medem 15 e o icone 32, e sem este maximo ele vazaria o card.
--- A altura do bloco de campos, que e tambem o TAMANHO do icone: os dois sao a mesma medida
--- desde que o icone passou a preencher o bloco.
+-- The FOUR-FIELD card, without the warning strip -- and the choice is deliberate. With the strip it
+-- measures 116, and sizing the window by it would make it 72 px taller **for everyone, all the
+-- time**, because of a state that is an error and meant to last little. With a missing piece in all
+-- three sets, the list scrolls a bit; and the right thing is the player fixing it, not the window growing.
+-- The block of fields' height is the BIGGER of the lines and the icon: with one field only, the lines
+-- measure 15 and the icon 32, and without this max it would leak out of the card.
+-- The block of fields' height, which is also the icon's SIZE: the two are the same measure
+-- since the icon started filling the block.
 local function FieldsHeight(n)
     return math.max(CARD_LINE * n, CARD_ICON_MIN)
 end
@@ -123,12 +123,12 @@ local CARD_MAX = CARD_TOP + FieldsHeight(4) + CARD_PAD
 local LIST_TOP = -60
 local LIST_H = CARD_MAX * CARDS_VISIVEIS + ROW_SPACING * (CARDS_VISIVEIS - 1) + 6  -- 6 = 3+3 do inset
 local LIST_BOTTOM = LIST_TOP - LIST_H
--- A faixa de Avisos começa logo abaixo do inset, com a mesma folga de 4 que ela sempre teve.
+-- The Warnings strip starts right below the inset, with the same 4 of slack it always had.
 local WARN_STRIP_Y = LIST_BOTTOM - 4
 
--- A conta fechada da janela, herdada da versão anterior e agora ancorada na lista:
--- faixa de Avisos (142 de conteúdo) + o rodapé de 26 que o `ButtonFrameTemplate` reserva,
--- mais os 4 de folga que a janela sempre teve.
+-- The window's closed sum, inherited from the version before and now anchored on the list:
+-- the Warnings strip (142 of content) + the 26 footer `ButtonFrameTemplate` reserves,
+-- plus the 4 of slack the window always had.
 local WARN_STRIP_H = 130
 local TEMPLATE_FOOTER = 26
 -- + the support line at the very bottom (Donate.lua, `DONATE_ROW`, 27/09).
@@ -136,8 +136,8 @@ local DONATE_ROW = ns.DONATE_ROW or 0
 HEIGHT = -WARN_STRIP_Y + WARN_STRIP_H + TEMPLATE_FOOTER + 4 + DONATE_ROW
 local FIELD_W = 240           -- combos: the widest loadout name the lab makes (201 px) + the combo's 34 of art
 local NAME_W = 251            -- EditBox: its art ends where the combos' does
-local GROUP_STEP = 50         -- rótulo (15) + combo (25) + respiro (10)
-local ATTIC_Y = -30           -- faixa entre o título e o inset
+local GROUP_STEP = 50         -- label (15) + combo (25) + breathing room (10)
+local ATTIC_Y = -30           -- the band between the title and the inset
 -- The editor column, top to bottom (27/09): the two buttons to the game's windows, the title of the
 -- name box, the box, the divider and the fields. Same rhythm as a field group: title 12 + 3 above
 -- its box, 10 between blocks, and the 16/10 around the divider that the column already had.
@@ -147,24 +147,24 @@ local NAME_TITLE_Y = EDITOR_TOP - 22 - 10        -- button (22) + gap
 local NAME_Y = NAME_TITLE_Y - 15                 -- title (12) + 3, like `Group`
 local DIVIDER_Y = NAME_Y - 22 - 16
 local FIELDS_Y = DIVIDER_Y - 10
-local CHILD_INDENT = 15       -- recuo de opção filha (`Blizzard_SettingControls.lua:1`)
+local CHILD_INDENT = 15       -- a child option's indent (`Blizzard_SettingControls.lua:1`)
 
 local frame, editor, selection
 local lastFilledRow      -- so para o harness: ver `UI.DebugLastRow`
 
--- O conjunto em edição, guardado AQUI e não perguntado ao ScrollBox.
+-- The set being edited, kept HERE and not asked of the ScrollBox.
 --
--- Dois motivos, os dois descobertos no primeiro teste in-game:
+-- Two reasons, both found in the first in-game test:
 --
---   1. `SelectionBehaviorMixin:GetSelectedElementData()` devolve uma **LISTA**, não um
---      elemento (`ScrollUtil.lua:434`). Uma lista vazia é VERDADEIRA em Lua, então o editor
---      achava que havia um conjunto selecionado — um conjunto sem spec, sem talentos e sem
---      itens. Era isso o "combo de talentos não traz nada": sem spec, `GetLoadouts(nil)`
---      devolve lista vazia. E era isso o "a deleção não funcionou": `UI.Delete` procurava
---      uma tabela vazia na lista e não achava.
---   2. `SetDataProvider` **apaga a seleção** (`OnScrollBoxDataProviderReassigned`,
---      `ScrollUtil.lua:413`). Sem guardar por fora, qualquer troca de equipamento no jogo
---      redesenharia a lista e jogaria a seleção de volta para o primeiro conjunto.
+--   1. `SelectionBehaviorMixin:GetSelectedElementData()` returns a **LIST**, not an
+--      element (`ScrollUtil.lua:434`). An empty list is TRUE in Lua, so the editor
+--      thought a set was selected -- a set with no spec, no talents and no
+--      items. That was the "combo de talentos não traz nada": with no spec, `GetLoadouts(nil)`
+--      returns an empty list. And that was the "a deleção não funcionou": `UI.Delete` looked for
+--      an empty table in the list and did not find it.
+--   2. `SetDataProvider` **erases the selection** (`OnScrollBoxDataProviderReassigned`,
+--      `ScrollUtil.lua:413`). Without keeping it outside, any gear swap in the game
+--      would redraw the list and throw the selection back to the first set.
 local current
 
 --------------------------------------------------------------------------------
@@ -172,12 +172,12 @@ local function Presets()
     return ns.db and ns.db.presets or {}
 end
 
----Texto de apoio da linha: "Gélido · SBA ST · Frost". Só entra o que o conjunto define — um
----conjunto que não mexe em talentos não deve dar a entender que mexe.
----As linhas do card, cada uma com rótulo próprio, na ordem em que a troca acontece.
+--- The row's support text: "Gélido · SBA ST · Frost". Only what the set defines goes in -- a
+--- set that does not touch talents must not suggest that it does.
+--- The card's lines, each with its own label, in the order the swap happens.
 ---
----Só entra o que o conjunto define — mesma regra do painel de progresso. Um conjunto só de
----itens mostra uma linha, e não quatro, das quais três diriam "(nenhum)".
+--- Only what the set defines goes in -- the same rule as the progress panel. An items-only
+--- set shows one line, and not four, three of which would say "(nenhum)".
 local function CardLines(preset)
     local linhas = {}
 
@@ -201,7 +201,7 @@ local function CardLines(preset)
     return linhas
 end
 
----Quanto este card mede. A lista pergunta isto por elemento, e não uma altura fixa para todos.
+--- How tall this card is. The list asks this per element, and not one fixed height for all.
 local function CardHeight(preset)
     local n = #CardLines(preset)
     local altura = CARD_TOP + FieldsHeight(n) + CARD_PAD
@@ -234,22 +234,22 @@ end
 --------------------------------------------------------------------------------
 -- A linha da lista
 --------------------------------------------------------------------------------
----Monta a linha uma vez. O ScrollBox reaproveita o mesmo frame para dados diferentes, então
----tudo que depende do conjunto vai em `Fill`, não aqui.
+--- Builds the row once. The ScrollBox reuses the same frame for different data, so
+--- everything that depends on the set goes in `Fill`, not here.
 local function BuildRow(row)
     if row.built then return end
     row.built = true
 
-    -- A altura real vem de `CardHeight`, por elemento; esta é só a de partida.
+    -- The real height comes from `CardHeight`, per element; this is only the starting one.
     row:SetHeight(CARD_PAD * 2 + CARD_NAME_INK + CARD_LINE)
 
-    -- Sem fundo próprio: quem dá o fundo é o mármore do inset. A linha só se pinta quando
-    -- está sob o mouse ou selecionada — o padrão do painel de Opções do jogo.
+    -- No background of its own: the inset's marble gives the background. The row only paints itself when
+    -- it is under the mouse or selected -- the pattern of the game's Options panel.
     --
-    -- Os alfas antigos (0.12 na seleção, 0.07 no hover) eram 3 a 6× mais fracos que o nativo
-    -- e sem `ADD`: era por isso que a seleção não aparecia. Estas duas texturas e estes
-    -- números são copiados do `GearSetButtonTemplate`, que é a lista de conjuntos de itens
-    -- da própria Blizzard. `TexCoord 0.2..0.8` corta as pontas para esticar sem deformar.
+    -- The old alphas (0.12 on selection, 0.07 on hover) were 3 to 6× weaker than the native ones
+    -- and without `ADD`: that is why the selection did not show. These two textures and these
+    -- numbers are copied from `GearSetButtonTemplate`, Blizzard's own list of equipment
+    -- sets. `TexCoord 0.2..0.8` cuts the ends so it stretches without deforming.
     row.selected = row:CreateTexture(nil, "OVERLAY")
     row.selected:SetAllPoints()
     row.selected:SetTexture("Interface\\FriendsFrame\\UI-FriendsFrame-HighlightBar")
@@ -275,14 +275,14 @@ local function BuildRow(row)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("TOPLEFT", 8, -CARD_PAD)
-    -- O titulo para antes do botao, e por isso ele nao usa `CARD_TEXT_W`: aqui o limite nao e
-    -- de leitura, e de colisao.
+    -- The title stops before the button, so it does not use `CARD_TEXT_W`: here the limit is not
+    -- for reading, it is for collision.
     row.name:SetPoint("RIGHT", row, "RIGHT", -86, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
-    -- UMA LINHA POR CAMPO, cada uma com rótulo. Quatro vagas fixas porque são quatro campos
-    -- possíveis; as que sobram ficam escondidas, e a ALTURA do card é que acompanha (`CardHeight`).
+    -- ONE LINE PER FIELD, each with a label. Four fixed slots because there are four possible
+    -- fields; the ones left over stay hidden, and it is the card's HEIGHT that follows (`CardHeight`).
     row.lines = {}
     for i = 1, 4 do
         local fs = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -293,9 +293,9 @@ local function BuildRow(row)
         row.lines[i] = fs
     end
 
-    -- A FAIXA DO AVISO. Vermelho sozinho, num texto de 11pt no meio de outros textos de 11pt,
-    -- é sinal fraco demais — e a skill deste projeto é explícita: destaque se faz somando sinais
-    -- fracos. Aqui são três: placa vermelha atrás, o "!" e a cor do texto.
+    -- THE WARNING STRIP. Red alone, in 11pt text among other 11pt texts,
+    -- is too weak a signal -- and this project's skill is explicit: emphasis comes from adding weak
+    -- signals. Here there are three: a red plate behind, the "!" and the text's colour.
     row.warn = CreateFrame("Frame", nil, row)
     row.warn:SetHeight(CARD_WARN - 2)
     row.warn:SetPoint("LEFT", CARD_LEFT, 0)
@@ -310,10 +310,10 @@ local function BuildRow(row)
     row.warn.text:SetWordWrap(false)
     row.warn.text:SetTextColor(1, 0.45, 0.42)
 
-    -- O CONSERTO TEM BOTÃO PRÓPRIO, e não toma o lugar do Carregar. O usuário foi explícito
+    -- THE FIX HAS A BUTTON OF ITS OWN, and does not take Load's place. The user was explicit
     -- (*"se tiver com erro de equipamentos, o botão de carregar fica indisponível para trocar"*),
-    -- e é a mesma regra que ele já tinha dado para a restrição de especialização: botão que
-    -- aceita clique e depois responde "não deu" é pior que botão apagado.
+    -- and it is the same rule he had already given for the specialization restriction: a button that
+    -- takes the click and then answers "it did not work" is worse than a dimmed button.
     row.fix = CreateFrame("Button", nil, row.warn, "UIPanelButtonTemplate")
     row.fix:SetSize(112, 20)
     row.fix:SetPoint("RIGHT", -2, 0)
@@ -331,24 +331,24 @@ local function BuildRow(row)
     end)
     row.warn:Hide()
 
-    -- O botão e o ✓ dividem o mesmo slot: a linha não reflui quando o conjunto passa a
-    -- estar aplicado, porque o texto reserva os 86px dos dois jeitos.
-    -- BOTÃO SEGURO, e não por capricho: **trocar de conjunto de aparência é protegido**. As duas
-    -- funções que fazem isso (`ChangeToOutfit` e `ChangeDisplayedOutfit`) não respondem a código
-    -- de addon — devolvem sucesso e não fazem nada, que foi o "não troca e não gera nenhum erro"
-    -- relatado três vezes. O patch 12.0.5 adicionou uma ação segura `"outfit"` justamente por
-    -- isso.
+    -- The button and the check mark share the same slot: the row does not reflow when the set comes to
+    -- be applied, because the text reserves the 86px both ways.
+    -- A SECURE BUTTON, and not on a whim: **switching an appearance set is protected**. The two
+    -- functions that do it (`ChangeToOutfit` and `ChangeDisplayedOutfit`) do not answer addon
+    -- code -- they return success and do nothing, which was the "não troca e não gera nenhum erro"
+    -- reported three times. Patch 12.0.5 added a secure action `"outfit"` exactly because of
+    -- that.
     --
-    -- Então quem troca a aparência é o CLIQUE DO JOGADOR neste botão, e não o nosso código. Os
-    -- outros três passos (spec, talentos, itens) continuam nossos e rodam no `PostClick`.
+    -- So what switches the appearance is the PLAYER'S CLICK on this button, not our code. The
+    -- other three steps (spec, talents, items) stay ours and run in `PostClick`.
     --
-    -- `PostClick`, e não `OnClick`: num botão seguro o `OnClick` roda dentro do caminho protegido
-    -- e o que fizermos ali contamina o resto. O `PostClick` roda depois, fora dele.
+    -- `PostClick`, and not `OnClick`: on a secure button `OnClick` runs inside the protected path
+    -- and what we do there taints the rest. `PostClick` runs after, outside it.
     row.load = CreateFrame("Button", nil, row,
         "UIPanelButtonTemplate, SecureActionButtonTemplate")
     row.load:SetSize(74, 22)
-    -- NA LINHA DO ICONE: e a unica faixa do card sem texto, e assim o botao para de disputar
-    -- altura com o titulo. De quebra, ele fica no canto onde o olho ja procura acao.
+    -- ON THE ICON'S LINE: the only band of the card with no text, and so the button stops competing
+    -- for height with the title. On top, it sits in the corner where the eye already looks for an action.
     row.load:SetPoint("RIGHT", -6, 0)
     row.load:SetText(L["Load"])
     row.load:RegisterForClicks("AnyUp")
@@ -377,8 +377,8 @@ local function BuildRow(row)
         UI.Load(self:GetParent().preset)
     end)
 
-    -- BOTÃO APAGADO TEM QUE DIZER POR QUÊ, senão ele é só um botão quebrado. O motivo vem do
-    -- jogo, já traduzido (`CanPlayerUseTalentSpecUI` devolve `canUse, failureReason`).
+    -- A DIMMED BUTTON HAS TO SAY WHY, or it is just a broken button. The reason comes from the
+    -- game, already translated (`CanPlayerUseTalentSpecUI` returns `canUse, failureReason`).
     row.load:SetScript("OnEnter", function(self)
         if not self.blockedReason then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -396,9 +396,9 @@ local function BuildRow(row)
     row.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
     row.check:Hide()
 
-    -- O CLIQUE DA LINHA. Ele não existia: eu troquei o `OnClick` manual pelo
-    -- `AddSelectionBehavior` achando que o comportamento também capturava o clique. Ele só
-    -- gerencia o ESTADO da seleção — quem seleciona é quem clica. Era o "não consigo clicar
+    -- THE ROW'S CLICK. It did not exist: I swapped the manual `OnClick` for
+    -- `AddSelectionBehavior` thinking the behaviour captured the click too. It only
+    -- manages the selection's STATE -- whoever clicks is who selects. That was the "não consigo clicar
     -- em outros conjuntos".
     row:RegisterForClicks("LeftButtonUp")
     row:SetScript("OnClick", function(self)
@@ -422,9 +422,9 @@ local function BuildRow(row)
             GameTooltip_AddErrorLine(GameTooltip, L["Give the preset a name first."])
         end
 
-        -- O PORQUÊ DO VERMELHO. Sem esta linha a pessoa vê "falta 1 item" e conclui a coisa
-        -- errada — que a troca vai ficar incompleta. O estrago real é outro: o espaço fica com
-        -- a peça que já estava, que pode ser a do papel anterior.
+        -- THE WHY OF THE RED. Without this line the person sees "1 item missing" and concludes the wrong
+        -- thing -- that the swap will be incomplete. The real damage is another: the slot keeps
+        -- the piece that was already there, which may be the previous role's.
         local problema = self.preset.gear and ns.Data.GearSetProblem(self.preset.gear)
         if problema then
             GameTooltip:AddLine(" ")
@@ -444,21 +444,21 @@ local function BuildRow(row)
     row:SetScript("OnLeave", GameTooltip_Hide)
 end
 
----Arma (ou desarma) a ação segura de aparência num botão.
+--- Arms (or disarms) the secure appearance action on a button.
 ---
----`action = "change"` e não `"toggle"`: em `SECURE_ACTIONS.outfit` o `"toggle"` vira
----`allowRemoveOutfit = true`, e aí pedir a aparência que já está posta é tratado como **limpar**
----(`SlashCommands.lua:1714`) — carregar duas vezes o mesmo conjunto TIRARIA a roupa na segunda.
+--- `action = "change"` and not `"toggle"`: in `SECURE_ACTIONS.outfit` `"toggle"` becomes
+--- `allowRemoveOutfit = true`, and then asking for the appearance already on is treated as **clearing**
+--- (`SlashCommands.lua:1714`) -- loading the same set twice WOULD TAKE the outfit off the second time.
 ---
----EM COMBATE NÃO SE MEXE em atributo de frame seguro. Sair sem fazer nada é o certo: o atributo
----que já estava lá continua valendo, e `Data.Apply` já recusa aplicar em combate de todo jeito.
+--- IN COMBAT A SECURE FRAME'S ATTRIBUTE IS NOT TOUCHED. Leaving without doing anything is right: the
+--- attribute already there still holds, and `Data.Apply` refuses to apply in combat anyway.
 local function ArmOutfit(button, preset)
     if InCombatLockdown() then return end
 
-    -- (!) CONJUNTO QUEBRADO NÃO ARMA A AÇÃO SEGURA. A ação `outfit` roda DENTRO do clique, antes
-    -- de qualquer Lua nosso — então recusar a troca no `Data.Apply` chegaria tarde para ela, e o
-    -- jogador ficaria com a roupa trocada e nada mais. Desarmar aqui é o único ponto em que dá
-    -- para impedir a aparência de ir sozinha.
+    -- (!) A BROKEN SET DOES NOT ARM THE SECURE ACTION. The `outfit` action runs INSIDE the click, before
+    -- any Lua of ours -- so refusing the swap in `Data.Apply` would come too late for it, and the
+    -- player would end up with the outfit switched and nothing else. Disarming here is the only point
+    -- where the appearance can be kept from going alone.
     local quebrado = preset and preset.gear and ns.Data.GearSetProblem(preset.gear)
 
     local index = not quebrado and preset and preset.transmog
@@ -468,9 +468,9 @@ local function ArmOutfit(button, preset)
         button:SetAttribute("outfit-index", index)
         button:SetAttribute("action", "change")
     else
-        -- Sem aparência no conjunto (ou a aparência foi apagada do jogo): o botão volta a ser um
-        -- botão comum. Deixar `type` armado com índice nulo faria o clique cair no ramo de
-        -- `SECURE_ACTIONS.outfit` e não fazer nada, silenciosamente.
+        -- No appearance in the set (or the appearance was deleted from the game): the button goes back to being
+        -- a plain button. Leaving `type` armed with a nil index would make the click fall into the
+        -- `SECURE_ACTIONS.outfit` branch and do nothing, silently.
         button:SetAttribute("type", nil)
         button:SetAttribute("outfit-index", nil)
         button:SetAttribute("action", nil)
@@ -480,7 +480,7 @@ end
 -- The macro's button arms the outfit the same way (Macro.lua).
 UI.ArmOutfit = ArmOutfit
 
----Preenche a linha com um conjunto.
+--- Fills the row with a set.
 -- (!) TURNING A BUTTON ON AND OFF IS PROTECTED (`SetEnabled`, `IsProtectedFunction` in the
 -- client's SimpleButtonAPIDocumentation.lua, 12.1.0), and Load is a secure button: in combat the
 -- game blocks the call. The reason is kept at once -- the tooltip is ours -- and the button is
@@ -548,18 +548,18 @@ local function FillRow(row, preset)
         local linha = linhas[i]
         fs:SetShown(linha ~= nil)
         if linha then
-            -- RÓTULO e VALOR na mesma linha, com o rótulo apagado: o olho varre os valores na
-            -- vertical e só lê o rótulo quando precisa. Dois brilhos, nenhuma cor nova.
+            -- LABEL and VALUE on the same line, the label dimmed: the eye scans the values
+            -- vertically and only reads the label when it needs to. Two brightnesses, no new colour.
             fs:SetText("|cff9a9a9e" .. linha[1] .. ":|r  " .. (linha[2] or "?"))
         end
     end
-    -- O ICONE TOMA A ALTURA DO BLOCO DE CAMPOS, e encosta no titulo. Ele ja esteve centralizado
-    -- na vertical, o que com quatro campos o empurrava 14 px para baixo e o deixava boiando ao
-    -- lado da segunda linha; ancorado no topo, fica colado no titulo com qualquer numero de
-    -- campos.
+    -- THE ICON TAKES THE BLOCK OF FIELDS' HEIGHT, and touches the title. It was once centred
+    -- vertically, which with four fields pushed it 14 px down and left it floating beside
+    -- the second line; anchored at the top, it sits right under the title with any number of
+    -- fields.
     --
-    -- Na HORIZONTAL ele se centraliza na coluna, que tem largura fixa: e isso que mantem o texto
-    -- de todos os cards comecando no mesmo X, independente de quantos campos cada um tem.
+    -- HORIZONTALLY it centres in the column, which has a fixed width: that is what keeps the text
+    -- of every card starting at the same X, whatever number of fields each has.
     local blocoH = FieldsHeight(#linhas)
     row.icon:SetSize(blocoH, blocoH)
     row.icon:ClearAllPoints()
@@ -572,13 +572,13 @@ local function FillRow(row, preset)
     local _, icon = ns.Data.GearSetName(preset.gear)
     row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
 
-    -- UM canal por fato: a barra dourada diz "selecionado", o slot do botão diz "aplicado".
-    -- A versão anterior também tingia o nome, e dourado-contra-quase-branco é distinção que
-    -- ninguém lê — dois sinais para o mesmo fato brigando com a barra de seleção.
-    -- O conjunto quebrado se anuncia NA LINHA, antes de qualquer clique: é o mesmo sinal que o
-    -- gerenciador de equipamento do jogo dá (nome em vermelho), e é o aviso que o usuário pediu
-    -- — *"a gente consegue antes de trocar, avisar isso"*.
-    -- A FAIXA DO AVISO, ancorada abaixo da última linha que apareceu.
+    -- ONE channel per fact: the gold bar says "selected", the button's slot says "applied".
+    -- The version before also tinted the name, and gold-against-almost-white is a distinction
+    -- nobody reads -- two signals for the same fact fighting with the selection bar.
+    -- A broken set announces itself ON THE ROW, before any click: it is the same signal the
+    -- game's equipment manager gives (the name in red), and it is the warning the user asked for
+    -- -- *"a gente consegue antes de trocar, avisar isso"*.
+    -- THE WARNING STRIP, anchored below the last line that showed.
     local problema = preset.gear and ns.Data.GearSetProblem(preset.gear)
     NoteLost(preset, problema)
     row.warn:SetShown(problema ~= nil)
@@ -597,18 +597,18 @@ local function FillRow(row, preset)
     row.check:SetShown(loaded)
     row.load:SetShown(not loaded)
 
-    -- BOTÃO DESABILITADO QUANDO O JOGO NÃO DEIXA, e a ideia é do usuário: *"se houver isso, tem
-    -- que desabilitar os botões de carregar preset até que possa ser feito"*. Ele está certo —
-    -- botão que aceita clique e depois responde "não deu" é pior que botão apagado.
+    -- A BUTTON DISABLED WHEN THE GAME DOES NOT ALLOW, and the idea is the user's: *"se houver isso, tem
+    -- que desabilitar os botões de carregar preset até que possa ser feito"*. He is right --
+    -- a button that takes the click and then answers "it did not work" is worse than a dimmed button.
     --
-    -- SÓ VALE PARA CONJUNTO QUE TROCA DE SPEC. Um conjunto que só mexe em itens não tem por que
-    -- ficar bloqueado por uma restrição de especialização, e desabilitar todos seria punir o
-    -- inocente — a regra é a MESMA que o passo aplica, e por isso as duas não podem divergir.
-    -- COM PEÇA PERDIDA, CARREGAR FICA APAGADO. A corrente recusa de qualquer jeito, e a regra
-    -- é a mesma que já vale para a restrição de especialização: botão que aceita clique e depois
-    -- responde "não deu" é pior que botão apagado. Quem age é o botão da faixa vermelha.
-    -- Os dois motivos de apagar o botão saem da MESMA função (`Data.LoadBlockedReason`), que
-    -- é onde o harness alcança. Aqui sobra o desenho: apagar e guardar a frase da dica.
+    -- IT ONLY APPLIES TO A SET THAT SWITCHES SPEC. A set that only touches items has no reason to
+    -- be blocked by a specialization restriction, and disabling them all would punish the
+    -- innocent -- the rule is the SAME the step applies, and so the two cannot drift apart.
+    -- WITH A PIECE MISSING, LOAD STAYS DIMMED. The chain refuses anyway, and the rule
+    -- is the same that already holds for the specialization restriction: a button that takes the click
+    -- and then answers "it did not work" is worse than a dimmed button. The red strip's button acts.
+    -- Both reasons to dim the button come from the SAME function (`Data.LoadBlockedReason`), which
+    -- is where the harness reaches. What is left here is the drawing: dimming and keeping the tooltip's phrase.
     SetLoadState(row, preset)
     row.drawn = RowState(preset)
 
@@ -618,14 +618,14 @@ end
 --------------------------------------------------------------------------------
 -- Os campos do editor
 --------------------------------------------------------------------------------
----Rótulo + combo num CONTÊINER. Esconder o grupo esconde os dois — é o que impede o rótulo
----órfão de voltar no próximo campo que alguém acrescentar.
+--- A label + combo in a CONTAINER. Hiding the group hides both -- it is what keeps the orphan
+--- label from coming back in the next field someone adds.
 ---
----O rótulo assenta pelo rodapé no topo do combo, +3: assim ele não depende do corpo da fonte.
+--- The label sits by its bottom on the combo's top, +3: so it does not depend on the font's size.
 ---
----`emptyText` is what the field shows when nothing is picked and `clearText` the menu entry that
----clears it (both "(none)" by default). An optional field can show nothing and name the clear
----entry by what the preset then does (21/10, Appearance).
+--- `emptyText` is what the field shows when nothing is picked and `clearText` the menu entry that
+--- clears it (both "(none)" by default). An optional field can show nothing and name the clear
+--- entry by what the preset then does (21/10, Appearance).
 local function Group(parent, labelText, yTop, items, get, set, emptyText, clearText)
     emptyText = emptyText or L["(none)"]
     clearText = clearText or L["(none)"]
@@ -643,11 +643,11 @@ local function Group(parent, labelText, yTop, items, get, set, emptyText, clearT
     label:SetJustifyH("LEFT")
     label:SetText(labelText)
 
-    ---Regenera o menu a partir do estado atual.
+    --- Rebuilds the menu from the current state.
     ---
-    ---`SetDefaultText` é só para "nada selecionado" — a marca do item escolhido sai de graça
-    ---do `IsSelected` do `CreateRadio`. A versão anterior usava o default como "texto do
-    ---selecionado", que é o que o comentário da própria Blizzard desaconselha.
+    --- `SetDefaultText` is only for "nothing selected" -- the mark of the chosen item comes free
+    --- from `CreateRadio`'s `IsSelected`. The version before used the default as the "selected's
+    --- text", which is what Blizzard's own comment advises against.
     function group.Sync()
         local list = items()
 
@@ -663,8 +663,8 @@ local function Group(parent, labelText, yTop, items, get, set, emptyText, clearT
                     function() UI.SaveName(); set(item.value); UI.AfterEdit() end,
                     item.value)
 
-                -- O conjunto de itens já tem ícone; mostrá-lo no menu custa cinco linhas e
-                -- é o que faz escolher "Frost" sem ler.
+                -- The equipment set already has an icon; showing it in the menu costs five lines and
+                -- is what makes choosing "Frost" possible without reading.
                 if item.icon and entry.AddInitializer then
                     entry:AddInitializer(function(button)
                         local tex = button:AttachTexture()
@@ -678,8 +678,8 @@ local function Group(parent, labelText, yTop, items, get, set, emptyText, clearT
                 end
             end
 
-            -- Sem nada para escolher, o combo fica apagado em vez de abrir um menu de um
-            -- item só — o caso real de uma spec sem loadout salvo.
+            -- With nothing to choose, the combo stays dimmed instead of opening a menu of one
+            -- item only -- the real case of a spec with no saved loadout.
             -- LOCKED stays off: the game runs this again on every show and every opening
             -- (`DropdownButton.lua:117,246`, 12.1.0). Off, its dropdown does not open (`:109`).
             if root.HasElements then dd:SetEnabled(group.locked == nil and root:HasElements()) end
@@ -767,16 +767,16 @@ local function BuildEditor()
     editor.name:SetAutoFocus(false)
     editor.name:SetMaxLetters(31)
     if editor.name.Instructions then
-        -- Sem isto o texto de instrução nasce 16px à direita do texto digitado.
+        -- Without this the instruction text is born 16px to the right of the typed text.
         editor.name.Instructions:SetAllPoints()
         -- With a title above, repeating it inside the box says nothing: show an example instead.
         editor.name.Instructions:SetText(L["e.g. Raid, M+, Arena"])
     end
     editor.name:SetScript("OnEscapePressed", editor.name.ClearFocus)
     editor.name:SetScript("OnEnterPressed", editor.name.ClearFocus)
-    -- Sair da caixa salva. O botão "Salvar" foi embora: os combos já escrevem direto no
-    -- conjunto, então ele só confirmava o nome — e sua existência levantava a dúvida "a
-    -- escolha do combo salvou?".
+    -- Leaving the box saves. The "Salvar" button went away: the combos already write straight to the
+    -- set, so it only confirmed the name -- and its existence raised the doubt "did the
+    -- combo's choice save?".
     editor.name:SetScript("OnEditFocusLost", function() UI.SaveName() end)
     -- (!) THE NAME IS REQUIRED (30/09), and the column says so AS IT IS TYPED: with the box empty
     -- the title carries "(required)" in the game's red and the four fields below are off; the
@@ -802,8 +802,8 @@ local function BuildEditor()
             return out
         end,
         function() local p = Current(); return p and p.spec end,
-        -- Trocar a spec zera o loadout: um loadout de Gélido não existe em Profano, e
-        -- oferecê-lo seria oferecer o impossível.
+        -- Switching the spec clears the loadout: a Frost loadout does not exist in Unholy, and
+        -- offering it would be offering the impossible.
         function(v) local p = Current(); if p then p.spec = v; p.talent = nil end end)
 
     editor.talent = Group(frame, L["Talents"], FIELDS_Y - GROUP_STEP,
@@ -830,8 +830,8 @@ local function BuildEditor()
         function() local p = Current(); return p and p.gear end,
         function(v) local p = Current(); if p then p.gear = v end end)
 
-    -- Aparência é OPCIONAL de propósito: vazio, o conjunto não mexe na roupa. Quem não usa
-    -- transmog nem percebe que o campo existe.
+    -- Appearance is OPTIONAL on purpose: empty, the set does not touch the outfit. Whoever does not use
+    -- transmog does not even notice the field exists.
     -- (21/10) EMPTY, THE FIELD IS BLANK. The user: *"quando não é selecionado a aparência fica
     -- (none), tem que melhorar o texto"*, then *"ou deixa vazio mesmo"* -- "(nenhum)" read as "no
     -- appearance", and in Portuguese it did not even agree with "Aparência". The menu entry that
@@ -882,52 +882,52 @@ end
 --------------------------------------------------------------------------------
 -- O progresso da troca
 --------------------------------------------------------------------------------
--- POR QUE ISTO EXISTE. O relato foi: *"quando clica para carregar, ele demora para iniciar o
--- 'cast', o usuário vai pensar que nada aconteceu"* — e o pedido junto, *"algo animado e bem
--- didático que o usuário entenda"* que a troca *"é um processo de troca por etapas"*.
+-- WHY THIS EXISTS. The report was: *"quando clica para carregar, ele demora para iniciar o
+-- 'cast', o usuário vai pensar que nada aconteceu"* -- and the request with it, *"algo animado e bem
+-- didático que o usuário entenda"* that the swap *"é um processo de troca por etapas"*.
 --
--- **E não é uma barra de progresso.** A corrente não sabe quanto vai demorar: o passo da
--- especialização espera o servidor e reinsiste de 4 em 4 segundos, e o diário real mostrou a
--- mesma troca sendo aceita ora em 4, ora em 14 segundos. Barra que anda sozinha inventa uma
--- previsão que ninguém tem, e barra que trava no meio é pior que barra nenhuma. O que dá para
--- mostrar com honestidade — e é o que a pessoa quer saber — são quatro coisas verdadeiras a cada
--- quadro: **quais são as etapas**, **em qual delas estamos**, **quais já fecharam** e **há
--- quanto tempo**. As três primeiras vêm de `Data.GetProgress()`; a quarta é um relógio.
+-- **And it is not a progress bar.** The chain does not know how long it will take: the
+-- specialization step waits for the server and insists every 4 seconds, and the real log showed the
+-- same swap accepted in 4 seconds one time and 14 another. A bar that moves by itself invents a
+-- forecast nobody has, and a bar stuck halfway is worse than no bar. What can be shown
+-- honestly -- and it is what the person wants to know -- are four things true at every
+-- frame: **what the stages are**, **which one we are in**, **which have closed** and **for how
+-- long**. The first three come from `Data.GetProgress()`; the fourth is a clock.
 --
--- ONDE: na coluna da direita, no lugar do editor. Durante a troca o editor não é usável — mexer
--- no conjunto que está sendo aplicado é mudar o chão no meio do passo —, então o espaço está
--- livre. E é onde os campos do conjunto já moram: os rótulos aqui são **os mesmos** do editor
--- (`Especialização`, `Talentos`, `Itens`, `Aparência`) e **na mesma ordem**. Quem acabou de ler
--- aqueles nomes ao lado dos combos reconhece a lista sem precisar de legenda — é isso que torna
--- a tela didática, e não um texto explicando o que ela é.
+-- WHERE: in the right column, in the editor's place. During the swap the editor is not usable -- changing
+-- the set being applied is moving the floor mid-step --, so the space is
+-- free. And it is where the set's fields already live: the labels here are **the same** as the editor's
+-- (`Especialização`, `Talentos`, `Itens`, `Aparência`) and **in the same order**. Whoever just read
+-- those names beside the combos recognises the list with no legend needed -- that is what makes
+-- the screen teach, and not a text explaining what it is.
 --
--- E entram **só as etapas que o conjunto pede** (`Data.GetProgress` filtra): um conjunto só de
--- itens mostra uma linha, não quatro, das quais três diriam "nada a mudar".
+-- And **only the stages the set asks for** go in (`Data.GetProgress` filters): an items-only
+-- set shows one line, not four, three of which would say "nothing to change".
 
 local PROGRESS_ROW = 22       -- ritmo de LISTA (`Blizzard_CategoryList.xml:51` + `.lua:214`)
 local PROGRESS_ICON = 16      -- o tamanho do ✓ nativo (`Blizzard_UIWidgetTemplateBase.xml:185`)
-local PROGRESS_ICON_GAP = 5   -- ícone → rótulo pequeno (`Blizzard_AutoCompletePopupList.xml:32`,
-                              -- que é ícone + `GameFontHighlightSmall`, o mesmo par daqui)
-local PROGRESS_TITLE_GAP = 13 -- abaixo do título, como no cabeçalho de seção: bloco 45, título a
+local PROGRESS_ICON_GAP = 5   -- icon -> small label (`Blizzard_AutoCompletePopupList.xml:32`,
+                              -- which is icon + `GameFontHighlightSmall`, the same pair as here)
+local PROGRESS_TITLE_GAP = 13 -- below the title, as in a section header: block 45, title at
                               -- y=-16 e 16 de tinta ⇒ 45 − 16 − 16 (`Blizzard_SettingControls.xml:14,19`)
 local PROGRESS_TITLE_INK = 16 -- `GameFontNormal` a 14pt, arredondado pela caixa da fonte
 local PROGRESS_CLOCK_W = 70
 
--- QUANTO TEMPO O RESULTADO FICA NA TELA depois de a troca acabar. Sem esta pausa o painel some
--- no instante em que ele finalmente tem algo a dizer — qual passo foi pulado, qual não deu — e o
--- jogador ficaria só com a linha de status lá embaixo, que é justamente o aviso que *"mostra e
--- some, o usuário pode nem ver"*.
+-- HOW LONG THE RESULT STAYS ON SCREEN after the swap ends. Without this pause the panel goes away
+-- the instant it finally has something to say -- which step was skipped, which failed -- and the
+-- player would be left only with the status line down below, which is exactly the warning that
+-- *"mostra e some, o usuário pode nem ver"*.
 local PROGRESS_HOLD = 5
 
--- Um sinal por estado, e nenhum deles inventado: os três atlas foram conferidos na fonte do
--- 12.1.0 (`common-icon-checkmark` em 7 arquivos, `common-icon-redx` em 3, `common-icon-forwardarrow`
--- em 3). A skill do workspace é explícita quanto ao resto: cor de classe é vocabulário reservado,
--- então o destaque se faz somando **sinais fracos** — aqui, arte + brilho + a pulsação.
+-- One signal per state, and none of them made up: the three atlases were checked in the
+-- 12.1.0 source (`common-icon-checkmark` in 7 files, `common-icon-redx` in 3, `common-icon-forwardarrow`
+-- in 3). The workspace's skill is explicit about the rest: a class colour is reserved vocabulary,
+-- so emphasis comes from adding **weak signals** -- here, art + brightness + the pulse.
 --
--- `skipped` NÃO É FALHA e não pode parecer uma: nada de ✗, nada de vermelho. Ele ganha o mesmo
--- ponto neutro de quem ainda não começou, mais a razão escrita no próprio rótulo.
--- Exportado em `ns.ProgressVisuals` logo abaixo: o painel flutuante (`Progress.lua`) desenha
--- os MESMOS estados, e duas tabelas de arte divergiriam na primeira mudança.
+-- `skipped` IS NOT A FAILURE and must not look like one: no ✗, no red. It gets the same
+-- neutral dot as one that has not started yet, plus the reason written in the label itself.
+-- Exported in `ns.ProgressVisuals` right below: the floating panel (`Progress.lua`) draws
+-- the SAME states, and two art tables would drift apart at the first change.
 local PROGRESS_STATE = {
     pending = {                                     alpha = 0.40 },
     doing   = { atlas = "common-icon-forwardarrow", alpha = 1.00 },
@@ -936,8 +936,8 @@ local PROGRESS_STATE = {
     failed  = { atlas = "common-icon-redx",         alpha = 0.90 },
 }
 
--- O painel flutuante (`Progress.lua`) desenha os MESMOS estados. Duas tabelas de arte
--- divergiriam na primeira mudança, então existe uma só e ela mora aqui.
+-- The floating panel (`Progress.lua`) draws the SAME states. Two art tables
+-- would drift apart at the first change, so there is only one and it lives here.
 ns.ProgressVisuals = PROGRESS_STATE
 ns.PROGRESS_ROW = PROGRESS_ROW
 ns.PROGRESS_ICON = PROGRESS_ICON
@@ -957,16 +957,16 @@ local function ConcludeProgress(panel)
     UI.RefreshEditor()
 end
 
----Monta o painel uma vez; quem escreve nele é `UI.RefreshProgress`.
+--- Builds the panel once; `UI.RefreshProgress` is what writes on it.
 local function BuildProgress()
     local panel = CreateFrame("Frame", nil, frame)
     panel:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, -60)
     panel:SetPoint("RIGHT", frame, "RIGHT", -20, 0)
     panel:Hide()
 
-    -- O relógio à direita do título. É o que responde *"aconteceu alguma coisa?"* antes de
-    -- qualquer passo fechar: um número que anda de segundo em segundo prova que o addon está
-    -- vivo, mesmo nos 4 segundos em que ele está de propósito esperando o jogo liberar.
+    -- The clock to the right of the title. It is what answers *"did anything happen?"* before
+    -- any step closes: a number moving second by second proves the addon is
+    -- alive, even in the 4 seconds when it is waiting on purpose for the game to allow it.
     panel.clock = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     panel.clock:SetPoint("TOPRIGHT", 0, 0)
     panel.clock:SetWidth(PROGRESS_CLOCK_W)
@@ -994,26 +994,26 @@ local function BuildProgress()
         row.icon:SetSize(PROGRESS_ICON, PROGRESS_ICON)
         row.icon:SetPoint("LEFT", 0, 0)
 
-        -- O PONTO DE ESPERA. Nos estados sem arte (ainda não chegou a vez, e o pulado) a coluna
-        -- do ícone não pode ficar vazia: buraco no meio de uma lista faz ela parecer quebrada, e
-        -- o rótulo perde a margem que os outros três têm. Um ponto neutro segura a coluna, e ele
-        -- some por baixo do ✓ ou do ✗ quando eles entram.
+        -- THE WAITING DOT. In the states with no art (its turn has not come, and the skipped) the icon's
+        -- column cannot stay empty: a hole in the middle of a list makes it look broken, and
+        -- the label loses the margin the other three have. A neutral dot holds the column, and it
+        -- vanishes under the ✓ or the ✗ when they come in.
         row.dot = row:CreateTexture(nil, "ARTWORK")
         row.dot:SetSize(4, 4)
         row.dot:SetPoint("CENTER", row.icon, "CENTER", 0, 0)
         row.dot:SetColorTexture(1, 1, 1, 1)
 
-        -- Largura por ancoragem nos dois lados, e não por `SetWidth` chutado: o rótulo tem que
-        -- caber em alemão e russo, onde ele cresce sozinho.
+        -- Width by anchoring on both sides, and not by a guessed `SetWidth`: the label has to
+        -- fit in German and Russian, where it grows by itself.
         row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.label:SetPoint("LEFT", row.icon, "RIGHT", PROGRESS_ICON_GAP, 0)
         row.label:SetPoint("RIGHT", row, "RIGHT", 0, 0)
         row.label:SetJustifyH("LEFT")
         row.label:SetWordWrap(false)
 
-        -- A PULSAÇÃO, e ela é a única animação da tela. Serve para o caso "indeterminado": não
-        -- se sabe quanto falta, então o que se anima é a presença do passo, não um avanço.
-        -- Alfa e não rotação — pulsar não disputa atenção com nada, e não exige arte nova.
+        -- THE PULSE, and it is the screen's only animation. It is for the "indeterminate" case: nobody
+        -- knows how much is left, so what is animated is the step's presence, not a progress.
+        -- Alpha and not rotation -- a pulse competes with nothing for attention, and needs no new art.
         row.pulse = row:CreateAnimationGroup()
         row.pulse:SetLooping("BOUNCE")
         local fade = row.pulse:CreateAnimation("Alpha")
@@ -1028,29 +1028,29 @@ local function BuildProgress()
     frame.progress = panel
 end
 
----Redesenha o progresso. Roda no `OnUpdate` da janela, represado — o relógio é em segundos
----inteiros, então dez quadros por segundo já é folga.
+--- Redraws the progress. It runs in the window's `OnUpdate`, throttled -- the clock is in whole
+--- seconds, so ten frames a second is plenty.
 function UI.RefreshProgress()
     if not frame or not frame.progress then return end
     local panel = frame.progress
 
     local passos, info = ns.Data.GetProgress()
     if not passos then
-        ConcludeProgress(panel)     -- nunca houve troca nesta sessão
+        ConcludeProgress(panel)     -- there was never a swap in this session
         return
     end
 
-    -- AS DUAS TRANSIÇÕES. `info.live` diz se a troca está acontecendo AGORA; `panel.live` é o que
-    -- a janela viu da última vez. A diferença entre os dois é o que marca começo e fim — e é o
-    -- fim que precisa da pausa, para o resultado ser lido antes de o editor voltar.
+    -- THE TWO TRANSITIONS. `info.live` says whether the swap is happening NOW; `panel.live` is what
+    -- the window saw last time. The difference between the two is what marks start and end -- and it is
+    -- the end that needs the pause, so the result is read before the editor comes back.
     if info.live and not panel.live then
         panel.live, panel.holdUntil = true, nil
     elseif not info.live and panel.live then
         panel.live, panel.holdUntil = false, GetTime() + PROGRESS_HOLD
     end
 
-    -- Retrato de uma troca que já terminou e já foi mostrada (ou que aconteceu com a janela
-    -- fechada): ele não abre o painel. Progresso é sobre agora.
+    -- The picture of a swap that already ended and was already shown (or that happened with the window
+    -- closed): it does not open the panel. Progress is about now.
     if not info.live and (not panel.holdUntil or GetTime() >= panel.holdUntil) then
         panel.holdUntil = nil
         ConcludeProgress(panel)
@@ -1062,26 +1062,26 @@ function UI.RefreshProgress()
         UI.RefreshEditor()          -- a coluna passa a ser do progresso
     end
 
-    -- A ALTURA ACOMPANHA QUANTAS ETAPAS O CONJUNTO PEDE. Reservar as quatro vagas sempre deixa
-    -- um vazio embaixo do painel de um conjunto so de itens -- e espaco guardado para conteudo
-    -- que nao existe e o que mais faz uma janela parecer quebrada.
+    -- THE HEIGHT FOLLOWS HOW MANY STAGES THE SET ASKS FOR. Reserving the four slots always leaves
+    -- a gap under the panel of an items-only set -- and space kept for content
+    -- that does not exist is what most makes a window look broken.
     panel:SetHeight(PROGRESS_ROW * #passos + PROGRESS_TITLE_GAP + PROGRESS_TITLE_INK)
 
     panel.title:SetText(format(L["Switching to %s"],
         info.preset and info.preset.name or "?"))
 
-    -- SÓ OS SEGUNDOS, e nada sobre tentativas.
+    -- ONLY THE SECONDS, and nothing about attempts.
     --
-    -- Uma versão anterior trocava o relógio por "tentativa 2 de 8" enquanto o jogo recusava a
-    -- troca de spec. O usuário pediu para tirar, e ele tem razão: o número de tentativas é
-    -- mecânica interna do addon — o jogador não decide nada com ele, não pode acelerar nem
-    -- interromper, e ver um contador subindo sugere um problema onde há só espera normal. O que
-    -- ele precisa saber é que **algo está acontecendo**, e disso o relógio já dá conta sozinho.
+    -- An earlier version swapped the clock for "attempt 2 of 8" while the game refused the
+    -- spec switch. The user asked to take it out, and he is right: the number of attempts is the
+    -- addon's internal mechanics -- the player decides nothing with it, cannot speed it up nor
+    -- interrupt it, and seeing a counter go up suggests a problem where there is only a normal wait. What
+    -- he needs to know is that **something is happening**, and the clock alone already handles that.
     --
-    -- A insistência continua registrada onde ela serve: no diário (`/rs log`).
+    -- The insisting is still recorded where it serves: in the log (`/rs log`).
     --
-    -- E ele PARA quando a troca para — deixá-lo correndo durante a pausa faria o número contar o
-    -- tempo de leitura como se fosse tempo de troca.
+    -- And it STOPS when the swap stops -- leaving it running during the pause would make the number count the
+    -- reading time as if it were swap time.
     if info.live then
         local secs = math.max(0, math.floor(GetTime() - (info.startedAt or 0)))
         panel.clock:SetText(secs .. "s")
@@ -1099,17 +1099,17 @@ function UI.RefreshProgress()
             row.dot:SetShown(not temArte)
             row.dot:SetVertexColor(1, 1, 1, visual.alpha)
 
-            -- O PULADO DIZ POR QUE FOI PULADO, no próprio rótulo. Sem isso ele fica igual a um
-            -- passo que ainda não começou, e o jogador termina a troca sem saber se a aparência
-            -- foi aplicada ou esquecida.
+            -- THE SKIPPED ONE SAYS WHY IT WAS SKIPPED, in the label itself. Without that it looks like a
+            -- step that has not started yet, and the player ends the swap not knowing whether the appearance
+            -- was applied or forgotten.
             row.label:SetText(passo.state == "skipped"
                 and format(L["%s — nothing to change"], passo.label)
                 or passo.label)
             row.label:SetAlpha(visual.alpha)
 
-            -- A pulsação segue o passo em andamento, e só enquanto a troca está viva: ela é
-            -- reancorada em vez de recriada, porque animação começada de novo a cada quadro não
-            -- anima nada — pisca.
+            -- The pulse follows the step under way, and only while the swap is alive: it is
+            -- re-anchored instead of re-created, because an animation started again at every frame does not
+            -- animate anything -- it blinks.
             local deve = passo.state == "doing" and info.live
             if deve and not row.__pulsing then
                 row.pulse:Play()
@@ -1126,11 +1126,11 @@ end
 --------------------------------------------------------------------------------
 -- Estado vazio
 --------------------------------------------------------------------------------
----Bloco centralizado. A Blizzard não tem tela de vazio com arte: em ~20 sistemas o padrão é
----uma FontString centralizada mais, quando há o que fazer, um botão.
+--- A centred block. Blizzard has no empty screen with art: in ~20 systems the pattern is
+--- a centred FontString plus, when there is something to do, a button.
 ---
----O texto responde à pergunta que o botão levanta ("vou ter que preencher tudo?"), em vez de
----descrever o produto. E a resposta é verdade no código: `UI.New` já nasce preenchido.
+--- The text answers the question the button raises ("will I have to fill everything?"), instead of
+--- describing the product. And the answer is true in the code: `UI.New` is already born filled.
 local function BuildEmptyState()
     local empty = CreateFrame("Frame", nil, frame)
     empty:SetAllPoints()
@@ -1155,25 +1155,25 @@ local function BuildEmptyState()
 end
 
 --------------------------------------------------------------------------------
----A seção "Avisos", no rodapé e em largura total.
+--- The "Avisos" section, in the footer and full width.
 ---
----Ela fica visível SEMPRE — inclusive com zero conjuntos, que é o caso que a motivou. Os dois
----avisos são o que o addon faz por quem nunca vai criar um conjunto; deixá-los só em
----`/rs warn` e `/rs ready` é o mesmo que não tê-los, porque ninguém descobre comando.
+--- It is ALWAYS visible -- including with zero sets, the case that started it. The two
+--- warnings are what the addon does for whoever will never make a set; leaving them only in
+--- `/rs warn` and `/rs ready` is the same as not having them, because nobody discovers a command.
 ---
----Ligados por padrão, e por isso o rótulo é afirmativo: a caixa marcada descreve o que já
----está acontecendo, não uma promessa.
+--- On by default, and so the label is affirmative: the ticked box describes what is already
+--- happening, not a promise.
 local function BuildToggles()
     local strip = CreateFrame("Frame", nil, frame)
     strip:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, WARN_STRIP_Y)
     strip:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, WARN_STRIP_Y)
-    -- 142 = a última caixa termina em −136, mais 6 de respiro. Era 86 com duas caixas, 118 com
-    -- a sub-opção de modo guerra (12/09) e 142 com a do convite de fila (18/09). Altura fixa que
-    -- não acompanha o conteúdo é o defeito que a faixa transbordando teria produzido em silêncio.
-    -- A faixa encolheu de 142 para 106 quando as quatro caixas viraram duas colunas de duas:
-    -- titulo (-10, 16 de tinta) + titulo de coluna (-34, 14) + duas caixas de 24 a partir de
-    -- -52 => a ultima termina em -100, mais 6 de respiro. O numero vive em `WARN_STRIP_H`,
-    -- porque a altura da janela sai dele.
+    -- 142 = the last box ends at −136, plus 6 of breathing room. It was 86 with two boxes, 118 with
+    -- the War Mode sub-option (12/09) and 142 with the queue invite's (18/09). A fixed height that
+    -- does not follow the content is the defect an overflowing strip would have produced silently.
+    -- The strip shrank from 142 to 106 when the four boxes became two columns of two:
+    -- title (-10, 16 of ink) + column title (-34, 14) + two boxes of 24 from
+    -- -52 => the last ends at -100, plus 6 of breathing room. The number lives in `WARN_STRIP_H`,
+    -- because the window's height comes from it.
     strip:SetHeight(WARN_STRIP_H)
 
     strip.divider = strip:CreateTexture(nil, "ARTWORK")
@@ -1189,13 +1189,13 @@ local function BuildToggles()
     strip.title:SetText(L["Warnings"])
     strip.title:SetTextColor(1, 0.82, 0)
 
-    -- O "?" ao lado do título, e não em cada caixa: o que precisa ser explicado é o RECURSO
-    -- (que os avisos funcionam sem conjunto, e quando eles calam), não cada linha isolada.
+    -- The "?" beside the title, and not on each box: what needs explaining is the FEATURE
+    -- (that the warnings work without a set, and when they stay quiet), not each line alone.
     --
-    -- `Interface\common\help-i` é a arte que a Blizzard usa no HelpPlate
-    -- (`Blizzard_HelpPlate.xml:382`). Caminho de textura falha em SILÊNCIO, então ele passa
-    -- por `ns.FirstIcon`, que consulta `GetFileIDFromPath` — e o último recurso é desenhar um
-    -- "?" de texto, que não tem como não aparecer.
+    -- `Interface\common\help-i` is the art Blizzard uses in the HelpPlate
+    -- (`Blizzard_HelpPlate.xml:382`). A texture path fails SILENTLY, so it goes
+    -- through `ns.FirstIcon`, which asks `GetFileIDFromPath` -- and the last resort is drawing a
+    -- text "?", which cannot fail to show.
     local help = CreateFrame("Button", nil, strip)
     help:SetSize(18, 18)
     help:SetPoint("LEFT", strip.title, "RIGHT", 6, 0)
@@ -1239,9 +1239,9 @@ local function BuildToggles()
     end)
     help:SetScript("OnLeave", GameTooltip_Hide)
 
-    ---Uma caixa com rótulo próprio. `UICheckButtonTemplate` tem um `.text` embutido, mas ele
-    ---depende de o frame ter nome — e frame nomeado vira global. FontString própria evita as
-    ---duas coisas.
+    --- A box with its own label. `UICheckButtonTemplate` has a built-in `.text`, but it
+    --- depends on the frame having a name -- and a named frame becomes a global. Our own FontString avoids
+    --- both.
     local function Toggle(y, label, key, indent)
         local box = CreateFrame("CheckButton", nil, strip, "UICheckButtonTemplate")
         box:SetSize(24, 24)
@@ -1256,7 +1256,7 @@ local function BuildToggles()
             if UI.RefreshToggles then UI.RefreshToggles() end
         end)
 
-        -- A DICA DIZ POR QUE ESTA APAGADA. Sem isso a caixa cinza e so uma caixa quebrada.
+        -- THE TOOLTIP SAYS WHY IT IS DIMMED. Without it the grey box is just a broken box.
         box:SetScript("OnEnter", function(self)
             if self:IsEnabled() then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -1271,20 +1271,20 @@ local function BuildToggles()
         return box
     end
 
-    -- (!) DUAS COLUNAS, E OS TITULOS DIZEM A VERDADE SOBRE O QUE CADA UMA E (22/09).
+    -- (!) TWO COLUMNS, AND THE TITLES TELL THE TRUTH ABOUT WHAT EACH ONE IS (22/09).
     --
-    -- O pedido foi *"de um lado avisos de PVE e do outro lado avisos de PVP"*. Ao conferir no
-    -- `Alert.lua` o que cada caixa faz, a divisao PvE/PvP nao existe:
+    -- The request was *"de um lado avisos de PVE e do outro lado avisos de PVP"*. Checking in
+    -- `Alert.lua` what each box does, the PvE/PvP split does not exist:
     --
-    --   `warn`        dispara nos DOIS contextos (equipamento de PvP em masmorra, e o inverso)
-    --   `readyCheck`  vale em qualquer grupo
-    --   `warnWarMode` estende o de cima ao mundo aberto com Modo Guerra -- PvP
-    --   `queuePop`    so campo de batalha e arena -- PvP
+    --   `warn`        fires in BOTH contexts (PvP gear in a dungeon, and the reverse)
+    --   `readyCheck`  holds in any group
+    --   `warnWarMode` extends the one above to the open world with War Mode -- PvP
+    --   `queuePop`    only battleground and arena -- PvP
     --
-    -- Ou seja: dois sao universais, dois sao de PvP, e **nenhum e so de PvE**. Uma coluna "PvE"
-    -- nasceria vazia ou mentindo, e rotulo que mente e pior que coluna nenhuma. Entao os titulos
-    -- sao os que o codigo sustenta, e a intencao do pedido -- ver de relance o que e especifico
-    -- de PvP -- fica atendida do mesmo jeito.
+    -- That is: two are universal, two are PvP, and **none is PvE only**. A "PvE" column
+    -- would be born empty or lying, and a label that lies is worse than no column. So the titles
+    -- are the ones the code holds up, and the request's intent -- seeing at a glance what is specific
+    -- to PvP -- is met just the same.
     local COL2 = math.floor((WIDTH - 28) / 2)
 
     local function ColumnTitle(x, texto)
@@ -1298,30 +1298,30 @@ local function BuildToggles()
     strip.colPvE = ColumnTitle(0, L["PvE"])
     strip.colPvP = ColumnTitle(COL2, L["PvP"])
 
-    -- AS DUAS COLUNAS SAO REAIS DESDE 0.35.0. Antes o aviso de equipamento era uma chave so para
-    -- os dois conteudos, entao os titulos tinham que ser "Em qualquer conteudo" e "So em PvP" --
-    -- honestos, mas nao era o que o usuario queria. Com a chave separada por contexto, PvE e PvP
-    -- passam a ser colunas de verdade, cada uma com o seu aviso de equipamento.
+    -- THE TWO COLUMNS ARE REAL SINCE 0.35.0. Before, the equipment warning was a single key for
+    -- both contents, so the titles had to be "In any content" and "Only in PvP" --
+    -- honest, but not what the user wanted. With the key split per context, PvE and PvP
+    -- become real columns, each with its own equipment warning.
     strip.warnPvE = Toggle(-52, L["Warn about wrong gear"], "warnPvE")
     strip.ready = Toggle(-76, L["Show my setup on Ready Check"], "readyCheck")
 
     strip.warnPvP = Toggle(-52, L["Warn about wrong gear"], "warnPvP", COL2)
-    -- (!) A SUB-OPCAO VOLTOU A SER FILHA, e agora com a mae na MESMA coluna: o Modo Guerra e
-    -- mundo aberto com PvP ligado, entao ele pertence a esta coluna e a este aviso. O recuo de
-    -- 15 px volta a dizer a dependencia, e o estado apagado continua dizendo tambem -- os dois
-    -- sinais somados, que e o que a skill deste projeto manda fazer.
+    -- (!) THE SUB-OPTION IS A CHILD AGAIN, and now with its parent in the SAME column: War Mode is the
+    -- open world with PvP on, so it belongs to this column and this warning. The 15 px
+    -- indent says the dependency again, and the dimmed state still says it too -- the two
+    -- signals added, which is what this project's skill says to do.
     strip.warMode = Toggle(-76, L["Warn with War Mode on too"], "warnWarMode", COL2 + CHILD_INDENT)
     strip.queue = Toggle(-100, L["Show my setup when a PvP queue pops"], "queuePop", COL2)
 
     frame.toggles = strip
 end
 
----Acerta o estado das caixas: marcada/desmarcada e, no caso da filha, apagada ou nao.
+--- Sets the boxes' state: ticked/unticked and, for the child, dimmed or not.
 ---
----(!) A DEPENDENCIA DEIXOU DE SER DESENHO E VIROU COMPORTAMENTO. Enquanto as duas moravam na
----mesma pilha, o recuo de 15 px dizia "esta depende da de cima". Em colunas diferentes o recuo
----nao diz mais nada, entao quem diz e o estado: com o aviso de equipamento desligado, a de Modo
----Guerra fica apagada, e a dica explica.
+--- (!) THE DEPENDENCY STOPPED BEING A DRAWING AND BECAME BEHAVIOUR. While the two lived in the
+--- same stack, the 15 px indent said "this one depends on the one above". In different columns the indent
+--- says nothing any more, so the state says it: with the equipment warning off, the War Mode
+--- one stays dimmed, and the tooltip explains.
 function UI.RefreshToggles()
     local strip = frame and frame.toggles
     if not strip then return end
@@ -1331,12 +1331,12 @@ function UI.RefreshToggles()
     strip.ready:SetChecked(ns.db.readyCheck ~= false)
     strip.queue:SetChecked(ns.db.queuePop ~= false)
 
-    -- `== true`, e nao `~= false`: esta nasce DESMARCADA, entao a ausencia de valor e "nao".
-    -- Copiar o `~= false` das vizinhas a deixaria marcada em quem nunca a viu -- o oposto do
-    -- que foi pedido em 12/09.
+    -- `== true`, and not `~= false`: this one is born UNTICKED, so the absence of a value is "no".
+    -- Copying the neighbours' `~= false` would leave it ticked for whoever never saw it -- the opposite of
+    -- what was asked on 12/09.
     strip.warMode:SetChecked(ns.db.warnWarMode == true)
 
-    -- A filha depende do aviso de PvP, que e a mae dela agora (Modo Guerra e mundo com PvP).
+    -- The child depends on the PvP warning, which is its parent now (War Mode is the world with PvP).
     local ligado = ns.db.warnPvP ~= false
     if strip.warMode then
         strip.warMode:SetEnabled(ligado)
@@ -1350,7 +1350,7 @@ end
 local function Create()
     if frame then return frame end
 
-    -- Herança de template só na criação.
+    -- Template inheritance only at creation.
     frame = CreateFrame("Frame", ADDON .. "Frame", UIParent, "ButtonFrameTemplate")
     frame:SetSize(WIDTH, HEIGHT)
     frame:SetPoint("CENTER")
@@ -1380,9 +1380,9 @@ local function Create()
     tinsert(UISpecialFrames, frame:GetName())
     ns.DarkBody(frame, 1, frame.Bg)                    -- (25/10) the dark body, as every Rocket window (Core.lua); the list keeps the inset
 
-    -- O inset do template cobre a largura toda; aqui ele passa a cobrir só a coluna da lista.
-    -- A coluna direita fica sobre o fundo da janela de propósito: o mármore do inset é fundo
-    -- de LISTA, e sob um formulário ele compete com a arte dos combos.
+    -- The template's inset covers the whole width; here it comes to cover only the list's column.
+    -- The right column sits on the window's background on purpose: the inset's marble is a LIST's
+    -- background, and under a form it competes with the combos' art.
     if frame.Inset then
         frame.Inset:ClearAllPoints()
         frame.Inset:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, LIST_TOP)
@@ -1390,16 +1390,16 @@ local function Create()
     end
     local host = frame.Inset or frame
 
-    -- Sem rótulo "Conjuntos": o inset já delimita a lista, e era justamente esse rótulo que
-    -- estava embaixo do retrato.
+    -- No "Conjuntos" label: the inset already bounds the list, and it was exactly that label that
+    -- sat under the portrait.
     frame.list = CreateFrame("Frame", nil, host, "WowScrollBoxList")
     frame.listBar = CreateFrame("EventFrame", nil, host, "MinimalScrollBar")
     frame.listBar:SetPoint("TOPRIGHT", host, "TOPRIGHT", -3, -3)
     frame.listBar:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -3, 3)
 
     local view = CreateScrollBoxListLinearView(0, 0, 0, 0, ROW_SPACING)
-    view:SetVirtualized(false)          -- 2 a 5 itens: cria todos, não recicla
-    -- ALTURA POR ELEMENTO, e não uma para todos: cada card mede o que os campos dele pedem.
+    view:SetVirtualized(false)          -- 2 to 5 items: creates them all, does not recycle
+    -- HEIGHT PER ELEMENT, and not one for all: each card measures what its fields ask for.
     view:SetElementExtentCalculator(function(_, preset)
         return CardHeight(preset)
     end)
@@ -1412,8 +1412,8 @@ local function Create()
         { CreateAnchor("TOPLEFT", host, "TOPLEFT", 3, -3),
           CreateAnchor("BOTTOMRIGHT", host, "BOTTOMRIGHT", -3, 3) })
 
-    -- A seleção guarda a TABELA do conjunto, não o índice. Com índice, `table.remove` no
-    -- Apagar deslocava tudo e a seleção passava a apontar para outro conjunto.
+    -- The selection keeps the set's TABLE, not the index. With the index, `table.remove` in
+    -- Delete shifted everything and the selection came to point at another set.
     selection = ScrollUtil.AddSelectionBehavior(frame.list)
     selection:RegisterCallback(SelectionBehaviorMixin.Event.OnSelectionChanged,
         function(_, elementData, isSelected)
@@ -1427,7 +1427,7 @@ local function Create()
             end
         end, UI)
 
-    -- Sótão: a faixa entre o título e o inset, à direita do retrato (x ≥ 58).
+    -- The attic: the band between the title and the inset, to the right of the portrait (x ≥ 58).
     frame.new = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.new:SetSize(140, 22)
     frame.new:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, ATTIC_Y)
@@ -1454,7 +1454,7 @@ local function Create()
     frame.fromLab:SetScript("OnLeave", GameTooltip_Hide)
 
 
-    -- Rodapé: a banda que o template já reserva (y 4..26).
+    -- The footer: the band the template already reserves (y 4..26).
     frame.delete = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.delete:SetSize(100, 22)
     frame.delete:SetPoint("BOTTOMRIGHT", -6, 4 + DONATE_ROW)
@@ -1470,11 +1470,11 @@ local function Create()
     frame.status:SetJustifyH("LEFT")
     frame.status:SetWordWrap(false)
 
-    -- O RELÓGIO DA JANELA. É o único `OnUpdate` do addon, e ele só corre com a janela aberta —
-    -- represado em 0,1 s porque o que ele desenha muda de segundo em segundo.
+    -- THE WINDOW'S CLOCK. It is the addon's only `OnUpdate`, and it only runs with the window open --
+    -- throttled to 0.1 s because what it draws changes second by second.
     --
-    -- Ele fica na janela, e não no painel, de propósito: `OnUpdate` de frame escondido não roda,
-    -- e o painel começa escondido. Preso nele, o progresso nunca apareceria sozinho.
+    -- It sits on the window, and not on the panel, on purpose: a hidden frame's `OnUpdate` does not run,
+    -- and the panel starts hidden. Tied to it, the progress would never show by itself.
     frame.__tick = 0
     frame:SetScript("OnUpdate", function(self, elapsed)
         self.__tick = self.__tick + (elapsed or 0)
@@ -1492,10 +1492,10 @@ local function Create()
 end
 
 --------------------------------------------------------------------------------
----O conjunto em edição. É a TABELA do conjunto, não um índice — `table.remove` no Apagar
----desloca os índices, e um índice guardado passaria a apontar para outro conjunto.
----Acesso à lista, só para o harness poder disparar o clique de uma linha. Sem isto o teste
----que trava o bug "não consigo clicar em outros conjuntos" não teria como existir.
+--- The set being edited. It is the set's TABLE, not an index -- `table.remove` in Delete
+--- shifts the indices, and a kept index would come to point at another set.
+--- Access to the list, only so the harness can fire a row's click. Without it the test
+--- that locks the bug "não consigo clicar em outros conjuntos" could not exist.
 function UI.DebugFrame()
     return frame
 end
@@ -1504,16 +1504,16 @@ function UI.DebugList()
     return frame and frame.list
 end
 
----Acesso à faixa de avisos, para o harness poder clicar nas caixas.
----O painel de progresso, para o teste poder olhar o que a janela mostra. Sem esta porta o
----harness so conseguiria afirmar que "nao deu erro" -- que e o que ele ja dizia enquanto o
----passo pulado aparecia igual ao passo que nao comecou.
+--- Access to the warnings strip, so the harness can click the boxes.
+--- The progress panel, so the test can look at what the window shows. Without this door the
+--- harness could only state that "there was no error" -- which is what it already said while the
+--- skipped step showed the same as a step not started.
 function UI.DebugProgress()
     return frame and frame.progress, editor
 end
 
----As medidas do painel. O que se trava aqui e a RAZAO entre os vaos, nao o numero cru: os
----numeros mudam quando a tela mudar; a razao e o que nao pode voltar a quebrar.
+--- The panel's measures. What is locked here is the RATIO between the gaps, not the raw number: the
+--- numbers change when the screen changes; the ratio is what cannot break again.
 function UI.DebugMetrics()
     return {
         row = PROGRESS_ROW,
@@ -1525,20 +1525,20 @@ function UI.DebugMetrics()
     }
 end
 
----Quanto mede o card de um conjunto. Geometria é aritmética e se confere em disco — duas
----rodadas de teste in-game já foram gastas neste projeto com posição e largura, e as duas eram
----conferveis daqui.
+--- How tall a set's card is. Geometry is arithmetic and is checked on disk -- two
+--- rounds of in-game testing were already spent in this project on position and width, and both were
+--- checkable from here.
 function UI.DebugCardHeight(preset)
     return CardHeight(preset)
 end
 
----A ULTIMA LINHA QUE O `FillRow` preencheu, para o harness perguntar POSICAO a um widget de
----verdade.
+--- THE LAST ROW `FillRow` filled, so the harness asks a real widget for its
+--- POSITION.
 ---
----(!) A primeira versao disto devolvia a constante `CARD_TOP` em vez de ler o frame. O teste
----entao comparava a constante com ela mesma e passava sempre -- exatamente o defeito que ja
----tinha aparecido tres vezes nesta sessao. Um "debug" que responde de cabeca nao serve de
----testemunha: ele tem que olhar a coisa.
+--- (!) The first version of this returned the constant `CARD_TOP` instead of reading the frame. The test
+--- then compared the constant with itself and always passed -- exactly the defect that had already
+--- shown up three times in this session. A "debug" that answers from memory is no
+--- witness: it has to look at the thing.
 function UI.DebugLastRow()
     return lastFilledRow
 end
@@ -1564,13 +1564,13 @@ function UI.Selected()
     return current
 end
 
----Seleciona um conjunto pela janela, como se o jogador tivesse clicado na linha dele.
+--- Selects a set through the window, as if the player had clicked its row.
 ---
----Existe para o atalho do minimapa: conjunto com aparência não pode ser aplicado por lá (a troca
----de aparência exige o clique no botão seguro), então o atalho abre a janela **com ele já
----selecionado** — um clique a mais, e o clique certo.
+--- It exists for the minimap shortcut: a set with an appearance cannot be applied from there (the
+--- appearance swap needs the click on the secure button), so the shortcut opens the window **with it already
+--- selected** -- one click more, and the right click.
 ---
----`Refresh` reancora a seleção a partir de `current`, então basta apontá-lo e redesenhar.
+--- `Refresh` re-anchors the selection from `current`, so pointing it and redrawing is enough.
 function UI.Select(preset)
     if not preset then return end
     current = preset
@@ -1578,12 +1578,12 @@ function UI.Select(preset)
     UI.RefreshEditor()
 end
 
----A janela está aberta?
+--- Is the window open?
 ---
----Existe porque `Toggle` alterna, e alternar obriga quem chama a saber o estado anterior. No
----harness isso vira dependência de ORDEM entre blocos de teste: um bloco que abre sem fechar
----inverte o comportamento de todos os seguintes, e o defeito aparece longe de onde nasceu --
----foi exatamente o que aconteceu ao escrever os testes da 0.10.0.
+--- It exists because `Toggle` toggles, and toggling forces the caller to know the state before. In
+--- the harness that becomes an ORDER dependency between test blocks: a block that opens without closing
+--- inverts the behaviour of all the following ones, and the defect shows far from where it was born --
+--- which is exactly what happened when writing the tests of 0.10.0.
 function UI.IsShown()
     return frame ~= nil and frame:IsShown() and true or false
 end
@@ -1626,16 +1626,16 @@ function UI.RefreshNameState()
     end
 end
 
----Só o editor. Chamado quando a seleção muda ou quando um combo escreve.
+--- The editor only. Called when the selection changes or when a combo writes.
 function UI.RefreshEditor()
     if not frame or not editor then return end
 
     local preset = UI.Selected()
 
-    -- O EDITOR CEDE A COLUNA ENQUANTO O PROGRESSO ESTÁ NELA. Não é só para não sobrepor: mexer
-    -- nos combos de um conjunto que está sendo aplicado muda o alvo no meio do caminho, e a
-    -- corrente já leu o que ia ler. Sumir com os campos é a forma mais direta de dizer "agora
-    -- não" — mais do que desabilitar cada um deles.
+    -- THE EDITOR GIVES UP THE COLUMN WHILE THE PROGRESS IS IN IT. It is not only to avoid overlapping: changing
+    -- the combos of a set being applied moves the target midway, and the chain has already read
+    -- what it was going to read. Making the fields vanish is the most direct way to say "not
+    -- now" -- more than disabling each of them.
     local has = preset ~= nil and not (frame.progress and frame.progress:IsShown())
 
     editor.name:SetShown(has)
@@ -1653,7 +1653,7 @@ function UI.RefreshEditor()
     if has then UI.RefreshNameState() end
 
     for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
-        -- `SetupMenu` só gera o menu com o frame visível: mostrar ANTES de sincronizar.
+        -- `SetupMenu` only builds the menu with the frame visible: show BEFORE syncing.
         group:SetShown(has)
         if has then group.Sync() end
     end
@@ -1667,12 +1667,12 @@ function UI.Refresh()
     local total = #presets
     local empty = total == 0
 
-    -- As caixas ficam fora do jogo de esconder/mostrar de propósito: elas valem nos dois
-    -- estados, e o estado vazio é justamente onde elas mais importam.
-    -- UM LUGAR SÓ acerta o estado das caixas (`UI.RefreshToggles`). Este bloco repetia a mesma
-    -- regra que a função dela já tinha, e a sabotagem denunciou: desligar o `SetEnabled` de lá
-    -- não reprovava nada, porque a cópia daqui continuava acertando o estado. Duas partes do
-    -- addon sabendo a mesma coisa é a divergencia da próxima mudança com data marcada.
+    -- The boxes stay out of the hide/show game on purpose: they hold in both
+    -- states, and the empty state is exactly where they matter most.
+    -- ONE PLACE ONLY sets the boxes' state (`UI.RefreshToggles`). This block repeated the same
+    -- rule its function already had, and the sabotage gave it away: turning off its `SetEnabled`
+    -- failed nothing, because the copy here kept setting the state. Two parts of the
+    -- addon knowing the same thing is the drift of the next change with a date set.
     UI.RefreshToggles()
 
     frame.emptyState:SetShown(empty)
@@ -1689,13 +1689,13 @@ function UI.Refresh()
     end
 
     if empty then
-        -- SEM LISTA NÃO HÁ CORRENTE. Sem esta linha, `current` continuava apontando para o último
-        -- conjunto selecionado mesmo depois de ele sair da lista — e `UI.Selected()` devolvia um
-        -- conjunto que não existe mais, que é o que `UI.Load` e `UI.Delete` consomem.
+        -- NO LIST, NO CURRENT. Without this line, `current` kept pointing at the last
+        -- set selected even after it left the list -- and `UI.Selected()` returned a
+        -- set that no longer exists, which is what `UI.Load` and `UI.Delete` consume.
         --
-        -- O editor some de qualquer jeito logo abaixo, então nada disso aparecia na tela; o teste
-        -- que cobria isto passava por acidente de ordem, porque quem rodava antes dele deixava
-        -- `current` nulo. Um bloco de teste novo mudou a ordem e o defeito apareceu.
+        -- The editor vanishes anyway right below, so none of it showed on screen; the test
+        -- that covered it passed by an accident of order, because whoever ran before it left
+        -- `current` nil. A new test block changed the order and the defect showed up.
         current = nil
 
         editor.name:Hide()
@@ -1709,8 +1709,8 @@ function UI.Refresh()
         return
     end
 
-    -- `SetDataProvider` apaga a seleção do comportamento; por isso o conjunto corrente é
-    -- guardado por fora e reancorado logo abaixo.
+    -- `SetDataProvider` erases the behaviour's selection; that is why the current set is
+    -- kept outside and re-anchored right below.
     local wanted = current
     frame.list:SetDataProvider(CreateDataProvider(presets), true)
 
@@ -1719,15 +1719,15 @@ function UI.Refresh()
         if presets[i] == wanted then stillThere = true end
     end
 
-    -- Seleção automática: é isto que faz o estado "nada selecionado" não existir, e com ele
-    -- os rótulos órfãos e o texto colado. Não é um remendo — é a remoção do estado.
+    -- Automatic selection: it is what keeps the "nothing selected" state from existing, and with it
+    -- the orphan labels and the stuck text. It is not a patch -- it is the removal of the state.
     selection:SelectElementData(stillThere and wanted or presets[1])
 
     UI.RefreshEditor()
 end
 
----Depois de mexer num combo: o texto da linha mudou, a quantidade não. Reinicializar é mais
----barato que trocar o data provider, e não perde a rolagem.
+--- After a combo changes: the row's text changed, the count did not. Re-initialising is
+--- cheaper than swapping the data provider, and does not lose the scroll.
 function UI.AfterEdit()
     if frame and frame.list and frame.list.ReinitializeFrames then
         frame.list:ReinitializeFrames()
@@ -1754,9 +1754,9 @@ function UI.New()
         end
     end
 
-    -- O conjunto novo já nasce com o que está valendo AGORA. É o caso de uso real: você
-    -- acabou de arrumar spec, talentos e equipamento para uma masmorra — agora só quer dar
-    -- um nome a isso. Começar vazio obrigaria a redigitar o óbvio.
+    -- The new set is born with what holds NOW. It is the real use case: you
+    -- just arranged spec, talents and gear for a dungeon -- now you only want to give
+    -- it a name. Starting empty would force retyping the obvious.
     local specIndex = ns.Data.GetCurrentSpecIndex()
     local spec = ns.Data.GetSpecByIndex(specIndex)
 
@@ -1865,14 +1865,14 @@ function UI.Delete()
     UI.Refresh()
 end
 
----Chamada do `PostClick` do botão seguro, e por isso o terceiro argumento é `true`: a ação de
----aparência JÁ foi disparada pelo clique, e o passo de aparência tem que ESPERAR a resposta do
----servidor em vez de conferir na hora e acusar falha numa troca que está a caminho.
----The rows follow the game. Each row keeps what it was drawn from (`RowState`), and this compares
----it with what the game says now: a switch that began or ended (in the window or outside it: a
----macro, the minimap menu, the queue alert), a piece that left or came back to the bags. A
----change that fell in combat is done when the combat ends. Called by the window's clock, and by
----the click, which cannot wait for the clock.
+--- Called from the secure button's `PostClick`, and so the third argument is `true`: the
+--- appearance action WAS already fired by the click, and the appearance step has to WAIT for the
+--- server's answer instead of checking on the spot and flagging a failure on a swap on its way.
+--- The rows follow the game. Each row keeps what it was drawn from (`RowState`), and this compares
+--- it with what the game says now: a switch that began or ended (in the window or outside it: a
+--- macro, the minimap menu, the queue alert), a piece that left or came back to the bags. A
+--- change that fell in combat is done when the combat ends. Called by the window's clock, and by
+--- the click, which cannot wait for the clock.
 function UI.SyncLoadButtons()
     if not frame or not frame.list then return end
     local velha = loadStatePending and not InCombatLockdown()
@@ -1892,9 +1892,9 @@ function UI.Load(preset)
     ns.Data.Apply(preset, UI.SetStatus, true)
     -- In the same frame as the click: the other buttons go off before a second click can land.
     UI.SyncLoadButtons()
-    -- NO MESMO QUADRO DO CLIQUE. O `OnUpdate` traria o painel em até 0,1 s, mas o defeito que
-    -- este painel conserta é justamente a sensação de que o clique não fez nada — então ele não
-    -- pode ser a primeira coisa a chegar atrasada.
+    -- IN THE SAME FRAME AS THE CLICK. `OnUpdate` would bring the panel within 0.1 s, but the defect
+    -- this panel fixes is exactly the feeling that the click did nothing -- so it cannot
+    -- be the first thing to arrive late.
     UI.RefreshProgress()
 end
 
