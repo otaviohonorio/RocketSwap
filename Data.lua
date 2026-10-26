@@ -725,7 +725,8 @@ end
 -- specialization. The two of one build share that word, so a RocketSwap preset is made of them here, reading the game's
 -- lists only -- never RocketLab's data (the workspace rule: no addon reads another addon; the plan of 25/10, "ponte com o
 -- RocketSwap pelos conjuntos nativos (nome padronizado)"). Both languages: the player may have switched the game's.
-local ROCKET_TAG = { ["M+"] = "mplus", ["Raid"] = "raid", ["Raide"] = "raid" }
+-- RocketLab's L["Raid"] in its other languages: "Banda" (esES, esMX), "Incursione" (itIT), the game's word in each.
+local ROCKET_TAG = { ["M+"] = "mplus", ["Raid"] = "raid", ["Raide"] = "raid", ["Banda"] = "raid", ["Incursione"] = "raid" }
 
 ---The pairs found: { { name, spec (index), talent (configID), gear (setID), tag, loadoutName, setName }, ... }.
 function Data.RocketPairs()
