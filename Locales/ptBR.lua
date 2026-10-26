@@ -1,6 +1,6 @@
 -- RocketSwap | Locales/ptBR.lua
--- Sobrescreve o que o enUS.lua deixou. Uma chave ausente aqui NÃO é um buraco: ela cai no
--- rótulo do jogo (quando `FROM_GAME` cobre) ou na própria chave, que já é o texto em inglês.
+-- Overrides what enUS.lua left. A key absent here is NOT a hole: it falls to the
+-- game's label (when `FROM_GAME` covers it) or to the key itself, which is already the English text.
 local ADDON, ns = ...
 
 if GetLocale() ~= "ptBR" then return end
@@ -13,53 +13,53 @@ L["Load"] = "Carregar"
 L["Delete"] = "Apagar"
 L["Specialization"] = "Especialização"
 
--- ARMADILHA DE NOME: a janela de talentos do jogo, em pt-BR, chama um loadout de talentos de
--- "equipamento" ("+ Novo equipamento"), enquanto a ficha do personagem chama um conjunto de
--- itens de "conjunto" ("+ Novo Conjunto"). A mesma palavra para as duas coisas, em telas
--- diferentes. Por isso, enquanto os campos apareciam SOLTOS numa linha só separada por pontos,
--- as duas palavras eram evitadas e o rótulo de itens era "Itens".
+-- NAMING TRAP: the game's talent window, in pt-BR, calls a talent loadout
+-- "equipamento" ("+ Novo equipamento"), while the character sheet calls an item
+-- set "conjunto" ("+ Novo Conjunto"). The same word for the two things, on different
+-- screens. That is why, while the fields showed LOOSE on a single line separated by dots,
+-- the two words were avoided and the items label was "Itens".
 --
--- ⛑ EM 22/09 ISSO MUDOU, e a mudança de tela é que permitiu: no card os quatro rótulos ficam
--- EMPILHADOS E VÍSIVEIS AO MESMO TEMPO. "Talentos:" e "Equipamento:" um embaixo do outro não
--- têm como ser confundidos entre si — a ambiguidade vinha de a palavra aparecer sozinha, sem o
--- irmão ao lado para contrastar. Pedido do usuário, e o contexto novo o sustenta.
+-- ⛑ ON 22/09 THAT CHANGED, and the change of screen is what allowed it: on the card the four labels sit
+-- STACKED AND VISIBLE AT THE SAME TIME. "Talentos:" and "Equipamento:" one under the other have
+-- no way of being confused with each other -- the ambiguity came from the word showing alone, without the
+-- sibling beside it to contrast. The user's request, and the new context supports it.
 L["Talents"] = "Talentos"
 L["Gear"] = "Equipamento"
 L["Appearance"] = "Aparência"
 
--- "Resumo ..." nos dois, e sem "setup": os rótulos são irmãos (mesma informação, gatilho
--- diferente), e rótulo irmão com forma diferente obriga a ler os dois para notar que dizem a
--- mesma coisa.
+-- "Resumo ..." in both, and without "setup": the labels are siblings (the same information, a different
+-- trigger), and a sibling label with a different form forces one to read both to notice they say the
+-- same thing.
 --
--- ⛑ "READY CHECK" FICA EM INGLÊS (22/09), por decisão do usuário e com razão: é como o jogador
--- brasileiro chama a coisa. A regra do projeto é evitar palavra em inglês com equivalente em
--- português — mas a mesma regra abre exceção para jargão do próprio jogo, e este é um. Conferido
--- no cliente: o termo em inglês é **Ready Check**, com o comando `/readycheck` e o evento
--- `READY_CHECK`. "Verificação de prontidão" é correto e ninguém fala.
+-- ⛑ "READY CHECK" STAYS IN ENGLISH (22/09), by the user's decision and rightly so: it is how the Brazilian
+-- player calls the thing. The project's rule is to avoid an English word that has a Portuguese
+-- equivalent -- but the same rule makes an exception for the game's own jargon, and this is one. Checked
+-- in the client: the English term is **Ready Check**, with the `/readycheck` command and the
+-- `READY_CHECK` event. "Verificação de prontidão" is correct and nobody says it.
 L["Show my setup when a PvP queue pops"] = "Resumo quando a fila de PvP chamar"
 L["PvP queue is up — check before you enter"] = "A fila de PvP chamou — confira antes de entrar"
 L["PvP queue is up:"] = "fila de PvP chamou:"
 L["PvP queue pop summary on."] = "resumo no convite da fila de PvP ligado."
 L["PvP queue pop summary off."] = "resumo no convite da fila de PvP desligado."
 L["turns the PvP queue pop summary on or off"] = "liga ou desliga o resumo no convite da fila de PvP"
--- O CONVITE DA FILA É O ÚLTIMO MOMENTO ÚTIL: dentro da arena a restrição de addon fecha a troca
--- do começo ao fim da partida. Daí o resumo aparecer aqui e não só no ready check.
+-- THE QUEUE INVITE IS THE LAST USEFUL MOMENT: inside the arena the addon restriction closes the swap
+-- from the start to the end of the match. Hence the summary showing here and not only on the ready check.
 L["PvP queue pop:"] = "Convite da fila de PvP:"
 L["When the arena or battleground invite shows up, it prints the same summary — the last moment when you can still fix the build."] =
     "Quando aparece o convite da arena ou do campo de batalha, ele mostra o mesmo resumo — é o último momento em que ainda dá para ajustar talentos e itens."
 
 L["(none)"] = "(nenhum)"
--- A opção que esvazia o campo Aparência (21/10): o campo vazio fica em branco, e a opção diz o que o
--- conjunto faz então — não mexe na roupa. "(nenhum)" lia como "sem aparência" e nem concordava com o
--- rótulo ("Aparência: (nenhum)").
+-- The option that empties the Appearance field (21/10): the empty field stays blank, and the option says what the
+-- set then does -- it does not touch the outfit. "(nenhum)" read as "no appearance" and did not even agree with the
+-- label ("Aparência: (nenhum)").
 L["Keep current"] = "Manter a atual"
--- O conjunto que está no corpo com peça trocada. `(nenhum)` era falso aqui — ver o comentário em
--- `Alert.Summary`. "peças" e não "itens" de propósito: "Itens" é o RÓTULO do campo, e
--- "Itens: Gélido (13 de 14 itens)" repetiria a etiqueta dentro do valor.
+-- The set that is on the body with a swapped piece. `(nenhum)` was false here -- see the comment in
+-- `Alert.Summary`. "peças" and not "itens" on purpose: "Itens" is the field's LABEL, and
+-- "Itens: Gélido (13 de 14 itens)" would repeat the tag inside the value.
 L["%s (%d of %d pieces)"] = "%s (%d de %d peças)"
--- Estado vazio (redesenho de 05/09/2026). O texto responde à pergunta que o BOTÃO levanta
--- ("vou ter que preencher tudo?") em vez de descrever o produto — e a resposta é verdade no
--- código: `UI.New` já nasce com a spec, o loadout e o conjunto que estão valendo.
+-- Empty state (redesign of 05/09/2026). The text answers the question the BUTTON raises
+-- ("will I have to fill everything in?") instead of describing the product -- and the answer is true in the
+-- code: `UI.New` is already born with the spec, the loadout and the set in effect.
 L["No presets yet"] = "Nenhum conjunto ainda"
 L["The first one starts with the spec, talents and gear you have right now."] =
     "O primeiro já vem com a especialização, os talentos e os itens que você está usando agora."
@@ -83,13 +83,13 @@ L["some items of this set are locked (in use, or in the mail)."] =
     "algumas peças deste conjunto estão bloqueadas (em uso ou no correio)."
 L["you are casting something — try again in a second."] =
     "você está conjurando algo — tente de novo daqui a pouco."
--- APAGADO É DIFERENTE DE RECUSADO, e cada um manda o jogador procurar em lugar diferente. A
--- aparência já tinha a frase dela; estas duas faltavam, e no lugar delas saía a genérica.
+-- DELETED IS DIFFERENT FROM REFUSED, and each one sends the player to look in a different place. The
+-- appearance already had its phrase; these two were missing, and in their place the generic one came out.
 L["that talent loadout no longer exists."] = "esse conjunto de talentos não existe mais."
 L["that gear set no longer exists."] = "esse conjunto de itens não existe mais."
 L["timed out waiting for the game to confirm."] = "o jogo não confirmou a tempo."
--- Com o NOME do passo (0.9.0): numa corrente de quatro, "o jogo nao confirmou a tempo" obriga o
--- jogador a adivinhar de que passo se trata -- e foi o que aconteceu no relato de 06/09.
+-- With the step's NAME (0.9.0): in a chain of four, "o jogo nao confirmou a tempo" forces the
+-- player to guess which step it is about -- and that is what happened in the report of 06/09.
 L["%s: the game did not confirm in time."] = "%s: o jogo não confirmou a tempo."
 
 L["preset deleted."] = "conjunto apagado."
@@ -100,25 +100,25 @@ L["lists the presets"] = "lista os conjuntos"
 L["no preset with that name."] = "nenhum conjunto com esse nome."
 L["commands:"] = "comandos:"
 L["loaded. %d preset(s). Type /rs."] = "carregado. %d conjunto(s). Digite /rs."
--- ⛑ O CLIQUE DIREITO MUDOU (23/09): antes ele TROCAVA de conjunto, e um usuário reportou
--- em vídeo que "trocava a spec sozinha". Agora ele lista os conjuntos, como manda a
--- convenção de ícone de minimapa.
+-- ⛑ THE RIGHT CLICK CHANGED (23/09): before it SWITCHED sets, and a user reported
+-- on video that it "trocava a spec sozinha". Now it lists the sets, as the
+-- minimap icon convention says.
 L["Switch to"] = "Trocar para"
--- Transmog opcional (0.3.0)
--- As duas chaves que sairam na 0.10.0 -- "Trocando a aparencia..." e "este cliente nao sabe
--- trocar" -- pressupunham que o addon TROCAVA. Ele nao troca: a API e protegida, e quem troca e
--- o clique do jogador no botao seguro. Frase que promete o que nao acontece e pior que frase
--- nenhuma.
+-- Optional transmog (0.3.0)
+-- The two keys that left in 0.10.0 -- "Trocando a aparencia..." and "este cliente nao sabe
+-- trocar" -- assumed the addon SWAPPED. It does not: the API is protected, and what swaps is
+-- the player's click on the secure button. A phrase that promises what does not happen is worse than no
+-- phrase at all.
 L["the appearance only changes by clicking Load (Blizzard protects the API)."] =
     "a aparência só muda pelo botão Carregar (a Blizzard protege a API)."
 L["that transmog outfit no longer exists."] = "essa roupa não existe mais."
 L["the transmog outfit could not be applied."] = "não foi possível aplicar a roupa."
 
--- As tres portas que recusam a troca SEM devolver erro (0.7.0). A UI nativa do conjunto
--- consulta as tres antes de deixar clicar; sem elas o addon so sabia dizer "nao deu".
--- SEM OS SEGUNDOS (0.13.0). Contar quanto falta exige `startTime` e `duration`, que são SECRET
--- dentro de mítica+ — e foi essa conta que travava a corrente inteira. `isActive` responde a
--- mesma pergunta sem ler campo secreto nenhum.
+-- The three gates that refuse the swap WITHOUT returning an error (0.7.0). The native set UI
+-- queries all three before allowing a click; without them the addon could only say "it did not work".
+-- WITHOUT THE SECONDS (0.13.0). Counting how much is left requires `startTime` and `duration`, which are SECRET
+-- inside mythic+ -- and it was that arithmetic that locked up the whole chain. `isActive` answers the
+-- same question without reading any secret field.
 L["changing appearance is on cooldown."] = "trocar de aparência está em recarga."
 L["a style event is running; appearances are locked."] =
     "há um evento de estilo em andamento; as aparências estão bloqueadas."
@@ -126,34 +126,34 @@ L["that appearance set is locked."] = "essa roupa está bloqueada."
 
 -- Aviso de equipamento e resumo no ready check (0.4.0)
 L["PvE gear in a PvP match."] = "Equipamento de PvE numa partida de PvP."
--- Modo guerra nao e partida: o jogador esta no mundo aberto, exposto a PvP enquanto faz
--- PvE. Dizer "partida" ali seria falso, e o mesmo texto para as duas situacoes vira ruido.
+-- War Mode is not a match: the player is in the open world, exposed to PvP while doing
+-- PvE. Saying "partida" there would be false, and the same text for both situations becomes noise.
 L["PvE gear with War Mode on."] = "Modo de Guerra ligado, e você está com equipamento de PvE."
 L["PvP gear in PvE content."] = "Equipamento de PvP em conteúdo de PvE."
 L["...and %d more."] = "...e mais %d."
 L["Load %s"] = "Carregar %s"
 L["Don't warn here"] = "Não avisar aqui"
 L["ready check:"] = "Ready Check:"
--- As duas frases longas saíram na 0.11.2: com o rótulo na frente elas repetiam a própria
--- etiqueta, e arrastavam "loadout" (que o cliente traduz como "equipamento") e "conjunto" (que
--- aqui é o nome dos presets). O resumo usa `L["(none)"]`, que já existe e já é o que os combos
--- do editor mostram no mesmo caso.
--- O TÍTULO NOMEIA O CONTEÚDO, e não o ritual que abriu a caixa.
+-- The two long phrases left in 0.11.2: with the label in front they repeated their own
+-- tag, and dragged along "loadout" (which the client translates as "equipamento") and "conjunto" (which
+-- here is the presets' name). The summary uses `L["(none)"]`, which already exists and is already what the
+-- editor's combos show in the same case.
+-- THE TITLE NAMES THE CONTENT, and not the ritual that opened the box.
 --
--- "Conferência" (0.11.2) dizia o que estava ACONTECENDO — o líder pediu conferência — e não
--- o que o jogador estava olhando. Pedido do usuário em 08/09/2026: *"tem um título
+-- "Conferência" (0.11.2) said what was HAPPENING -- the leader asked for a check -- and not
+-- what the player was looking at. The user's request on 08/09/2026: *"tem um título
 -- 'conferência', poderia trocar por algo melhor"*.
 --
--- ⚑ E NÃO É "CONJUNTO ATUAL", que foi a primeira ideia. Duas razões, e as duas são do
--- próprio addon: (a) `conjunto` já é o nome dos PRESETS aqui (`L["Presets"]`), então o
--- título prometeria o contêiner e entregaria os campos; (b) a caixa **não** mostra um
--- preset — ela lê a especialização, os talentos e os itens que estão valendo AGORA, que
--- podem não bater com preset nenhum. Aliás, é exatamente esse descasamento que o addon
--- existe para revelar: um título dizendo "conjunto atual" mentiria justo na hora em que
--- a informação importa.
+-- ⚑ AND IT IS NOT "CONJUNTO ATUAL", which was the first idea. Two reasons, and both are the
+-- addon's own: (a) `conjunto` is already the PRESETS' name here (`L["Presets"]`), so the
+-- title would promise the container and deliver the fields; (b) the box does **not** show a
+-- preset -- it reads the specialization, the talents and the items in effect NOW, which
+-- may not match any preset. In fact, that mismatch is exactly what the addon
+-- exists to reveal: a title saying "conjunto atual" would lie right when
+-- the information matters.
 --
--- A frase escolhida já existia no addon, em `/rs gear`, para este mesmo conteúdo. Mesmo
--- vocabulário nos dois lugares, que é a regra que já governa os rótulos aqui dentro.
+-- The chosen phrase already existed in the addon, in `/rs gear`, for this same content. The same
+-- vocabulary in both places, which is the rule that already governs the labels in here.
 L["What you are using"] = "O que você está usando"
 L["gear warning on."] = "aviso de equipamento ligado."
 L["gear warning off."] = "aviso de equipamento desligado."
@@ -173,8 +173,8 @@ L["turns the gear warning on or off"] = "liga ou desliga o aviso de equipamento"
 L["turns the ready check summary on or off"] = "liga ou desliga o resumo no Ready Check"
 L["re-enables warnings you silenced"] = "religa os avisos que você silenciou"
 L["Warn about wrong gear"] = "Avisar sobre equipamento errado"
--- Desmarcada por padrão (12/09). O rótulo diz ONDE o aviso passa a valer, não o que ele é: quem
--- lê a lista de caixas já sabe que se trata do aviso de equipamento pela caixa de cima.
+-- Unticked by default (12/09). The label says WHERE the warning comes to apply, not what it is: whoever
+-- reads the list of boxes already knows it is the gear warning from the box above.
 L["Warn with War Mode on too"] = "Avisar também com Modo de Guerra ligado"
 L["Show my setup on Ready Check"] = "Resumo no Ready Check"
 L["Warnings"] = "Avisos"
@@ -192,8 +192,8 @@ L["When the leader starts one, it prints your specialization, talent loadout and
 L["It stays quiet in combat, once the gates are open, and whenever the reading is not reliable. Type /rs gear to see what it reads on each slot."] =
     "Ele fica em silêncio em combate, depois que os portões abrem e sempre que a leitura não for confiável. Digite /rs gear para ver como cada espaço está sendo lido."
 
--- Conferencia dos rotulos que vem do jogo (0.5.0). Mesmo motivo do /rs gear: a falha e
--- silenciosa — a global some e o rotulo so continua em ingles.
+-- Checking the labels that come from the game (0.5.0). The same reason as /rs gear: the failure is
+-- silent -- the global goes away and the label just stays in English.
 L["checks the labels taken from the game"] = "confere os rótulos que vêm do jogo"
 L["locale %s, %d game label(s):"] = "idioma %s, %d rótulo(s) vindos do jogo:"
 L["%d game label(s) are not usable here."] = "%d rótulo(s) do jogo não servem neste cliente."
@@ -203,7 +203,7 @@ L["version"] = "versão"
 L["talents: %s"] = "talentos: %s"
 L["%s loaded, except: %s"] = "%s carregado, menos: %s"
 
--- O diário da troca (0.12.0)
+-- The swap's log (0.12.0)
 L["log cleared."] = "diário limpo."
 L["the log only exists in development builds."] = "o diário só existe na versão de desenvolvimento."
 L["the log is empty: load a preset and look again."] =
@@ -219,8 +219,8 @@ L["the talents were staged but not applied; open the talent window and apply."] 
 L["an internal error interrupted this step."] = "um erro interno interrompeu este passo."
 L["the specialization did not change, so the talents were left alone."] =
     "a especialização não mudou, então os talentos ficaram como estavam."
--- O jogo recusa trocar de spec quando a anterior foi ha pouco. O diario real mostrou isso em
--- quatro das nove trocas: sempre a segunda, poucos segundos depois da primeira.
+-- The game refuses to switch spec when the previous switch was recent. The real log showed that in
+-- four of the nine swaps: always the second, a few seconds after the first.
 L["the game refused to change specialization now; wait a few seconds."] =
     "o jogo não deixou trocar de especialização agora; espere alguns segundos."
 L["still applying %s: waiting for %s."] = "ainda aplicando %s: esperando %s."
@@ -232,14 +232,14 @@ L["the game kept refusing to change specialization."] =
 L["click Load to switch to %s completely."] =
     "clique em Carregar para trocar para %s por completo."
 
--- O progresso da troca: a janela mostrando que sao ETAPAS (0.18.0)
+-- The swap's progress: the window showing that they are STEPS (0.18.0)
 L["Switching to %s"] = "Trocando para %s"
 L["Switching to %s. Wait for it to finish."] = "Trocando para %s. Espere até terminar."
 L["you are in %s: leave the form to change specialization."] = "você está em %s: saia da forma para trocar de especialização."
 L["you are shapeshifted: leave the form to change specialization."] = "você está transformado: saia da forma para trocar de especialização."
 L["%s was NOT loaded: the specialization did not change, and nothing after it was touched."] = "%s NÃO foi carregado: a especialização não mudou, e nada depois dela foi alterado."
--- "pulado" nao e falha, e o rotulo diz por que -- senao o passo pulado fica igual ao que ainda
--- nao comecou, e a pessoa termina sem saber se a aparencia foi aplicada ou esquecida.
+-- "pulado" is not a failure, and the label says why -- otherwise the skipped step looks the same as one that has not
+-- started yet, and the person ends without knowing whether the appearance was applied or forgotten.
 L["%s — nothing to change"] = "%s — nada a mudar"
 
 -- LoadConfig recusado SEM motivo declarado e transitorio: o addon insiste (0.18.2)
@@ -259,7 +259,7 @@ L["turns the swap progress panel on or off"] = "liga ou desliga o painel de prog
 L["swap progress panel on."] = "painel de progresso da troca ligado."
 L["swap progress panel off."] = "painel de progresso da troca desligado."
 
--- Conjunto de itens com peça perdida (0.31.0)
+-- Item set with a lost piece (0.31.0)
 L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."] = "%s: %d item(ns) faltando — o espaço fica com a peça atual, que pode ser a errada. Salve o conjunto antes."
 L["You are already wearing the rest of it — use /rs fix to update the set."] = "Você já está vestindo o resto dele — use /rs fix para salvar o conjunto."
 L["Open the equipment manager, fix the set and save it, then switch."] = "Abra o gerenciador de equipamentos, ajuste o conjunto e salve; depois troque."
@@ -270,7 +270,7 @@ L["%s: %d item(s) missing"] = "%s: %d item(ns) faltando"
 L["Save set"] = "Salvar conjunto"
 L["Equipment Manager"] = "Gerenciador"
 
--- Colunas dos avisos (0.34.0)
+-- Warning columns (0.34.0)
 L["Turn on the wrong gear warning first."] = "Ligue primeiro o aviso de equipamento errado."
 
 -- Colunas dos avisos por conteudo (0.35.0)
@@ -309,7 +309,7 @@ L["in a PvP match -- the countdown included -- the game blocks switches made by 
 L["during a boss encounter the game blocks switches made by addons."] = "durante o encontro com um chefe o jogo bloqueia trocas feitas por addon."
 L["during a Mythic+ keystone the game blocks switches made by addons."] = "durante uma chave de Mítica+ o jogo bloqueia trocas feitas por addon."
 
--- Doação (Donate.lua, 26/09)
+-- Donation (Donate.lua, 26/09)
 L["Link copied — paste it in your browser."] = "Link copiado — cole no navegador."
 L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."] = "Obrigado por apoiar o Rocket Swap! Aperte Ctrl+C para copiar o link e cole no navegador."
 L["Click: open the donation link, ready to copy"] = "Clique: abrir o link de doação, pronto para copiar"
@@ -320,7 +320,7 @@ L["Click: choose where to report a problem"] = "Clique: escolher onde relatar um
 L["Rocket Swap %s — report a problem on %s.|n|nPress Ctrl+C to copy the link, then paste it in your browser. Say what you were doing and what happened."] =
     "Rocket Swap %s — relatar um problema em %s.|n|nAperte Ctrl+C para copiar o link e cole no navegador. Conte o que você estava fazendo e o que aconteceu."
 
--- Botões para as janelas do jogo e título do nome (UI.lua, 27/09)
+-- Buttons for the game's windows and the name title (UI.lua, 27/09)
 L["Equipment"] = "Equipamentos"
 L["e.g. Raid, M+, Arena"] = "Ex.: Raide, M+, Arena"
 L["Opens the game's talent window, to create or edit a loadout."] = "Abre a janela de talentos do jogo, para criar ou editar um conjunto de talentos."

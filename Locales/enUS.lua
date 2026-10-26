@@ -1,16 +1,16 @@
 -- RocketSwap | Locales/enUS.lua
--- Base da localização. Este arquivo carrega SEMPRE, em qualquer idioma de cliente.
+-- The localization base. This file ALWAYS loads, in any client language.
 --
--- Mesma estrutura do RocketMeter (padronizado em 05/09/2026), em duas camadas:
+-- The same structure as RocketMeter (standardized on 05/09/2026), in two layers:
 --
---   1. A CHAVE É O TEXTO EM INGLÊS. Sem tradução, a própria chave aparece na tela — então o
---      inglês é o fallback automático de todo idioma que ainda não tem arquivo aqui.
+--   1. THE KEY IS THE ENGLISH TEXT. Without a translation, the key itself shows on screen -- so
+--      English is the automatic fallback of every language that does not have a file here yet.
 --
---   2. `FROM_GAME` puxa do próprio cliente os rótulos que a Blizzard já traduziu, o que vale
---      para os ~11 idiomas de uma vez e usa **a palavra que o jogador já lê na interface**.
+--   2. `FROM_GAME` pulls from the client itself the labels Blizzard already translated, which holds
+--      for the ~11 languages at once and uses **the word the player already reads in the interface**.
 --
--- Depois deste arquivo carrega o do idioma (ptBR.lua), que sobrescreve o que quiser. A
--- precedência final é: nossa escolha explícita > palavra do jogo > chave em inglês.
+-- After this file the language's file loads (ptBR.lua), which overrides what it wants. The
+-- final precedence is: our explicit choice > the game's word > the English key.
 local ADDON, ns = ...
 
 local L = setmetatable({}, {
@@ -22,15 +22,15 @@ local L = setmetatable({}, {
 ns.L = L
 
 --------------------------------------------------------------------------------
--- Rótulos que o jogo já traduziu
+-- Labels the game already translated
 --------------------------------------------------------------------------------
--- Esta tabela é curta **de propósito**. O vocabulário deste addon é quase todo frase nossa
--- ("Nenhum conjunto ainda", "Trocando de especialização..."), e para as palavras do jogo que
--- pareciam candidatas óbvias a evidência mandou parar. Ver o bloco de recusas abaixo.
+-- This table is short **on purpose**. This addon's vocabulary is almost all our own phrases
+-- ("Nenhum conjunto ainda", "Trocando de especialização..."), and for the game's words that
+-- looked like obvious candidates the evidence said stop. See the block of refusals below.
 --
--- O que este addon já fazia certo antes desta tabela existir: `Gear.lua:177-190` lê os nomes
--- de slot de `_G["HEADSLOT"]` e afins, com o número do slot como último recurso. Os 16 slots
--- do aviso de equipamento já saíam traduzidos em todos os idiomas.
+-- What this addon already did right before this table existed: `Gear.lua:177-190` reads the slot
+-- names from `_G["HEADSLOT"]` and the like, with the slot number as the last resort. The 16 slots
+-- of the gear warning already came out translated in every language.
 local FROM_GAME = {
     ["Specialization"] = "SPECIALIZATION",
     ["Talents"]        = "TALENTS",
@@ -39,33 +39,33 @@ local FROM_GAME = {
     ["version"]        = "GAME_VERSION_LABEL",
 }
 
--- O que NÃO entrou, e por quê — todas conferidas contra o build 12.1.0.69587:
+-- What did NOT come in, and why -- all checked against build 12.1.0.69587:
 --
---   "Ready check:"  READY_CHECK em pt-BR é **"Todos prontos?"**, uma pergunta. O rótulo é um
---                   prefixo ("Ready check: Gélido · SBA ST"), e daria "Todos prontos?: ...".
---   "Gear"          Nenhuma global limpa, e tem a armadilha de nome descrita no ptBR.lua: em
---                   pt-BR o jogo chama **loadout de talentos** de "equipamento" e **conjunto
---                   de itens** de "conjunto". Este addon foge das duas de propósito, porque
---                   ele existe para quem já confunde as duas coisas.
---   "Load"          Não existe global `LOAD`. `EQUIPSET_EQUIP` é "Equipar", e o botão faz
---                   mais do que equipar — troca spec e talentos também.
---   "(none)"        NONE é "Nenhum", sem os parênteses que o nosso rótulo usa.
---   "Warnings"      Só existe PING_TYPE_WARNING, singular ("Alerta"), do sistema de ping.
+--   "Ready check:"  READY_CHECK in pt-BR is **"Todos prontos?"**, a question. The label is a
+--                   prefix ("Ready check: Gélido · SBA ST"), and it would give "Todos prontos?: ...".
+--   "Gear"          No clean global, and it has the naming trap described in ptBR.lua: in
+--                   pt-BR the game calls a **talent loadout** "equipamento" and an **item
+--                   set** "conjunto". This addon avoids both on purpose, because
+--                   it exists for whoever already confuses the two things.
+--   "Load"          There is no `LOAD` global. `EQUIPSET_EQUIP` is "Equipar", and the button does
+--                   more than equip -- it switches spec and talents too.
+--   "(none)"        NONE is "Nenhum", without the parentheses our label uses.
+--   "Warnings"      Only PING_TYPE_WARNING exists, singular ("Alerta"), from the ping system.
 
 ns.FROM_GAME = FROM_GAME
 
----Esta global serve como rótulo?
+--- Does this global serve as a label?
 ---
----Três guardas, cada uma contra uma falha diferente:
+--- Three guards, each one against a different failure:
 ---
----  * **não é string** → a global não existe neste cliente. Esta guarda **não pode** ser
----    simplificada: sem ela `text:find` recebe `nil` e **levanta erro na carga do arquivo**.
----    Como é aqui que `ns.L` nasce, o addon inteiro morre junto.
----  * **string vazia** → existe mas não tem texto; viraria um rótulo em branco.
----  * **tem `%s`/`%d`** → é modelo de frase, não rótulo, e apareceria cru na tela.
+---  * **not a string** -> the global does not exist in this client. This guard **cannot** be
+---    simplified: without it `text:find` receives `nil` and **raises an error at file load**.
+---    Since `ns.L` is born here, the whole addon dies with it.
+---  * **empty string** -> it exists but has no text; it would become a blank label.
+---  * **has `%s`/`%d`** -> it is a sentence template, not a label, and would show raw on screen.
 ---
----Nos três casos a chave fica em paz e o inglês continua valendo.
----@return string|nil texto, string|nil motivo da recusa
+--- In all three cases the key is left alone and the English still holds.
+--- @return string|nil text, string|nil reason for refusal
 local function Usable(tag)
     local text = _G[tag]
     if type(text) ~= "string" then return nil, "ausente" end
@@ -74,8 +74,8 @@ local function Usable(tag)
     return text
 end
 
----Escreve os rótulos do jogo em `L`. Roda **uma vez**, na carga deste arquivo, antes do
----arquivo de idioma — que sobrescreve o que quiser depois.
+--- Writes the game's labels into `L`. It runs **once**, when this file loads, before the
+--- language file -- which overrides what it wants afterwards.
 function ns.ApplyGameStrings()
     for key, tag in pairs(FROM_GAME) do
         local text = Usable(tag)
@@ -85,9 +85,9 @@ function ns.ApplyGameStrings()
     end
 end
 
----Relatório para o `/rs i18n`. **Só lê** — reaplicar aqui apagaria o que o arquivo de idioma
----escreveu por cima, sem ninguém entender por quê.
----@return table lista de { key, tag, text, why }, ordenada pela global
+--- The report for `/rs i18n`. **Read only** -- reapplying here would erase what the language file
+--- wrote on top, with nobody understanding why.
+--- @return table a list of { key, tag, text, why }, sorted by global
 function ns.CheckGameStrings()
     local report = {}
     for key, tag in pairs(FROM_GAME) do
@@ -105,7 +105,7 @@ L["turns the swap progress panel on or off"] = "turns the swap progress panel on
 L["swap progress panel on."] = "swap progress panel on."
 L["swap progress panel off."] = "swap progress panel off."
 
--- Conjunto de itens com peça perdida (0.31.0)
+-- Item set with a lost piece (0.31.0)
 L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."] = "%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."
 L["You are already wearing the rest of it — use /rs fix to update the set."] = "You are already wearing the rest of it — use /rs fix to update the set."
 L["Open the equipment manager, fix the set and save it, then switch."] = "Open the equipment manager, fix the set and save it, then switch."
@@ -116,7 +116,7 @@ L["%s: %d item(s) missing"] = "%s: %d item(s) missing"
 L["Save set"] = "Save set"
 L["Equipment Manager"] = "Equipment Manager"
 
--- Colunas dos avisos (0.34.0)
+-- Warning columns (0.34.0)
 L["Turn on the wrong gear warning first."] = "Turn on the wrong gear warning first."
 
 -- Colunas dos avisos por conteudo (0.35.0)
