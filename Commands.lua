@@ -48,9 +48,6 @@ commands["progress"] = function()
         or L["swap progress panel on."])
 end
 
--- The command is in English like all the others (`warn`, `ready`, `queue`), but whoever plays in
--- Portuguese will type "progresso" -- and refusing over one letter would be nitpicking.
-commands["progresso"] = function() commands["progress"]() end
 
 commands[""] = function()
     ns.UI.Toggle()
@@ -109,7 +106,7 @@ end
 -- starts off. The same door for both because it is the same warning -- one is a slice of the other.
 commands["warn"] = function(rest)
     local arg = (rest or ""):lower()
-    if arg:find("warmode", 1, true) or arg:find("guerra", 1, true) then
+    if arg:find("warmode", 1, true) then
         ns.db.warnWarMode = not (ns.db.warnWarMode == true)
         ns.Print(ns.db.warnWarMode and L["war mode warning on."] or L["war mode warning off."])
         if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
