@@ -32,6 +32,7 @@ Locales\zhTW.lua
 Core.lua
 Dialog.lua
 Donate.lua
+Style.lua
 #@debug@
 Log.lua
 #@end-debug@
