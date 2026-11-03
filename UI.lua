@@ -382,8 +382,8 @@ local function BuildRow(row)
     row.load:SetScript("OnEnter", function(self)
         if not self.blockedReason then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(L["Load"], 1, 1, 1)
-        GameTooltip:AddLine(self.blockedReason, 1, 0.5, 0.4, true)
+        GameTooltip_SetTitle(GameTooltip, L["Load"])
+        GameTooltip_AddErrorLine(GameTooltip, self.blockedReason, true)
         GameTooltip:Show()
     end)
     row.load:SetScript("OnLeave", GameTooltip_Hide)
@@ -414,10 +414,10 @@ local function BuildRow(row)
         if not self.preset then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         local named = ns.Data.HasName(self.preset)
-        GameTooltip:SetText(named and self.preset.name or L["Unnamed"], 1, 1, 1)
-        GameTooltip:AddLine(Subtitle(self.preset), 0.7, 0.7, 0.7, true)
+        GameTooltip_SetTitle(GameTooltip, named and self.preset.name or L["Unnamed"])
+        GameTooltip_AddNormalLine(GameTooltip, Subtitle(self.preset), true)
         if named then
-            GameTooltip:AddLine(L["Drag to an action bar to make it a button."], 0.5, 0.8, 1, true)
+            GameTooltip_AddInstructionLine(GameTooltip, L["Drag to an action bar to make it a button."], true)
         else
             GameTooltip_AddErrorLine(GameTooltip, L["Give the preset a name first."])
         end
@@ -427,16 +427,15 @@ local function BuildRow(row)
         -- the piece that was already there, which may be the previous role's.
         local problema = self.preset.gear and ns.Data.GearSetProblem(self.preset.gear)
         if problema then
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddLine(format(L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."],
-                problema.nome or "?", problema.perdidas), 1, 0.35, 0.35, true)
+            GameTooltip_AddBlankLineToTooltip(GameTooltip)
+            GameTooltip_AddErrorLine(GameTooltip, format(L["%s is missing %d item(s): the slot keeps what you are wearing, which may be wrong. Save the set first."],
+                problema.nome or "?", problema.perdidas), true)
             if problema.slots then
-                GameTooltip:AddLine(table.concat(problema.slots, ", "), 0.8, 0.6, 0.6, true)
+                GameTooltip_AddErrorLine(GameTooltip, table.concat(problema.slots, ", "), true)
             end
-            GameTooltip:AddLine(problema.consertavel
+            GameTooltip_AddNormalLine(GameTooltip, problema.consertavel
                 and L["You are already wearing the rest of it — use /rs fix to update the set."]
-                or L["Open the equipment manager, fix the set and save it, then switch."],
-                0.7, 0.7, 0.7, true)
+                or L["Open the equipment manager, fix the set and save it, then switch."], true)
         end
 
         GameTooltip:Show()
@@ -734,8 +733,8 @@ local function BuildEditor()
         b:SetScript("OnClick", fn)
         b:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText(text, 1, 1, 1)
-            GameTooltip:AddLine(tooltip, 0.8, 0.8, 0.8, true)
+            GameTooltip_SetTitle(GameTooltip, text)
+            GameTooltip_AddNormalLine(GameTooltip, tooltip, true)
             GameTooltip:Show()
         end)
         b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1215,26 +1214,20 @@ local function BuildToggles()
 
     help:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(L["Warnings"], 1, 1, 1)
-        GameTooltip:AddLine(L["These two work without any preset — they are what the addon does on the day you install it."],
-            0.8, 0.8, 0.8, true)
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(L["Wrong gear:"], 1, 0.82, 0)
-        GameTooltip:AddLine(L["In an arena or battleground it flags every slot WITHOUT the PvP item level line; in a dungeon or raid, every slot WITH it. It names the slots, and offers to load a preset if you have one that fits."],
-            0.8, 0.8, 0.8, true)
-        GameTooltip:AddLine(L["In the open world with War Mode on it stays quiet unless you tick the second box: out there most of the time is questing, not fighting players."],
-            0.8, 0.8, 0.8, true)
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(L["Ready check:"], 1, 0.82, 0)
-        GameTooltip:AddLine(L["When the leader starts one, it prints your specialization, talent loadout and gear set — so you can confirm before the pull."],
-            0.8, 0.8, 0.8, true)
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(L["PvP queue pop:"], 1, 0.82, 0)
-        GameTooltip:AddLine(L["When the arena or battleground invite shows up, it prints the same summary — the last moment when you can still fix the build."],
-            0.8, 0.8, 0.8, true)
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(L["It stays quiet in combat, once the gates are open, and whenever the reading is not reliable. Type /rs gear to see what it reads on each slot."],
-            0.6, 0.6, 0.6, true)
+        GameTooltip_SetTitle(GameTooltip, L["Warnings"])
+        GameTooltip_AddNormalLine(GameTooltip, L["These two work without any preset — they are what the addon does on the day you install it."], true)
+        GameTooltip_AddBlankLineToTooltip(GameTooltip)
+        GameTooltip_AddHighlightLine(GameTooltip, L["Wrong gear:"])
+        GameTooltip_AddNormalLine(GameTooltip, L["In an arena or battleground it flags every slot WITHOUT the PvP item level line; in a dungeon or raid, every slot WITH it. It names the slots, and offers to load a preset if you have one that fits."], true)
+        GameTooltip_AddNormalLine(GameTooltip, L["In the open world with War Mode on it stays quiet unless you tick the second box: out there most of the time is questing, not fighting players."], true)
+        GameTooltip_AddBlankLineToTooltip(GameTooltip)
+        GameTooltip_AddHighlightLine(GameTooltip, L["Ready check:"])
+        GameTooltip_AddNormalLine(GameTooltip, L["When the leader starts one, it prints your specialization, talent loadout and gear set — so you can confirm before the pull."], true)
+        GameTooltip_AddBlankLineToTooltip(GameTooltip)
+        GameTooltip_AddHighlightLine(GameTooltip, L["PvP queue pop:"])
+        GameTooltip_AddNormalLine(GameTooltip, L["When the arena or battleground invite shows up, it prints the same summary — the last moment when you can still fix the build."], true)
+        GameTooltip_AddBlankLineToTooltip(GameTooltip)
+        GameTooltip_AddNormalLine(GameTooltip, L["It stays quiet in combat, once the gates are open, and whenever the reading is not reliable. Type /rs gear to see what it reads on each slot."], true)
         GameTooltip:Show()
     end)
     help:SetScript("OnLeave", GameTooltip_Hide)
@@ -1260,8 +1253,8 @@ local function BuildToggles()
         box:SetScript("OnEnter", function(self)
             if self:IsEnabled() then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(label, 1, 1, 1)
-            GameTooltip:AddLine(L["Turn on the wrong gear warning first."], 1, 0.5, 0.4, true)
+            GameTooltip_SetTitle(GameTooltip, label)
+            GameTooltip_AddErrorLine(GameTooltip, L["Turn on the wrong gear warning first."], true)
             GameTooltip:Show()
         end)
         box:SetScript("OnLeave", GameTooltip_Hide)
@@ -1373,7 +1366,7 @@ local function Create()
     end)
     frame:Hide()
 
-    if frame.SetTitle then frame:SetTitle(ns.NAME) end
+    if frame.SetTitle then frame:SetTitle(ns.TITLE) end
     if frame.SetPortraitToAsset then
         frame:SetPortraitToAsset(ns.LOGO)
     end
