@@ -42,3 +42,4 @@ Minimap.lua
 Gear.lua
 Alert.lua
 Commands.lua
+OptionsEntry.lua
