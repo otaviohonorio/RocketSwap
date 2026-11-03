@@ -627,3 +627,8 @@ SlashCmdList["ROCKETSWAP"] = function(msg)
         commands["load"](msg)
     end
 end
+
+---The game's addon compartment (the menu by the minimap), as every Rocket addon (03/11/2026): a click opens the window.
+function RocketSwap_OnCompartmentClick()
+    ns.UI.Toggle()
+end
