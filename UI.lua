@@ -299,7 +299,9 @@ local function BuildRow(row)
     row.name:SetPoint("TOPLEFT", 8 + CARD_INSET, -CARD_PAD)
     -- The title stops before the button, so it does not use `CARD_TEXT_W`: here the limit is not
     -- for reading, it is for collision.
-    row.name:SetPoint("RIGHT", row, "RIGHT", -86 - CARD_INSET, 0)
+    -- (04/11) measured from the CARD's right edge, not the row's: without the scroll bar the row is 414 and the card
+    -- 400, and the user's print showed "Carregar" past the card's frame
+    row.name:SetPoint("RIGHT", row, "LEFT", CARD_W - 86 - CARD_INSET, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
@@ -322,7 +324,7 @@ local function BuildRow(row)
     row.warn = CreateFrame("Frame", nil, row)
     row.warn:SetHeight(CARD_WARN - 2)
     row.warn:SetPoint("LEFT", CARD_LEFT, 0)
-    row.warn:SetPoint("RIGHT", row, "RIGHT", -6 - CARD_INSET, 0)
+    row.warn:SetPoint("RIGHT", row, "LEFT", CARD_W - 6 - CARD_INSET, 0)
     row.warn.bg = row.warn:CreateTexture(nil, "BACKGROUND")
     row.warn.bg:SetAllPoints()
     row.warn.bg:SetColorTexture(0.75, 0.15, 0.15, 0.20)
@@ -372,7 +374,7 @@ local function BuildRow(row)
     row.load:SetSize(74, 22)
     -- ON THE ICON'S LINE: the only band of the card with no text, and so the button stops competing
     -- for height with the title. On top, it sits in the corner where the eye already looks for an action.
-    row.load:SetPoint("RIGHT", -6 - CARD_INSET, 0)
+    row.load:SetPoint("RIGHT", row, "LEFT", CARD_W - 6 - CARD_INSET, 0)
     row.load:SetText(L["Load"])
     row.load:RegisterForClicks("AnyUp")
     row.load:SetAttribute("useOnKeyDown", false)
@@ -415,7 +417,7 @@ local function BuildRow(row)
 
     row.check = row:CreateTexture(nil, "OVERLAY")
     row.check:SetSize(16, 16)
-    row.check:SetPoint("RIGHT", -8 - CARD_INSET, 0)
+    row.check:SetPoint("RIGHT", row, "LEFT", CARD_W - 8 - CARD_INSET, 0)
     row.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
     row.check:Hide()
 
@@ -608,7 +610,7 @@ local function FillRow(row, preset)
     if problema then
         row.warn:ClearAllPoints()
         row.warn:SetPoint("LEFT", CARD_LEFT, 0)
-        row.warn:SetPoint("RIGHT", row, "RIGHT", -6 - CARD_INSET, 0)
+        row.warn:SetPoint("RIGHT", row, "LEFT", CARD_W - 6 - CARD_INSET, 0)
         row.warn:SetPoint("TOP", row, "TOP", 0, -(CARD_TOP + FieldsHeight(#linhas) + 2))
         row.warn.text:SetText("|cffff5a52!|r  " .. format(L["%s: %d item(s) missing"],
             problema.nome or "?", problema.perdidas))
