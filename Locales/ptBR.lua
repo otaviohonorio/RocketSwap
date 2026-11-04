@@ -311,9 +311,6 @@ L["during a Mythic+ keystone the game blocks switches made by addons."] = "duran
 
 -- Donation (Donate.lua, 26/09)
 L["Link copied — paste it in your browser."] = "Link copiado — cole no navegador."
-L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."] = "Obrigado por apoiar o Rocket Swap! Aperte Ctrl+C para copiar o link e cole no navegador."
-L["Click: open the donation link, ready to copy"] = "Clique: abrir o link de doação, pronto para copiar"
-L["Support the project"] = "Apoiar o projeto"
 L["Report a problem"] = "Relatar um problema"
 L["Report a problem on"] = "Relatar um problema em"
 L["Click: choose where to report a problem"] = "Clique: escolher onde relatar um problema"
