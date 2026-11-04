@@ -89,7 +89,10 @@ local CARD_WARN = 24          -- the warning's plate: a button's height (22) plu
 -- size of the biggest icon, and a smaller icon centres in that column.
 local CARD_ICON_MIN = 32
 local CARD_ICON_MAX = CARD_LINE * 4       -- 60: a altura de quatro campos
-local CARD_ICON_X = 6                     -- margem esquerda da coluna do icone
+-- (04/11) everything 4 points further in: the card has a frame now (the identity of the Rocket Mount: shadow + metal
+-- ~5 points, chamfered corners ~6), and the icon at 6 / the name at 8 touched it (lesson L-054)
+local CARD_INSET = 4
+local CARD_ICON_X = 6 + CARD_INSET        -- margem esquerda da coluna do icone
 local CARD_LEFT = CARD_ICON_X + CARD_ICON_MAX + 8
 local CARD_NAME_GAP = 4       -- entre o titulo e a primeira linha de campo
 
@@ -100,6 +103,14 @@ local CARD_NAME_GAP = 4       -- entre o titulo e a primeira linha de campo
 -- indent and the scroll bar. A fixed ceiling bigger than that would shorten nothing -- it would only
 -- let the text overflow the row, which is worse than the long line.
 local CARD_TEXT_W = LIST_W - CARD_LEFT - 30
+
+-- (04/11) the card's art (tools/arte_cartao_swap.py): 400 wide (the list's width with its scroll bar), the top and
+-- bottom pieces 11 points tall, the stone's middle cropped from row CARD_EDGE_H*2 of its 512, running CARD_FADE under
+-- the bottom piece (whose inside fades in over it)
+local CARD_W = 400
+local CARD_EDGE_H = 11
+local CARD_FADE = 5
+local CARD_GLOW_INSET = 6
 
 -- ⛑ HOW MANY WHOLE CARDS HAVE TO FIT WITHOUT SCROLLING. The user's request: three.
 --
@@ -243,28 +254,39 @@ local function BuildRow(row)
     -- The real height comes from `CardHeight`, per element; this is only the starting one.
     row:SetHeight(CARD_PAD * 2 + CARD_NAME_INK + CARD_LINE)
 
-    -- No background of its own: the inset's marble gives the background. The row only paints itself when
-    -- it is under the mouse or selected -- the pattern of the game's Options panel.
-    --
-    -- The old alphas (0.12 on selection, 0.07 on hover) were 3 to 6× weaker than the native ones
-    -- and without `ADD`: that is why the selection did not show. These two textures and these
-    -- numbers are copied from `GearSetButtonTemplate`, Blizzard's own list of equipment
-    -- sets. `TexCoord 0.2..0.8` cuts the ends so it stretches without deforming.
-    row.selected = row:CreateTexture(nil, "OVERLAY")
-    row.selected:SetAllPoints()
-    row.selected:SetTexture("Interface\\FriendsFrame\\UI-FriendsFrame-HighlightBar")
-    row.selected:SetTexCoord(0.2, 0.8, 0, 1)
-    row.selected:SetBlendMode("ADD")
-    row.selected:SetAlpha(0.4)
-    row.selected:Hide()
-
-    row:SetHighlightTexture("Interface\\FriendsFrame\\UI-FriendsFrame-HighlightBar-Blue")
-    local highlight = row:GetHighlightTexture()
-    if highlight then
-        highlight:SetTexCoord(0.2, 0.8, 0, 1)
-        highlight:SetBlendMode("ADD")
-        highlight:SetAlpha(0.4)
+    -- (04/11) THE CARD, in the identity of the Rocket Mount (the user: "adorei, agora podemos fazer nos outros addons,
+    -- que tal o swap agora"). Until then the row had no background and lit up with the game's highlight bars
+    -- (`GearSetButtonTemplate`). The card's HEIGHT varies with the set, so it is built of pieces that never stretch
+    -- (tools/arte_cartao_swap.py, mockup/PREVIA Rocket Swap - cartoes na identidade nova.png): the top (line and
+    -- chamfers), the sides (ONE clean row: stretching it in height deforms nothing), the bottom, and the stone between
+    -- them CROPPED to the card's height. CARD_W wide whether the scroll bar shows or not. Selected = the gold frame;
+    -- under the mouse the stone lights up a little (ADD, the Journeys' `AlphaHighlightButtonTemplate`).
+    local function Peca(arquivo, sub, layer)
+        local t = row:CreateTexture(nil, layer or "BACKGROUND", nil, sub)
+        t:SetTexture("Interface\\AddOns\\" .. ADDON .. "\\Textures\\" .. arquivo)
+        return t
     end
+    local u1 = CARD_W * 2 / 1024
+    row.cardTop = Peca("SwapTop.png", -6)
+    row.cardTop:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.cardTop:SetSize(CARD_W, CARD_EDGE_H)
+    row.cardTop:SetTexCoord(0, u1, 0, CARD_EDGE_H * 2 / 32)
+    row.cardBottom = Peca("SwapBottom.png", -6)
+    row.cardBottom:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.cardBottom:SetSize(CARD_W, CARD_EDGE_H)
+    row.cardBottom:SetTexCoord(0, u1, 0, CARD_EDGE_H * 2 / 32)
+    row.cardSide = Peca("SwapSide.png", -7)
+    row.cardSide:SetPoint("TOPLEFT", row.cardTop, "BOTTOMLEFT", 0, 0)
+    row.cardSide:SetPoint("BOTTOMRIGHT", row.cardBottom, "TOPRIGHT", 0, 0)
+    row.cardSide:SetTexCoord(0, u1, 0, 0.25)
+    row.cardStone = Peca("SwapStone.png", -8)
+    row.cardStone:SetPoint("TOPLEFT", row.cardTop, "BOTTOMLEFT", 0, 0)
+    row.cardStone:SetPoint("BOTTOMRIGHT", row.cardBottom, "TOPRIGHT", 0, -CARD_FADE)
+    row.glow = Peca("SwapStone.png", 0, "HIGHLIGHT")
+    row.glow:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -CARD_GLOW_INSET)
+    row.glow:SetPoint("BOTTOMRIGHT", row, "TOPLEFT", CARD_W, 0)
+    row.glow:SetBlendMode("ADD")
+    row.glow:SetAlpha(0.22)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     -- Tamanho e posicao sao reacertados em `FillRow`: os dois dependem de quantos campos o
@@ -274,10 +296,10 @@ local function BuildRow(row)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.name:SetPoint("TOPLEFT", 8, -CARD_PAD)
+    row.name:SetPoint("TOPLEFT", 8 + CARD_INSET, -CARD_PAD)
     -- The title stops before the button, so it does not use `CARD_TEXT_W`: here the limit is not
     -- for reading, it is for collision.
-    row.name:SetPoint("RIGHT", row, "RIGHT", -86, 0)
+    row.name:SetPoint("RIGHT", row, "RIGHT", -86 - CARD_INSET, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
@@ -285,7 +307,8 @@ local function BuildRow(row)
     -- fields; the ones left over stay hidden, and it is the card's HEIGHT that follows (`CardHeight`).
     row.lines = {}
     for i = 1, 4 do
-        local fs = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        -- (04/11) white on the stone card (the Rocket Mount's decision); the label inside stays #9a9a9e
+        local fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         fs:SetPoint("TOPLEFT", CARD_LEFT, -(CARD_TOP + CARD_LINE * (i - 1)))
         fs:SetWidth(CARD_TEXT_W)
         fs:SetJustifyH("LEFT")
@@ -299,7 +322,7 @@ local function BuildRow(row)
     row.warn = CreateFrame("Frame", nil, row)
     row.warn:SetHeight(CARD_WARN - 2)
     row.warn:SetPoint("LEFT", CARD_LEFT, 0)
-    row.warn:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+    row.warn:SetPoint("RIGHT", row, "RIGHT", -6 - CARD_INSET, 0)
     row.warn.bg = row.warn:CreateTexture(nil, "BACKGROUND")
     row.warn.bg:SetAllPoints()
     row.warn.bg:SetColorTexture(0.75, 0.15, 0.15, 0.20)
@@ -349,7 +372,7 @@ local function BuildRow(row)
     row.load:SetSize(74, 22)
     -- ON THE ICON'S LINE: the only band of the card with no text, and so the button stops competing
     -- for height with the title. On top, it sits in the corner where the eye already looks for an action.
-    row.load:SetPoint("RIGHT", -6, 0)
+    row.load:SetPoint("RIGHT", -6 - CARD_INSET, 0)
     row.load:SetText(L["Load"])
     row.load:RegisterForClicks("AnyUp")
     row.load:SetAttribute("useOnKeyDown", false)
@@ -392,7 +415,7 @@ local function BuildRow(row)
 
     row.check = row:CreateTexture(nil, "OVERLAY")
     row.check:SetSize(16, 16)
-    row.check:SetPoint("RIGHT", -8, 0)
+    row.check:SetPoint("RIGHT", -8 - CARD_INSET, 0)
     row.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
     row.check:Hide()
 
@@ -566,6 +589,7 @@ local function FillRow(row, preset)
         CARD_ICON_X + math.floor((CARD_ICON_MAX - blocoH) / 2), -CARD_TOP)
 
     row:SetHeight(CardHeight(preset))
+    UI.LayCard(row, CardHeight(preset))
     lastFilledRow = row
 
     local _, icon = ns.Data.GearSetName(preset.gear)
@@ -584,7 +608,7 @@ local function FillRow(row, preset)
     if problema then
         row.warn:ClearAllPoints()
         row.warn:SetPoint("LEFT", CARD_LEFT, 0)
-        row.warn:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+        row.warn:SetPoint("RIGHT", row, "RIGHT", -6 - CARD_INSET, 0)
         row.warn:SetPoint("TOP", row, "TOP", 0, -(CARD_TOP + FieldsHeight(#linhas) + 2))
         row.warn.text:SetText("|cffff5a52!|r  " .. format(L["%s: %d item(s) missing"],
             problema.nome or "?", problema.perdidas))
@@ -611,7 +635,26 @@ local function FillRow(row, preset)
     SetLoadState(row, preset)
     row.drawn = RowState(preset)
 
-    row.selected:SetShown(selection ~= nil and selection:IsElementDataSelected(preset))
+    UI.SetCardSelected(row, selection ~= nil and selection:IsElementDataSelected(preset))
+end
+
+---(04/11) The stone's middle cropped to the card's height (never stretched): from where the top piece's ends.
+function UI.LayCard(row, h)
+    if not row.cardStone then return end
+    local meio = math.max(h - 2 * CARD_EDGE_H + CARD_FADE, 1)
+    row.cardStone:SetTexCoord(0, CARD_W * 2 / 1024, CARD_EDGE_H * 2 / 512, (CARD_EDGE_H + meio) * 2 / 512)
+    row.cardH = h
+end
+
+---(04/11) Selected: the gold frame (the same pieces, gold), in place of the game's highlight bar.
+function UI.SetCardSelected(row, on)
+    if not row.cardTop then return end
+    local s = on and "Sel" or ""
+    local base = "Interface\\AddOns\\" .. ADDON .. "\\Textures\\"
+    row.cardTop:SetTexture(base .. "SwapTop" .. s .. ".png")
+    row.cardSide:SetTexture(base .. "SwapSide" .. s .. ".png")
+    row.cardBottom:SetTexture(base .. "SwapBottom" .. s .. ".png")
+    row.cardSelected = on and true or false
 end
 
 --------------------------------------------------------------------------------
@@ -1411,7 +1454,7 @@ local function Create()
     selection:RegisterCallback(SelectionBehaviorMixin.Event.OnSelectionChanged,
         function(_, elementData, isSelected)
             local row = frame.list:FindFrame(elementData)
-            if row and row.selected then row.selected:SetShown(isSelected) end
+            if row then UI.SetCardSelected(row, isSelected) end
             if isSelected then
                 current = elementData
                 UI.RefreshEditor()
