@@ -2,10 +2,9 @@
 
 ## Title: |cffff6a00Rocket|r Swap
 ## Notes: Presets that tie specialization, talents and gear together — switch all three with one click.
-## Category: Combat
+## Category: Rocket Addons
 
 ## Notes-ptBR: Conjuntos que relacionam especialização, talentos e itens — troque os três com um clique.
-## Category-ptBR: Combate
 
 ## Author: Otto Rocket (Otávio Honório)
 ## Version: 0.41.1
