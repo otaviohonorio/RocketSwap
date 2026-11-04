@@ -1,4 +1,10 @@
 -- RocketSwap | Donate.lua
+-- (04/11/2026) NO DONATION REQUEST IN THE GAME. The user: "como eu quero receber pelo curseforge e tem várias regras
+-- (...) temos que tirar das telas do addon o apoiar projeto, deixar somente o reportar problema". Researched the same
+-- day: Blizzard's UI Add-On Development Policy says add-ons "may not solicit donations" in the game (rule 5); the
+-- CurseForge rewards program pays by the project's popularity, and the project PAGE may carry the donation button
+-- (CurseForge's description guidelines). So the footer is only "Report a problem", centred, on the same line (the
+-- windows keep their height: DONATE_ROW stays), and the `## X-Donate` line left every .toc.
 -- The support line at the bottom of every window, the same in every Rocket addon: the "Donate"
 -- link and, beside it, "Report a problem".
 --
@@ -14,12 +20,7 @@
 local ADDON, ns = ...
 local L = ns.L
 
-local BASE = "https://www.paypal.com/donate/?business=HH4PHH48DPG9J&no_recurring=0&currency_code="
 
-function ns.DonateURL()
-    local brl = GetLocale and GetLocale() == "ptBR"
-    return BASE .. (brl and "BRL" or "USD")
-end
 
 ---The box with a link in it, already selected: the addon's own (`Dialog.lua`), not the game's
 ---`StaticPopup` -- a game dialog opened by an addon marks the game's dialog code (05/10).
@@ -33,11 +34,6 @@ local function CopyBox(key, text, url)
     return false
 end
 
-function ns.ShowDonate()
-    CopyBox("donate",
-        L["Thank you for supporting Rocket Swap! Press Ctrl+C to copy the link, then paste it in your browser."],
-        ns.DonateURL())
-end
 
 --------------------------------------------------------------------------------
 -- "Report a problem"
@@ -102,7 +98,6 @@ end
 ---own `Textures/` -- the retail client loads PNG.
 ---The glyph is simple-icons' `paypal`
 ---(CC0) in PayPal's two blues, rendered at 64x64.
-ns.PAYPAL_ICON = "Interface\\AddOns\\" .. ADDON .. "\\Textures\\PayPal.png"
 -- The game's own alert glyph (20x20 in the art, seen with `tools/ver_atlas.py`).
 ns.REPORT_ICON = "gmchat-icon-alert"
 local ICON = 14
@@ -155,11 +150,6 @@ local function Link(parent, word, tip, icon, click)
     return b
 end
 
-function ns.DonateLink(parent)
-    return Link(parent, L["Support the project"], L["Click: open the donation link, ready to copy"],
-        function(icon) icon:SetTexture(ns.PAYPAL_ICON) end,
-        function() ns.ShowDonate() end)
-end
 
 function ns.ReportLink(parent)
     return Link(parent, L["Report a problem"], L["Click: choose where to report a problem"],
@@ -172,12 +162,8 @@ end
 ---window (none today).
 ---@return table donate the support link; the report link is its `report`
 function ns.DonateFooter(window)
-    local b = ns.DonateLink(window)
     local r = ns.ReportLink(window)
-    -- The middle of the pair on the middle of the window: the first link sits half of what is
-    -- at its right to the left of it.
-    b:SetPoint("BOTTOM", window, "BOTTOM", -(LINK_GAP + r.linkWidth) / 2, DONATE_Y)
-    r:SetPoint("LEFT", b, "RIGHT", LINK_GAP, 0)
-    b.report = r
-    return b
+    r:SetPoint("BOTTOM", window, "BOTTOM", 0, DONATE_Y)
+    r.report = r   -- the callers knew the report link as the footer's `report`
+    return r
 end
