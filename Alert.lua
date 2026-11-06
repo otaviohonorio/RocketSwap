@@ -549,6 +549,26 @@ local DIVIDER_ATLAS = "options_horizontaldivider"    -- the Settings panel's div
 
 local card, cardKind, cardInitiatorIsMe, cardRefreshing
 
+-- (06/11) The ready check's unit arguments can arrive as secret values (the game's error: "UnitIsUnit ... Secret values are
+-- only allowed during untainted execution"). The game's own box can compare them; we cannot, so a secret one is
+-- "unknown" (nil) and never reaches `UnitIsUnit`.
+local function IsPlayer(u)
+    if type(u) ~= "string" or (issecretvalue and issecretvalue(u)) or not UnitIsUnit then return nil end
+    local ok, same = pcall(UnitIsUnit, "player", u)
+    if ok and type(same) == "boolean" then return same end
+    return nil
+end
+
+-- Who started the check, when the name is secret: the game counts the initiator as ready at once (the automatic
+-- READY_CHECK_CONFIRM), so "player" already ready at READY_CHECK means it was the player.
+local function InitiatorIsMe(initiator)
+    local me = IsPlayer(initiator)
+    if me ~= nil then return me end
+    if not GetReadyCheckStatus then return false end
+    local ok, status = pcall(GetReadyCheckStatus, "player")
+    return ok and type(status) == "string" and not (issecretvalue and issecretvalue(status)) and status == "ready"
+end
+
 -- A colour object of the game, with its method (`ColorMixin:WrapTextInColorCode`); plain text if it is missing.
 local function Wrap(colour, text)
     if colour and colour.WrapTextInColorCode then return colour:WrapTextInColorCode(text) end
@@ -1167,8 +1187,7 @@ end
 function Alert.OnReadyCheckEvent(event, unit)
     if event == "READY_CHECK_FINISHED" then
         Alert.HideCard("readycheck")
-    elseif event == "READY_CHECK_CONFIRM" and not cardInitiatorIsMe and type(unit) == "string"
-        and UnitIsUnit and UnitIsUnit(unit, "player") then
+    elseif event == "READY_CHECK_CONFIRM" and not cardInitiatorIsMe and IsPlayer(unit) then
         Alert.HideCard("readycheck")
     end
 end
@@ -1217,7 +1236,7 @@ function Alert.Create()
     frame:SetScript("OnEvent", function(_, event, a, b)
         if event == "READY_CHECK" then
             -- `a` is the initiator's name (PartyInfoDocumentation, 12.1.5), read as the game's own box reads it
-            cardInitiatorIsMe = type(a) == "string" and UnitIsUnit and UnitIsUnit("player", a) or false
+            cardInitiatorIsMe = InitiatorIsMe(a)
             Alert.OnReadyCheck()
 
         elseif event == "READY_CHECK_CONFIRM" or event == "READY_CHECK_FINISHED" then
