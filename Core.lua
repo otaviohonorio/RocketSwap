@@ -292,6 +292,8 @@ function handlers:ACTIVE_PLAYER_SPECIALIZATION_CHANGED() ns.UI.Refresh() end
 -- switch (Blizzard registers both, and its comment says this one "needs to always be
 -- registered so that the entire spec change process is always captured").
 function handlers:PLAYER_SPECIALIZATION_CHANGED() ns.UI.Refresh() end
+-- (16/11) the WoW Forever switches its two talent groups (dual spec) with this one
+function handlers:ACTIVE_TALENT_GROUP_CHANGED() ns.UI.Refresh() end
 
 -- Walking cancels the spec switch's cast, and `SPECIALIZATION_CHANGE_CAST_FAILED` does not cover
 -- it -- which is why the native window listens to these two.

@@ -161,7 +161,27 @@ end
 ---
 --- `specIndex` (1..n) is what the switch and set APIs use -- **not** the `specID`.
 --- Mixing the two is the classic mistake here: `AssignSpecToEquipmentSet` takes the index.
+-- (16/11/2026) THE WoW FOREVER: one specialization per class and the DUAL SPEC (two talent groups, the game's tabs
+-- "Principal" / "Secundário" in its talents window, DUAL_SPEC_PRIMARY/SECONDARY). There the preset's "specialization"
+-- is the GROUP: its index is the group (1, 2), its id the class's one spec (the loadouts are that spec's), its name the
+-- game's own tab name. Switching is C_SpecializationInfo.SetActiveSpecGroup (no return value) and the game answers with
+-- ACTIVE_TALENT_GROUP_CHANGED (Blizzard_PlayerSpells/Camelot/ClassTalents, SpecializationInfoDocumentation, 1.60.1).
+local FOREVER = WOW_PROJECT_ID ~= nil and WOW_PROJECT_ID == rawget(_G, "WOW_PROJECT_CAMELOT")
+Data.FOREVER = FOREVER
+
+local function ForeverGroups()
+    local out = {}
+    local n = (GetNumSpecGroups and GetNumSpecGroups()) or 1
+    local id, _, _, icon = C_SpecializationInfo.GetSpecializationInfo(1)
+    local names = { rawget(_G, "DUAL_SPEC_PRIMARY") or "1", rawget(_G, "DUAL_SPEC_SECONDARY") or "2" }
+    for group = 1, math.min(n, 2) do
+        out[#out + 1] = { index = group, id = id, name = names[group], icon = icon }
+    end
+    return out
+end
+
 function Data.GetSpecs()
+    if FOREVER then return ForeverGroups() end
     local out = {}
     local count = C_SpecializationInfo.GetNumSpecializations
         and C_SpecializationInfo.GetNumSpecializations() or GetNumSpecializations()
@@ -177,6 +197,10 @@ function Data.GetSpecs()
 end
 
 function Data.GetCurrentSpecIndex()
+    if FOREVER and C_SpecializationInfo.GetActiveSpecGroup then
+        local ok, g = pcall(C_SpecializationInfo.GetActiveSpecGroup)
+        return ok and g or 1
+    end
     local index = C_SpecializationInfo.GetSpecialization and C_SpecializationInfo.GetSpecialization()
     if index == nil and GetSpecialization then index = GetSpecialization() end
     return index
@@ -1286,7 +1310,11 @@ function Steps.spec(preset)
     end
 
     local ok, aceito
-    if C_SpecializationInfo and C_SpecializationInfo.SetSpecialization then
+    if FOREVER and C_SpecializationInfo and C_SpecializationInfo.SetActiveSpecGroup then
+        -- no return value: a call that did not raise is taken as accepted; the game's event confirms it
+        ok = pcall(C_SpecializationInfo.SetActiveSpecGroup, wanted)
+        if ns.Log then ns.Log.Call("spec", "SetActiveSpecGroup(" .. tostring(wanted) .. ")", ok) end
+    elseif C_SpecializationInfo and C_SpecializationInfo.SetSpecialization then
         ok, aceito = pcall(C_SpecializationInfo.SetSpecialization, wanted)
         if ns.Log then
             ns.Log.Call("spec", "SetSpecialization(" .. tostring(wanted) .. ")", ok, aceito)
@@ -2329,6 +2357,7 @@ function Data.EnsureListener()
 
     listener = CreateFrame("Frame", ADDON .. "ApplyListener")
     listener:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
+    if FOREVER then listener:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED") end   -- the Forever's group switch
     listener:RegisterEvent("SPECIALIZATION_CHANGE_CAST_FAILED")
     listener:RegisterEvent("TRAIT_CONFIG_UPDATED")
     listener:RegisterEvent("CONFIG_COMMIT_FAILED")
@@ -2391,7 +2420,7 @@ function Data.EnsureListener()
             -- is what decides when to stop insisting.
             SpecCastCut(event)
 
-        elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" and step == "spec" then
+        elseif (event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" or event == "ACTIVE_TALENT_GROUP_CHANGED") and step == "spec" then
             RunNext()
 
         elseif event == "TRAIT_CONFIG_UPDATED" and step == "talent" then
