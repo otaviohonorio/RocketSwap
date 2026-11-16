@@ -1,3 +1,3 @@
-# Rocket Swap 0.42.1
+# Rocket Swap 0.43.0
 
-- Fixed a Lua error when a ready check started: the game can hide who started the check, and the addon tried to compare that name anyway. The ready check card now opens and closes normally.
+- Now also for WoW Forever: each set uses your Primary or Secondary talent group (dual specialization) in place of a specialization, and loading a set switches to it.
