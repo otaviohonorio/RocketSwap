@@ -1989,7 +1989,11 @@ function Data.Preflight(preset, byClick)
             else
                 Nao("spec", motivo or L["the game refused to change specialization now; wait a few seconds."])
             end
-        elseif GetUnitSpeed and (GetUnitSpeed("player") or 0) > 0 then
+        elseif GetUnitSpeed and (function()
+                -- (18/11) the speed can be a value blocked by Blizzard (seen in the Forever): never compared then
+                local v = GetUnitSpeed("player")
+                return type(v) == "number" and not (issecretvalue and issecretvalue(v)) and v > 0
+            end)() then
             Nao("spec", L["stand still: changing specialization is a cast, and moving cuts it."])
         end
     end
