@@ -268,7 +268,7 @@ local function BuildRow(row)
     -- layer, no script), and selected (UI.SetCardSelected) a gold ring with the family's orange accent on the left. Our
     -- 9-slice never stretches its corners, so the card's varying height needs no cropping. CARD_W wide whether the scroll
     -- bar shows or not: a scaled texture's offsets are in its own scale (Style.Slice), so the right edge is CARD_W / scale.
-    -- Until 18/11 the card was the stone pieces of tools/arte_cartao_swap.py (04/11).
+    -- Until 18/11 the card was a stone of our own in pieces (04/11; files and tool removed on 18/11).
     local function CardPiece(file, layer, sub)
         local t = Style.Slice(row, file, 16, 0, layer, sub)
         t:ClearAllPoints()
