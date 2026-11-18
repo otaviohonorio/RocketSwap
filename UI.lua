@@ -1937,8 +1937,24 @@ function UI.Load(preset)
 end
 
 --------------------------------------------------------------------------------
+-- (17/11/2026) THE WINDOW AND COMBAT. A streamer opened the window in the middle of a fight: it froze half drawn and its
+-- X did not close it. The window holds SECURE buttons (each set's Load, SecureActionButtonTemplate: the appearance
+-- switch is the player's click), and a frame holding a protected frame is protected too: in combat the game blocks
+-- showing it, hiding it and changing its secure buttons. So the window is never open in combat:
+--   * asked for in combat, it does not open: it says so and opens by itself when the fight ends;
+--   * open when a fight starts, it closes at PLAYER_REGEN_DISABLED (the last moment the game still allows hiding it,
+--     before the lockdown) and opens again by itself when the fight ends.
+local reopenAfterCombat = false
+
 function UI.Toggle()
     Create()
+    if InCombatLockdown() then
+        if not frame:IsShown() and not reopenAfterCombat then
+            reopenAfterCombat = true
+            ns.Print(L["opens when the fight ends."])
+        end
+        return
+    end
     if frame:IsShown() then
         frame:Hide()
         return
@@ -1957,4 +1973,20 @@ end
 function UI.Show()
     Create()
     if not frame:IsShown() then UI.Toggle() end
+end
+
+---A fight starts: an open window closes now, while the game still allows it, and comes back when the fight ends.
+function UI.CombatStarted()
+    if frame and frame:IsShown() then
+        frame:Hide()
+        reopenAfterCombat = true
+    end
+end
+
+---The fight ended: the window asked for (or open) during it comes back.
+function UI.CombatEnded()
+    if reopenAfterCombat then
+        reopenAfterCombat = false
+        UI.Show()
+    end
 end

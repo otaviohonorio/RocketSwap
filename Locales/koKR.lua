@@ -204,3 +204,6 @@ L["Inside the match you can't switch."] = "경기 중에는 바꿀 수 없습니
 L["Does not match the preset %s."] = "%s 프리셋과 일치하지 않습니다."
 L["The preset %s: the gear is not complete."] = "%s 프리셋: 장비가 다 갖춰지지 않았습니다."
 L["Matches the preset %s."] = "%s 프리셋과 일치합니다."
+
+-- (17/11) the window holds secure buttons: in combat it waits for the fight to end
+L["opens when the fight ends."] = "전투가 끝나면 열립니다."

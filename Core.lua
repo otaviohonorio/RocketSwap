@@ -266,6 +266,12 @@ end
 function handlers:PLAYER_REGEN_ENABLED()
     FlushQueue()
     if ns.Macro then ns.Macro.CombatEnded() end
+    if ns.UI and ns.UI.CombatEnded then ns.UI.CombatEnded() end
+end
+
+-- (17/11/2026) the window holds secure buttons: it must not be open when the lockdown starts (UI.lua, UI.Toggle)
+function handlers:PLAYER_REGEN_DISABLED()
+    if ns.UI and ns.UI.CombatStarted then ns.UI.CombatStarted() end
 end
 
 -- Swaps made by hand (from the character sheet or the talents window) change which set is

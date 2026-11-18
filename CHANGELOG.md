@@ -1,3 +1,3 @@
-# Rocket Swap 0.43.0
+# Rocket Swap 0.43.1
 
-- Now also for WoW Forever: each set uses your Primary or Secondary talent group (dual specialization) in place of a specialization, and loading a set switches to it.
+- Fixed: opening the window during combat froze it half drawn and its X did not close it. In combat the window now waits and opens by itself when the fight ends; if it is open when a fight starts, it closes and comes back afterwards.

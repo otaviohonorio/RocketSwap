@@ -204,3 +204,6 @@ L["Inside the match you can't switch."] = "比賽中無法更換。"
 L["Does not match the preset %s."] = "與預設%s不符。"
 L["The preset %s: the gear is not complete."] = "預設%s：裝備不完整。"
 L["Matches the preset %s."] = "與預設%s一致。"
+
+-- (17/11) the window holds secure buttons: in combat it waits for the fight to end
+L["opens when the fight ends."] = "戰鬥結束後開啟。"

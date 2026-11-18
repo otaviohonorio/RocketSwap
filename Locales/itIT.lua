@@ -203,3 +203,6 @@ L["Inside the match you can't switch."] = "Durante la partita non puoi cambiare.
 L["Does not match the preset %s."] = "Non corrisponde al profilo %s."
 L["The preset %s: the gear is not complete."] = "Profilo %s: l'equipaggiamento non è completo."
 L["Matches the preset %s."] = "Corrisponde al profilo %s."
+
+-- (17/11) the window holds secure buttons: in combat it waits for the fight to end
+L["opens when the fight ends."] = "si apre alla fine del combattimento."
