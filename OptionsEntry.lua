@@ -14,6 +14,7 @@ local function Register(open)
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText(ns.TITLE)
     local button = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    ns.Style.SkinButton(button)   -- (18/11) the family's bronze button, as in its windows
     button:SetText(SETTINGS)
     local label = button:GetFontString()
     button:SetSize(math.max(160, (label and label:GetStringWidth() or 0) + 40), 22)

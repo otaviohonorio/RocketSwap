@@ -60,9 +60,8 @@ end
 -- with an appearance, which is nearly all of them. So the list is ours, each row a secure button with the
 -- recipe of the window's Load button: the outfit armed in PreClick, the rest in PostClick.
 --
--- THE LOOK IS THE GAME'S CONTEXT MENU (Blizzard_Menu, 12.1.0): the background is the atlas
--- `common-dropdown-bg` drawn 10 beyond the sides and 3 beyond top and bottom at 0.925
--- (`MenuStyle1Mixin:Generate`), the inset 8 / 8 / 8 / 15 (`GetInset`), each item 20 tall
+-- THE LOOK IS THE GAME'S CONTEXT MENU (Blizzard_Menu, 12.1.0), on the family's panel since 18/11 (the background
+-- was the atlas `common-dropdown-bg`, `MenuStyle1Mixin:Generate`): the inset 8 / 8 / 8 / 15 (`GetInset`), each item 20 tall
 -- (`MenuVariants.CreateFontString`), the highlight `UI-QuestTitleHighlight` added over it
 -- (`MenuVariants.CreateHighlight`), the title in the gold of `NORMAL_FONT_COLOR`.
 --------------------------------------------------------------------------------
@@ -129,11 +128,9 @@ local function CreateMenu()
     menu:Hide()
     menu.rows = {}
 
-    menu.bg = menu:CreateTexture(nil, "BACKGROUND")
-    menu.bg:SetAtlas("common-dropdown-bg")
-    menu.bg:SetPoint("TOPLEFT", -10, 3)
-    menu.bg:SetPoint("BOTTOMRIGHT", 10, -3)
-    menu.bg:SetAlpha(0.925)
+    -- (18/11) the modern Rocket identity: our panel with the filete, the one the family's drop-down menus wear
+    -- (Style.SkinDropdown), 6 beyond the list's edges as there
+    menu.bg = ns.Style.Slice(menu, "RocketPanel.png", 28, 6, "BACKGROUND")
 
     menu.title = menu:CreateFontString(nil, "OVERLAY", "GameFontNormalLeft")
     menu.title:SetPoint("TOPLEFT", MENU_INSET.left, -MENU_INSET.top)

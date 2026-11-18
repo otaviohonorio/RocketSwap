@@ -27,6 +27,9 @@ local TITLE_INK = 16
 local TITLE_GAP = 13
 local BAR_H = 8
 local BAR_GAP = 8
+-- (18/11) the modern Rocket identity's notice header (Style.Window with no seal: ns.TITLE at the left, the close X) is
+-- 34 tall; the panel's content starts under it
+local HEAD = 34
 
 -- How long the result stays on screen after the swap ends. **Three seconds, the user's choice**:
 -- it goes away by itself, with no click needed, but leaves time to read what happened.
@@ -129,7 +132,11 @@ local function Build()
     -- (25/10) DARK EVERYWHERE: the user chose the app's look as the reference and "escuro em tudo" -- the panel wears
     -- the Specialization tab's dark art (spec-background), as RocketLab's tabs; an atlas, never tiled (one texture
     -- tiled and then given an atlas showed the whole atlas file: RocketLab, 13/10)
-    frame.art = ns.DarkBody(frame, 0.92)
+    -- (18/11) THE MODERN ROCKET IDENTITY, a small notice: our panel with the filete in place of the tooltip border (its
+    -- NineSlice, hidden), the body stone, ns.TITLE at the left and the close X (Style.Window, no seal). The close only
+    -- shows when a step failed (Progress.Refresh), as before.
+    frame.head = ns.Style.Window(frame, { seal = false })
+    frame.art = frame.__body
 
     local pos = ns.db and ns.db.progressPos
     if pos then
@@ -147,19 +154,21 @@ local function Build()
     end)
 
     frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    frame.title:SetPoint("TOPLEFT", PAD, -PAD)
+    frame.title:SetPoint("TOPLEFT", PAD, -(HEAD + PAD))
     frame.title:SetWidth(WIDTH - PAD * 2 - 40)
     frame.title:SetJustifyH("LEFT")
     frame.title:SetWordWrap(false)
 
-    frame.clock = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    frame.clock:SetPoint("TOPRIGHT", -PAD, -PAD - 2)
+    -- (18/11) the secondary grey of the design system (LIGHTGRAY), never the disabled grey on the stone
+    frame.clock = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.clock:SetTextColor(LIGHTGRAY_FONT_COLOR:GetRGB())
+    frame.clock:SetPoint("TOPRIGHT", -PAD, -(HEAD + PAD) - 2)
     frame.clock:SetWidth(36)
     frame.clock:SetJustifyH("RIGHT")
 
     -- A barra.
     local trilho = CreateFrame("Frame", nil, frame)
-    trilho:SetPoint("TOPLEFT", PAD, -(PAD + TITLE_INK + BAR_GAP))
+    trilho:SetPoint("TOPLEFT", PAD, -(HEAD + PAD + TITLE_INK + BAR_GAP))
     trilho:SetSize(WIDTH - PAD * 2, BAR_H)
     trilho.bg = trilho:CreateTexture(nil, "BACKGROUND")
     trilho.bg:SetAllPoints()
@@ -185,7 +194,7 @@ local function Build()
     for i = 1, 4 do
         local row = CreateFrame("Frame", nil, frame)
         row:SetSize(WIDTH - PAD * 2, ROW)
-        row:SetPoint("TOPLEFT", PAD, -(PAD + TITLE_INK + BAR_GAP + BAR_H + TITLE_GAP + (i - 1) * ROW))
+        row:SetPoint("TOPLEFT", PAD, -(HEAD + PAD + TITLE_INK + BAR_GAP + BAR_H + TITLE_GAP + (i - 1) * ROW))
 
         row.icon = row:CreateTexture(nil, "ARTWORK")
         row.icon:SetSize(ICON, ICON)
@@ -218,18 +227,8 @@ local function Build()
     frame.shout:SetTextColor(0.35, 0.90, 0.45)
     frame.shout:Hide()
 
-    frame.close = CreateFrame("Button", nil, frame)
-    frame.close:SetSize(14, 14)
-    frame.close:SetPoint("TOPRIGHT", -4, -4)
-    frame.close.tex = frame.close:CreateTexture(nil, "ARTWORK")
-    frame.close.tex:SetAllPoints()
-    if not (ns.SetAtlasSafe and ns.SetAtlasSafe(frame.close.tex, "common-icon-redx")) then
-        frame.close.tex:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
-    end
-    frame.close.tex:SetAlpha(0.5)
-    frame.close:SetScript("OnClick", function() frame:Hide() end)
-    frame.close:SetScript("OnEnter", function() frame.close.tex:SetAlpha(1) end)
-    frame.close:SetScript("OnLeave", function() frame.close.tex:SetAlpha(0.5) end)
+    -- the header's X (Style.Window), hidden until a step fails
+    frame.close = frame.__close
     frame.close:Hide()
 
     frame:SetScript("OnUpdate", function(self, elapsed)
@@ -319,7 +318,7 @@ function Progress.Refresh()
 
     -- THE HEIGHT IS THE SAME FROM START TO END. Shrinking at the end makes the panel jump on screen
     -- right when the eye comes back to it, and a layout jump reads as a defect.
-    frame:SetHeight(PAD * 2 + TITLE_INK + BAR_GAP + BAR_H + TITLE_GAP + ROW * #passos)
+    frame:SetHeight(HEAD + PAD * 2 + TITLE_INK + BAR_GAP + BAR_H + TITLE_GAP + ROW * #passos)
 
     -- ENDED AND IT WORKED: the panel changes its content for the three seconds it has left.
     if frame.shouting then

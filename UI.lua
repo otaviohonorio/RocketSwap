@@ -9,6 +9,8 @@
 --      centre at (26, −22) of the frame. The "Conjuntos" label was at (14, −34),
 --      sqrt(12² + 12²) = 17px from the centre -- that is, 12px INSIDE the disc.
 --      RULE: nothing anchored on `frame` with x < 58 and y > −55. Nothing here breaks it.
+--      (18/11/2026) The portrait is gone: the modern Rocket identity's header (Style.Window) holds the seal, and
+--      everything starts under it (Style.HEAD). The rule became "nothing above -Style.HEAD".
 --
 --   2. ORPHAN LABELS. With zero sets, "Nome / Especialização / Talentos / Itens"
 --      showed with no field under them: I hid the controls and forgot the labels.
@@ -28,6 +30,7 @@ local L = ns.L
 
 local UI = {}
 ns.UI = UI
+local Style = ns.Style
 
 -- Every number has an origin. Where there is a quote, it is from a file of client 12.1.0.
 -- The height went from 420 to 452 when the War Mode sub-option came into the Warnings strip
@@ -104,13 +107,9 @@ local CARD_NAME_GAP = 4       -- entre o titulo e a primeira linha de campo
 -- let the text overflow the row, which is worse than the long line.
 local CARD_TEXT_W = LIST_W - CARD_LEFT - 30
 
--- (04/11) the card's art (tools/arte_cartao_swap.py): 400 wide (the list's width with its scroll bar), the top and
--- bottom pieces 11 points tall, the stone's middle cropped from row CARD_EDGE_H*2 of its 512, running CARD_FADE under
--- the bottom piece (whose inside fades in over it)
+-- (18/11) the card is the family's (Style.Card's pieces, tools/rocket_pele.py): CARD_W wide (the list's width with its
+-- scroll bar), whether the scroll bar shows or not
 local CARD_W = 400
-local CARD_EDGE_H = 11
-local CARD_FADE = 5
-local CARD_GLOW_INSET = 6
 
 -- ⛑ HOW MANY WHOLE CARDS HAVE TO FIT WITHOUT SCROLLING. The user's request: three.
 --
@@ -131,7 +130,12 @@ local function FieldsHeight(n)
 end
 local CARD_TOP = CARD_PAD + CARD_NAME_INK + CARD_NAME_GAP   -- onde o bloco de campos comeca
 local CARD_MAX = CARD_TOP + FieldsHeight(4) + CARD_PAD
-local LIST_TOP = -60
+-- (18/11) THE MODERN ROCKET IDENTITY (the user approved mockup/PREVIA Identidade Rocket - Rocket Swap.png): the header
+-- with the seal, the name and the subtitle (Style.Window) takes the top Style.HEAD; under it the toolbar (New preset and
+-- the two buttons to the game's windows), and under that the list. The old portrait and its "x >= 58" rule are gone.
+local TOOLBAR_Y = -(Style.HEAD + 8)              -- -66
+local LIST_X = 8                                 -- the list's left edge, 4 inside the body's (Style.INSET)
+local LIST_TOP = TOOLBAR_Y - 22 - 12             -- -100: a button (22) + 12
 -- (17/11) + 44: the editor column gained the content field (a `Group`, 50) and the window grows with it, the list taking
 -- the height (a little more of the next card shows) instead of squeezing any gap of the column
 local LIST_H = CARD_MAX * CARDS_VISIVEIS + ROW_SPACING * (CARDS_VISIVEIS - 1) + 6 + 44  -- 6 = 3+3 do inset
@@ -142,7 +146,9 @@ local WARN_STRIP_Y = LIST_BOTTOM - 4
 -- The window's closed sum, inherited from the version before and now anchored on the list:
 -- the Warnings strip (142 of content) + the 26 footer `ButtonFrameTemplate` reserves,
 -- plus the 4 of slack the window always had.
-local WARN_STRIP_H = 130
+-- (18/11) 134: the section band (Style.Section's look) holds the title down to -30, the column titles at -40, three
+-- boxes from -56 (the last ends at -128), plus 6
+local WARN_STRIP_H = 134
 local TEMPLATE_FOOTER = 26
 -- + the support line at the very bottom (Donate.lua, `DONATE_ROW`, 27/09).
 local DONATE_ROW = ns.DONATE_ROW or 0
@@ -150,11 +156,10 @@ HEIGHT = -WARN_STRIP_Y + WARN_STRIP_H + TEMPLATE_FOOTER + 4 + DONATE_ROW
 local FIELD_W = 240           -- combos: the widest loadout name the lab makes (201 px) + the combo's 34 of art
 local NAME_W = 251            -- EditBox: its art ends where the combos' does
 local GROUP_STEP = 50         -- label (15) + combo (25) + breathing room (10)
-local ATTIC_Y = -30           -- the band between the title and the inset
 -- The editor column, top to bottom (27/09): the two buttons to the game's windows, the title of the
 -- name box, the box, the divider and the fields. Same rhythm as a field group: title 12 + 3 above
 -- its box, 10 between blocks, and the 16/10 around the divider that the column already had.
-local EDITOR_TOP = -60                           -- level with the list's inset (`LIST_TOP`)
+local EDITOR_TOP = TOOLBAR_Y                     -- level with the toolbar (the mockup of 18/11)
 local TOOL_W = 122                               -- two of them + 7 of gap = NAME_W
 local NAME_TITLE_Y = EDITOR_TOP - 22 - 10        -- button (22) + gap
 local NAME_Y = NAME_TITLE_Y - 15                 -- title (12) + 3, like `Group`
@@ -258,39 +263,31 @@ local function BuildRow(row)
     -- The real height comes from `CardHeight`, per element; this is only the starting one.
     row:SetHeight(CARD_PAD * 2 + CARD_NAME_INK + CARD_LINE)
 
-    -- (04/11) THE CARD, in the identity of the Rocket Mount (the user: "adorei, agora podemos fazer nos outros addons,
-    -- que tal o swap agora"). Until then the row had no background and lit up with the game's highlight bars
-    -- (`GearSetButtonTemplate`). The card's HEIGHT varies with the set, so it is built of pieces that never stretch
-    -- (tools/arte_cartao_swap.py, mockup/PREVIA Rocket Swap - cartoes na identidade nova.png): the top (line and
-    -- chamfers), the sides (ONE clean row: stretching it in height deforms nothing), the bottom, and the stone between
-    -- them CROPPED to the card's height. CARD_W wide whether the scroll bar shows or not. Selected = the gold frame;
-    -- under the mouse the stone lights up a little (ADD, the Journeys' `AlphaHighlightButtonTemplate`).
-    local function Peca(arquivo, sub, layer)
-        local t = row:CreateTexture(nil, layer or "BACKGROUND", nil, sub)
-        t:SetTexture("Interface\\AddOns\\" .. ADDON .. "\\Textures\\" .. arquivo)
+    -- (18/11) THE CARD, in the family's modern identity (Style.Card's pieces on the ScrollBox's own row: the list makes
+    -- the Button, so it is dressed instead of made): our card art, a light-bronze ring under the mouse (the HIGHLIGHT
+    -- layer, no script), and selected (UI.SetCardSelected) a gold ring with the family's orange accent on the left. Our
+    -- 9-slice never stretches its corners, so the card's varying height needs no cropping. CARD_W wide whether the scroll
+    -- bar shows or not: a scaled texture's offsets are in its own scale (Style.Slice), so the right edge is CARD_W / scale.
+    -- Until 18/11 the card was the stone pieces of tools/arte_cartao_swap.py (04/11).
+    local function CardPiece(file, layer, sub)
+        local t = Style.Slice(row, file, 16, 0, layer, sub)
+        t:ClearAllPoints()
+        t:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        t:SetPoint("BOTTOMRIGHT", row, "BOTTOMLEFT", CARD_W / Style.ART_SCALE, 0)
         return t
     end
-    local u1 = CARD_W * 2 / 1024
-    row.cardTop = Peca("SwapTop.png", -6)
-    row.cardTop:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-    row.cardTop:SetSize(CARD_W, CARD_EDGE_H)
-    row.cardTop:SetTexCoord(0, u1, 0, CARD_EDGE_H * 2 / 32)
-    row.cardBottom = Peca("SwapBottom.png", -6)
-    row.cardBottom:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-    row.cardBottom:SetSize(CARD_W, CARD_EDGE_H)
-    row.cardBottom:SetTexCoord(0, u1, 0, CARD_EDGE_H * 2 / 32)
-    row.cardSide = Peca("SwapSide.png", -7)
-    row.cardSide:SetPoint("TOPLEFT", row.cardTop, "BOTTOMLEFT", 0, 0)
-    row.cardSide:SetPoint("BOTTOMRIGHT", row.cardBottom, "TOPRIGHT", 0, 0)
-    row.cardSide:SetTexCoord(0, u1, 0, 0.25)
-    row.cardStone = Peca("SwapStone.png", -8)
-    row.cardStone:SetPoint("TOPLEFT", row.cardTop, "BOTTOMLEFT", 0, 0)
-    row.cardStone:SetPoint("BOTTOMRIGHT", row.cardBottom, "TOPRIGHT", 0, -CARD_FADE)
-    row.glow = Peca("SwapStone.png", 0, "HIGHLIGHT")
-    row.glow:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -CARD_GLOW_INSET)
-    row.glow:SetPoint("BOTTOMRIGHT", row, "TOPLEFT", CARD_W, 0)
-    row.glow:SetBlendMode("ADD")
-    row.glow:SetAlpha(0.22)
+    row.__bg = CardPiece("RocketCard.png", "BACKGROUND", -7)
+    row.__hover = CardPiece("RocketCardRing.png", "HIGHLIGHT", 0)
+    row.__hover:SetVertexColor(Style.BRONZE_LIGHT[1], Style.BRONZE_LIGHT[2], Style.BRONZE_LIGHT[3])
+    row.__ring = CardPiece("RocketCardRing.png", "OVERLAY", 7)
+    row.__ring:SetVertexColor(NORMAL_FONT_COLOR:GetRGB())
+    row.__ring:Hide()
+    row.__accent = row:CreateTexture(nil, "BORDER")
+    row.__accent:SetColorTexture(Style.ORANGE[1], Style.ORANGE[2], Style.ORANGE[3], 1)
+    row.__accent:SetWidth(3)
+    row.__accent:SetPoint("TOPLEFT", 1, -4)
+    row.__accent:SetPoint("BOTTOMLEFT", 1, 4)
+    row.__accent:Hide()
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     -- Tamanho e posicao sao reacertados em `FillRow`: os dois dependem de quantos campos o
@@ -344,6 +341,7 @@ local function BuildRow(row)
     -- and it is the same rule he had already given for the specialization restriction: a button that
     -- takes the click and then answers "it did not work" is worse than a dimmed button.
     row.fix = CreateFrame("Button", nil, row.warn, "UIPanelButtonTemplate")
+    Style.SkinButton(row.fix)
     row.fix:SetSize(112, 20)
     row.fix:SetPoint("RIGHT", -2, 0)
     row.fix:SetScript("OnClick", function(self)
@@ -375,6 +373,7 @@ local function BuildRow(row)
     -- and what we do there taints the rest. `PostClick` runs after, outside it.
     row.load = CreateFrame("Button", nil, row,
         "UIPanelButtonTemplate, SecureActionButtonTemplate")
+    Style.SkinButton(row.load)          -- the bronze button; the secure template underneath is untouched
     row.load:SetSize(74, 22)
     -- ON THE ICON'S LINE: the only band of the card with no text, and so the button stops competing
     -- for height with the title. On top, it sits in the corner where the eye already looks for an action.
@@ -420,9 +419,9 @@ local function BuildRow(row)
     row.load:SetMotionScriptsWhileDisabled(true)
 
     row.check = row:CreateTexture(nil, "OVERLAY")
-    row.check:SetSize(16, 16)
     row.check:SetPoint("RIGHT", row, "LEFT", CARD_W - 8 - CARD_INSET, 0)
-    row.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    row.check:SetAtlas("checkmark-minimal")      -- (18/11) the gold tick of our check boxes (Style.SkinCheck)
+    row.check:SetSize(22, 21)
     row.check:Hide()
 
     -- THE ROW'S CLICK. It did not exist: I swapped the manual `OnClick` for
@@ -649,22 +648,16 @@ local function FillRow(row, preset)
     UI.SetCardSelected(row, selection ~= nil and selection:IsElementDataSelected(preset))
 end
 
----(04/11) The stone's middle cropped to the card's height (never stretched): from where the top piece's ends.
+---The card's height, kept for the harness (our 9-slice follows the row by itself since 18/11: nothing to crop).
 function UI.LayCard(row, h)
-    if not row.cardStone then return end
-    local meio = math.max(h - 2 * CARD_EDGE_H + CARD_FADE, 1)
-    row.cardStone:SetTexCoord(0, CARD_W * 2 / 1024, CARD_EDGE_H * 2 / 512, (CARD_EDGE_H + meio) * 2 / 512)
     row.cardH = h
 end
 
----(04/11) Selected: the gold frame (the same pieces, gold), in place of the game's highlight bar.
+---(18/11) Selected: the gold ring and the orange accent (Style.Card), in place of the game's highlight bar.
 function UI.SetCardSelected(row, on)
-    if not row.cardTop then return end
-    local s = on and "Sel" or ""
-    local base = "Interface\\AddOns\\" .. ADDON .. "\\Textures\\"
-    row.cardTop:SetTexture(base .. "SwapTop" .. s .. ".png")
-    row.cardSide:SetTexture(base .. "SwapSide" .. s .. ".png")
-    row.cardBottom:SetTexture(base .. "SwapBottom" .. s .. ".png")
+    if not row.__ring then return end
+    row.__ring:SetShown(on and true or false)
+    row.__accent:SetShown(on and true or false)
     row.cardSelected = on and true or false
 end
 
@@ -690,8 +683,10 @@ local function Group(parent, labelText, yTop, items, get, set, emptyText, clearT
     local dd = CreateFrame("DropdownButton", nil, group, "WowStyle1DropdownTemplate")
     dd:SetSize(FIELD_W, 25)
     dd:SetPoint("BOTTOMLEFT", group, "BOTTOMLEFT", 8, 0)
+    Style.SkinDropdown(dd)              -- (18/11) the bronze drop-down, 22 tall; the game's menu underneath
 
-    local label = group:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    -- (18/11) the option's name in white (the design system: titles gold, option names white)
+    local label = group:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     label:SetPoint("BOTTOMLEFT", dd, "TOPLEFT", 3, 3)
     label:SetJustifyH("LEFT")
     label:SetText(labelText)
@@ -785,6 +780,7 @@ local function BuildEditor()
     -- below only pick one.
     local function Tool(text, tooltip, fn, x)
         local b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        Style.SkinButton(b)
         b:SetSize(TOOL_W, 22)
         b:SetPoint("TOPLEFT", frame, "TOPLEFT", x, EDITOR_TOP)
         b:SetText(text)
@@ -808,7 +804,7 @@ local function BuildEditor()
     -- salvando"* -- once typed, the instruction is gone and nothing says what the box is. The word
     -- is the one the list, "+ New preset" and every message already use ("conjunto" in ptBR), so
     -- the player never meets two names for the same thing. Placed like a `Group` label.
-    editor.nameTitle = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    editor.nameTitle = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")   -- white, as the fields' names
     editor.nameTitle:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X + 11, NAME_TITLE_Y)
     editor.nameTitle:SetWidth(NAME_W - 6)
     editor.nameTitle:SetJustifyH("LEFT")
@@ -823,6 +819,7 @@ local function BuildEditor()
     editor.name:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X + 5, NAME_Y)
     editor.name:SetAutoFocus(false)
     editor.name:SetMaxLetters(31)
+    Style.SkinField(editor.name)        -- (18/11) our dark field, gold with the focus
     if editor.name.Instructions then
         -- Without this the instruction text is born 16px to the right of the typed text.
         editor.name.Instructions:SetAllPoints()
@@ -844,9 +841,7 @@ local function BuildEditor()
     editor.divider = frame:CreateTexture(nil, "ARTWORK")
     editor.divider:SetSize(FIELD_W + 16, 1)
     editor.divider:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, DIVIDER_Y)
-    if not ns.SetAtlasSafe or not ns.SetAtlasSafe(editor.divider, "Options_HorizontalDivider") then
-        editor.divider:SetColorTexture(1, 1, 1, 0.12)
-    end
+    Style.Divider(editor.divider)       -- (18/11) the game's line in the family's bronze
 
     local function Current() return UI.Selected() end
 
@@ -1028,14 +1023,16 @@ end
 --- Builds the panel once; `UI.RefreshProgress` is what writes on it.
 local function BuildProgress()
     local panel = CreateFrame("Frame", nil, frame)
-    panel:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, -60)
+    panel:SetPoint("TOPLEFT", frame, "TOPLEFT", COL_X, EDITOR_TOP)
     panel:SetPoint("RIGHT", frame, "RIGHT", -20, 0)
     panel:Hide()
 
     -- The clock to the right of the title. It is what answers *"did anything happen?"* before
     -- any step closes: a number moving second by second proves the addon is
     -- alive, even in the 4 seconds when it is waiting on purpose for the game to allow it.
-    panel.clock = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    -- (18/11) the secondary grey of the design system, never the disabled one on the stone
+    panel.clock = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    panel.clock:SetTextColor(LIGHTGRAY_FONT_COLOR:GetRGB())
     panel.clock:SetPoint("TOPRIGHT", 0, 0)
     panel.clock:SetWidth(PROGRESS_CLOCK_W)
     panel.clock:SetJustifyH("RIGHT")
@@ -1207,13 +1204,16 @@ local function BuildEmptyState()
     empty.title:SetPoint("CENTER", frame, "CENTER", 0, 55)
     empty.title:SetText(L["No presets yet"])
 
-    empty.body = empty:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    -- (18/11) the secondary grey of the design system (LIGHTGRAY), never the disabled grey on the stone
+    empty.body = empty:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    empty.body:SetTextColor(LIGHTGRAY_FONT_COLOR:GetRGB())
     empty.body:SetPoint("TOP", empty.title, "BOTTOM", 0, -10)
     empty.body:SetWidth(320)
     empty.body:SetJustifyH("CENTER")
     empty.body:SetText(L["The first one starts with the spec, talents and gear you have right now."])
 
     empty.button = CreateFrame("Button", nil, empty, "UIPanelButtonTemplate")
+    Style.SkinButton(empty.button)
     empty.button:SetSize(180, 22)
     empty.button:SetPoint("TOP", empty.body, "BOTTOM", 0, -20)
     empty.button:SetText(L["Create the first preset"])
@@ -1244,18 +1244,10 @@ local function BuildToggles()
     -- because the window's height comes from it.
     strip:SetHeight(WARN_STRIP_H)
 
-    strip.divider = strip:CreateTexture(nil, "ARTWORK")
-    strip.divider:SetPoint("TOPLEFT", 0, 0)
-    strip.divider:SetPoint("TOPRIGHT", 0, 0)
-    strip.divider:SetHeight(1)
-    if not ns.SetAtlasSafe or not ns.SetAtlasSafe(strip.divider, "Options_HorizontalDivider") then
-        strip.divider:SetColorTexture(1, 1, 1, 0.12)
-    end
-
-    strip.title = strip:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    strip.title:SetPoint("TOPLEFT", 0, -10)
-    strip.title:SetText(L["Warnings"])
-    strip.title:SetTextColor(1, 0.82, 0)
+    -- (18/11) THE SECTION of the design system (Style.Section): the title in gold 16 on the band of the game's quest
+    -- tracker, in place of the divider and the gold 12 title
+    local _, title, band = Style.Section(strip, 0, 0, 300, L["Warnings"])
+    strip.title, strip.band = title, band
 
     -- The "?" beside the title, and not on each box: what needs explaining is the FEATURE
     -- (that the warnings work without a set, and when they stay quiet), not each line alone.
@@ -1308,6 +1300,7 @@ local function BuildToggles()
         local box = CreateFrame("CheckButton", nil, strip, "UICheckButtonTemplate")
         box:SetSize(24, 24)
         box:SetPoint("TOPLEFT", indent or 0, y)
+        Style.SkinCheck(box)            -- (18/11) our 18-point box with the game's gold tick
 
         local text = strip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         text:SetPoint("LEFT", box, "RIGHT", 2, 0)
@@ -1350,10 +1343,11 @@ local function BuildToggles()
     local COL2 = math.floor((WIDTH - 28) / 2)
 
     local function ColumnTitle(x, texto)
-        local fs = strip:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetPoint("TOPLEFT", x, -34)
+        -- (18/11) the secondary grey of the design system (LIGHTGRAY), under the section band
+        local fs = strip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        fs:SetPoint("TOPLEFT", x, -40)
         fs:SetText(texto)
-        fs:SetTextColor(0.75, 0.75, 0.78)
+        fs:SetTextColor(LIGHTGRAY_FONT_COLOR:GetRGB())
         return fs
     end
 
@@ -1364,16 +1358,16 @@ local function BuildToggles()
     -- both contents, so the titles had to be "In any content" and "Only in PvP" --
     -- honest, but not what the user wanted. With the key split per context, PvE and PvP
     -- become real columns, each with its own equipment warning.
-    strip.warnPvE = Toggle(-52, L["Warn about wrong gear"], "warnPvE")
-    strip.ready = Toggle(-76, L["Show my setup on Ready Check"], "readyCheck")
+    strip.warnPvE = Toggle(-56, L["Warn about wrong gear"], "warnPvE")
+    strip.ready = Toggle(-80, L["Show my setup on Ready Check"], "readyCheck")
 
-    strip.warnPvP = Toggle(-52, L["Warn about wrong gear"], "warnPvP", COL2)
+    strip.warnPvP = Toggle(-56, L["Warn about wrong gear"], "warnPvP", COL2)
     -- (!) THE SUB-OPTION IS A CHILD AGAIN, and now with its parent in the SAME column: War Mode is the
     -- open world with PvP on, so it belongs to this column and this warning. The 15 px
     -- indent says the dependency again, and the dimmed state still says it too -- the two
     -- signals added, which is what this project's skill says to do.
-    strip.warMode = Toggle(-76, L["Warn with War Mode on too"], "warnWarMode", COL2 + CHILD_INDENT)
-    strip.queue = Toggle(-100, L["Show my setup when a PvP queue pops"], "queuePop", COL2)
+    strip.warMode = Toggle(-80, L["Warn with War Mode on too"], "warnWarMode", COL2 + CHILD_INDENT)
+    strip.queue = Toggle(-104, L["Show my setup when a PvP queue pops"], "queuePop", COL2)
 
     frame.toggles = strip
 end
@@ -1435,20 +1429,18 @@ local function Create()
     end)
     frame:Hide()
 
-    if frame.SetTitle then frame:SetTitle(ns.TITLE) end
-    if frame.SetPortraitToAsset then
-        frame:SetPortraitToAsset(ns.LOGO)
-    end
     tinsert(UISpecialFrames, frame:GetName())
-    ns.DarkBody(frame, 1, frame.Bg)                    -- (25/10) the dark body, as every Rocket window (Core.lua); the list keeps the inset
+    -- (18/11) THE MODERN ROCKET IDENTITY: our panel with the filete, the body stone, the header with the seal, ns.TITLE
+    -- and the subtitle on the tracker's band, the close X (Style.Window; the template's portrait, title bar, red close
+    -- and stone hidden). Esc still closes it (UISpecialFrames, above).
+    frame.head = Style.Window(frame, { subtitle = L["Presets"] })
 
-    -- The template's inset covers the whole width; here it comes to cover only the list's column.
-    -- The right column sits on the window's background on purpose: the inset's marble is a LIST's
-    -- background, and under a form it competes with the combos' art.
+    -- The template's inset only bounds the list's column now: its marble is hidden by Style.Window, the cards carry
+    -- their own art over the body stone (the mockup of 18/11).
     if frame.Inset then
         frame.Inset:ClearAllPoints()
-        frame.Inset:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, LIST_TOP)
-        frame.Inset:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", 4 + LIST_W, LIST_BOTTOM)
+        frame.Inset:SetPoint("TOPLEFT", frame, "TOPLEFT", LIST_X, LIST_TOP)
+        frame.Inset:SetPoint("BOTTOMRIGHT", frame, "TOPLEFT", LIST_X + LIST_W, LIST_BOTTOM)
     end
     local host = frame.Inset or frame
 
@@ -1489,15 +1481,17 @@ local function Create()
             end
         end, UI)
 
-    -- The attic: the band between the title and the inset, to the right of the portrait (x ≥ 58).
+    -- The toolbar, under the header and over the list (18/11).
     frame.new = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    Style.SkinButton(frame.new)
     frame.new:SetSize(140, 22)
-    frame.new:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, ATTIC_Y)
+    frame.new:SetPoint("TOPLEFT", frame, "TOPLEFT", LIST_X + 4, TOOLBAR_Y)
     frame.new:SetText("+ " .. L["New preset"])
     frame.new:SetScript("OnClick", function() UI.New() end)
 
     -- (25/10) the Rocket SBA Lab's builds as presets: shown only when the game has a pair of its talents and items
     frame.fromLab = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    Style.SkinButton(frame.fromLab)
     frame.fromLab:SetSize(160, 22)
     frame.fromLab:SetText(L["From Rocket SBA Lab"])
     frame.fromLab:SetScript("OnClick", function() UI.FromRocketLab() end)
@@ -1518,8 +1512,9 @@ local function Create()
 
     -- The footer: the band the template already reserves (y 4..26).
     frame.delete = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    Style.SkinButton(frame.delete)
     frame.delete:SetSize(100, 22)
-    frame.delete:SetPoint("BOTTOMRIGHT", -6, 4 + DONATE_ROW)
+    frame.delete:SetPoint("BOTTOMRIGHT", -12, 4 + DONATE_ROW)     -- inside the panel's filete and the body (18/11)
     frame.delete:SetText(L["Delete"])
     frame.delete:SetScript("OnClick", function() UI.Delete() end)
 
@@ -1527,7 +1522,7 @@ local function Create()
     frame.donate = ns.DonateFooter(frame)
 
     frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.status:SetPoint("BOTTOMLEFT", 10, 8 + DONATE_ROW)
+    frame.status:SetPoint("BOTTOMLEFT", 14, 8 + DONATE_ROW)
     frame.status:SetPoint("RIGHT", frame.delete, "LEFT", -8, 0)
     frame.status:SetJustifyH("LEFT")
     frame.status:SetWordWrap(false)
@@ -1755,7 +1750,7 @@ function UI.Refresh()
     frame.fromLab:SetShown(#ns.Data.RocketPairs() > 0)
     frame.fromLab:ClearAllPoints()
     if empty then
-        frame.fromLab:SetPoint("TOPLEFT", frame, "TOPLEFT", 60, ATTIC_Y)
+        frame.fromLab:SetPoint("TOPLEFT", frame, "TOPLEFT", LIST_X + 4, TOOLBAR_Y)
     else
         frame.fromLab:SetPoint("LEFT", frame.new, "RIGHT", 8, 0)
     end

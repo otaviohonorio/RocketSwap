@@ -227,13 +227,13 @@ local function Build()
     ui:SetScript("OnDragStop", ui.StopMovingOrSizing)
     ui:Hide()
 
-    if ui.SetTitle then ui:SetTitle(ns.TITLE) end
-    if ui.SetPortraitToAsset then ui:SetPortraitToAsset(ns.LOGO) end
     if ui.Inset then ui.Inset:Hide() end
-    ns.DarkBody(ui, 1, ui.Bg)                       -- (25/10) the dark body, as every Rocket window (Core.lua)
+    -- (18/11) THE MODERN ROCKET IDENTITY, a small notice: our panel and body stone, ns.TITLE at the left with no seal, the
+    -- close X (Style.Window). The headline sits where a notice's subtitle goes, and may wrap.
+    ui.head = ns.Style.Window(ui, { seal = false })
 
     ui.headline = ui:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    ui.headline:SetPoint("TOPLEFT", 60, -30)
+    ui.headline:SetPoint("TOPLEFT", 14, -29)
     ui.headline:SetPoint("RIGHT", -14, 0)
     ui.headline:SetJustifyH("LEFT")
     ui.headline:SetTextColor(1, 0.82, 0)
@@ -245,12 +245,14 @@ local function Build()
     ui.body:SetSpacing(3)
 
     ui.fix = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
+    ns.Style.SkinButton(ui.fix)
     ui.fix:SetSize(150, 22)
-    ui.fix:SetPoint("BOTTOMLEFT", 14, 8)
+    ui.fix:SetPoint("BOTTOMLEFT", 14, 10)
 
     ui.mute = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
+    ns.Style.SkinButton(ui.mute)
     ui.mute:SetSize(150, 22)
-    ui.mute:SetPoint("BOTTOMRIGHT", -14, 8)
+    ui.mute:SetPoint("BOTTOMRIGHT", -14, 10)
     ui.mute:SetText(L["Don't warn here"])
     ui.mute:SetScript("OnClick", function()
         if lastKey then
@@ -586,13 +588,15 @@ end
 -- where the game's box is (its edges) and never anchors to it. It closes when the player answers or the check ends.
 --
 -- THE SHELL is the one of the addon's box (`StaticPopupBaseTemplate`: the game's dialog border, never the game's
--- dialog LIST -- see Dialog.lua), with the dark body of every Rocket window (`ns.DarkBody`, 25/10).
+-- dialog LIST -- see Dialog.lua), dressed since 18/11 in the modern Rocket identity (Style.Window, a notice with no seal).
 
 -- The game's measures where it has them: the dialog's 16 above and below and its 22-tall button (Dialog.lua); the
 -- Settings panel's 25 to the left of its content is too wide for a card, the game's own dialogs use 20 at the sides
 -- (EditModeDialogs.xml:260). The row: a 32 icon (the size of the talent loadout's icon in the game's dropdown), 10 to
 -- the text, the mark at 18 (`common-icon-checkmark` is 22, drawn smaller to sit beside a 12 text).
-local CARD = { width = 360, side = 20, top = 16, bottom = 16, icon = 32, iconGap = 10, mark = 18, markGap = 6,
+-- (18/11) `head`: where the content starts, under the notice's header (Style.Window with no seal: its line at -10 in the
+-- gold 16, the header 34 tall) plus 4.
+local CARD = { width = 360, side = 20, top = 16, head = 38, bottom = 16, icon = 32, iconGap = 10, mark = 18, markGap = 6,
                rowGap = 10, button = 22, fixWidth = 150, okWidth = 128, buttonGap = 10, fromScreenTop = 135 }
 CARD.text = CARD.width - 2 * CARD.side - CARD.icon - CARD.iconGap - CARD.mark - CARD.markGap
 Alert.CARD = CARD
@@ -874,11 +878,15 @@ local function BuildCard()
     f:SetClampedToScreen(true)
     f:SetWidth(CARD.width)
     f:Hide()
-    ns.DarkBody(f, 1, f.BG and f.BG.Bottom)
-
-    f.brand = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    -- (18/11) THE MODERN ROCKET IDENTITY, a small notice (Style.Window, no seal): our panel in place of the game's dialog
+    -- border and background (its BG frame, hidden), the body stone, the close X. The header's line is the brand: ns.TITLE
+    -- and the moment in the secondary grey.
+    if type(f.BG) == "table" and f.BG.Hide then f.BG:Hide() end
+    f.head = ns.Style.Window(f, { seal = false })
+    f.brand = f.head.title
     f.brand:SetJustifyH("LEFT")
-    f.brand:SetWidth(CARD.width - 2 * CARD.side)
+    f.brand:SetPoint("RIGHT", f, "RIGHT", -40, 0)
+    f.brand:SetWordWrap(false)
     f.title = f:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     f.title:SetJustifyH("LEFT")
     f.title:SetWidth(CARD.width - 2 * CARD.side)
@@ -896,8 +904,10 @@ local function BuildCard()
     f.verdict:SetWidth(CARD.width - 2 * CARD.side - 20)
 
     f.fix = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    ns.Style.SkinButton(f.fix)
     f.fix:SetSize(CARD.fixWidth, CARD.button)
     f.ok = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    ns.Style.SkinButton(f.ok)
     f.ok:SetSize(CARD.okWidth, CARD.button)
     f.ok:SetText(OKAY)
     f.ok:SetScript("OnClick", function() f:Hide() end)
@@ -917,11 +927,9 @@ local function SetMark(tex, state, size)
 end
 
 local function DrawCard(f, model, title, subtitle)
-    local x, y = CARD.side, CARD.top
+    -- (18/11) the brand is the header's line (Style.Window): the title starts under the header
+    local x, y = CARD.side, CARD.head
     f.brand:SetText(ns.TITLE .. Wrap(LIGHTGRAY_FONT_COLOR, "  ·  " .. subtitle))
-    f.brand:ClearAllPoints()
-    f.brand:SetPoint("TOPLEFT", x, -y)
-    y = y + f.brand:GetStringHeight() + 4
     f.title:SetText(title)
     f.title:ClearAllPoints()
     f.title:SetPoint("TOPLEFT", x, -y)
@@ -1014,6 +1022,7 @@ local function DrawCard(f, model, title, subtitle)
         local b = f.options[i]
         if preset and not b then
             b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+            ns.Style.SkinButton(b)
             b:SetSize(CARD.width - 2 * CARD.side, CARD.button)
             f.options[i] = b
         end

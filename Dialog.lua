@@ -39,12 +39,15 @@ local WIDTH, TEXT_WIDTH = 320, 290
 local BOX_WIDTH = 350
 local WIDE = WIDTH + (BOX_WIDTH - 260)
 local TOP, GAP, BOTTOM = 16, 16, 16
+-- (18/11) the modern Rocket identity's notice header (Style.Window with no seal: ns.TITLE at the left, the close X) is
+-- 34 tall; the text starts TOP under it
+local HEAD = 34
 local BUTTON_WIDTH, BUTTON_HEIGHT = 128, 22
 local BOX_HEIGHT, BOX_FROM_BOTTOM = 20, 45
 local FROM_SCREEN_TOP = 135
 local NAME = "RocketSwapDialog"
 
-Dialog.MEASURES = { width = WIDTH, wide = WIDE, textWidth = TEXT_WIDTH, top = TOP, gap = GAP,
+Dialog.MEASURES = { width = WIDTH, wide = WIDE, textWidth = TEXT_WIDTH, head = HEAD, top = TOP, gap = GAP,
     bottom = BOTTOM, buttonWidth = BUTTON_WIDTH, buttonHeight = BUTTON_HEIGHT,
     boxWidth = BOX_WIDTH, boxHeight = BOX_HEIGHT, boxFromBottom = BOX_FROM_BOTTOM }
 
@@ -68,12 +71,18 @@ local function Build()
     f:SetFrameStrata("DIALOG")
     f:SetClampedToScreen(true)
     f:Hide()
+    -- (18/11) THE MODERN ROCKET IDENTITY: our panel in place of the game's dialog border and background (the shell's BG
+    -- frame, hidden), the body stone, ns.TITLE at the left and the close X (Style.Window, a notice: no seal). The shell
+    -- stays for its behaviour. Style.lua loads after this file, so it is read here, at build time.
+    if type(f.BG) == "table" and f.BG.Hide then f.BG:Hide() end
+    f.head = ns.Style.Window(f, { seal = false })
 
     f.text = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    f.text:SetPoint("TOP", 0, -TOP)
+    f.text:SetPoint("TOP", 0, -(HEAD + TOP))
     f.text:SetWidth(TEXT_WIDTH)
 
     f.button = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    ns.Style.SkinButton(f.button)
     f.button:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
     f.button:SetPoint("BOTTOM", 0, BOTTOM)
     f.button:SetScript("OnClick", function() f:Hide() end)
@@ -82,6 +91,7 @@ local function Build()
     f.box:SetSize(BOX_WIDTH, BOX_HEIGHT)
     f.box:SetPoint("BOTTOM", 0, BOX_FROM_BOTTOM)
     f.box:SetAutoFocus(false)
+    ns.Style.SkinField(f.box)
     f.box:Hide()
     f.box:SetScript("OnEscapePressed", function() f:Hide() end)
     f.box:SetScript("OnEnterPressed", function() f:Hide() end)
@@ -155,10 +165,10 @@ function Dialog.Show(key, text, opts)
     local textHeight = f.text:GetStringHeight() or 0
     if url then
         -- text, the box, the button: the box 45 above the bottom, as in the game's dialogs.
-        f:SetHeight(TOP + textHeight + GAP + BOX_HEIGHT + BOX_FROM_BOTTOM)
+        f:SetHeight(HEAD + TOP + textHeight + GAP + BOX_HEIGHT + BOX_FROM_BOTTOM)
         f.box:Show()
     else
-        f:SetHeight(TOP + textHeight + GAP + BUTTON_HEIGHT + BOTTOM)
+        f:SetHeight(HEAD + TOP + textHeight + GAP + BUTTON_HEIGHT + BOTTOM)
         f.box:Hide()
     end
 
