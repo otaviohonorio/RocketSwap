@@ -206,3 +206,14 @@ L["Matches the preset %s."] = "Corrisponde al profilo %s."
 
 -- (17/11) the window holds secure buttons: in combat it waits for the fight to end
 L["opens when the fight ends."] = "si apre alla fine del combattimento."
+
+-- (17/11) what a preset is for (raid, Mythic+, PvP): the editor field and the warnings
+L["Content"] = "Contenuto"
+L["Choose what the preset is for first."] = "Scegli prima a cosa serve il set."
+L["choose the content"] = "scegli il contenuto"
+L["Your %s presets:"] = "I tuoi set per %s:"
+L["Switch to a %s preset."] = "Passa a un set per %s."
+-- the game's own words (GlobalStrings.itIT: RAID, PLAYER_DIFFICULTY_MYTHIC_PLUS, LFG_TYPE_DUNGEON)
+L["Raid"] = "Incursione"
+L["Mythic+"] = "Mitica+"
+L["Dungeon"] = "Spedizione"

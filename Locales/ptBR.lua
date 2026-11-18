@@ -351,3 +351,15 @@ L["Matches the preset %s."] = "Confere com o conjunto %s."
 
 -- (17/11) the window holds secure buttons: in combat it waits for the fight to end
 L["opens when the fight ends."] = "abre quando o combate terminar."
+
+-- (17/11) what a preset is for (raid, Mythic+, PvP): the editor field and the warnings
+L["Content"] = "Conteúdo"
+L["Choose what the preset is for first."] = "Escolha primeiro para que é o conjunto."
+L["choose the content"] = "escolha o conteúdo"
+L["Your %s presets:"] = "Seus conjuntos de %s:"
+L["Switch to a %s preset."] = "Troque para um conjunto de %s."
+-- the players' form, and the game's own majority one (24 strings "Mítica+" against 4 "Mítico+")
+L["Mythic+"] = "Mítica+"
+-- the game's own words (GlobalStrings.ptBR: RAID, PLAYER_DIFFICULTY_MYTHIC_PLUS, LFG_TYPE_DUNGEON)
+L["Raid"] = "Raide"
+L["Dungeon"] = "Masmorra"

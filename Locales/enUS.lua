@@ -39,6 +39,11 @@ local FROM_GAME = {
     ["version"]        = "GAME_VERSION_LABEL",
     -- (26/10) the summary card's subtitle, alone on its line: there the question ("Todos prontos?") reads right
     ["Ready check"]    = "READY_CHECK",
+    -- (17/11) what a preset is for (Data.CONTENTS)
+    ["Raid"]           = "RAID",
+    ["Mythic+"]        = "PLAYER_DIFFICULTY_MYTHIC_PLUS",
+    ["Dungeon"]        = "LFG_TYPE_DUNGEON",
+    ["PvP"]            = "PVP",
 }
 
 -- What did NOT come in, and why -- all checked against build 12.1.0.69587:

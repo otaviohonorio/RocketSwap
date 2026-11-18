@@ -132,7 +132,9 @@ end
 local CARD_TOP = CARD_PAD + CARD_NAME_INK + CARD_NAME_GAP   -- onde o bloco de campos comeca
 local CARD_MAX = CARD_TOP + FieldsHeight(4) + CARD_PAD
 local LIST_TOP = -60
-local LIST_H = CARD_MAX * CARDS_VISIVEIS + ROW_SPACING * (CARDS_VISIVEIS - 1) + 6  -- 6 = 3+3 do inset
+-- (17/11) + 44: the editor column gained the content field (a `Group`, 50) and the window grows with it, the list taking
+-- the height (a little more of the next card shows) instead of squeezing any gap of the column
+local LIST_H = CARD_MAX * CARDS_VISIVEIS + ROW_SPACING * (CARDS_VISIVEIS - 1) + 6 + 44  -- 6 = 3+3 do inset
 local LIST_BOTTOM = LIST_TOP - LIST_H
 -- The Warnings strip starts right below the inset, with the same 4 of slack it always had.
 local WARN_STRIP_Y = LIST_BOTTOM - 4
@@ -156,7 +158,9 @@ local EDITOR_TOP = -60                           -- level with the list's inset 
 local TOOL_W = 122                               -- two of them + 7 of gap = NAME_W
 local NAME_TITLE_Y = EDITOR_TOP - 22 - 10        -- button (22) + gap
 local NAME_Y = NAME_TITLE_Y - 15                 -- title (12) + 3, like `Group`
-local DIVIDER_Y = NAME_Y - 22 - 16
+-- (17/11) what the preset is for (raid, Mythic+, PvP), a `Group` right under the name: box (22) + the 10 between blocks
+local CONTENT_Y = NAME_Y - 22 - 10
+local DIVIDER_Y = CONTENT_Y - 40 - 16
 local FIELDS_Y = DIVIDER_Y - 10
 local CHILD_INDENT = 15       -- a child option's indent (`Blizzard_SettingControls.lua:1`)
 
@@ -564,8 +568,13 @@ local function FillRow(row, preset)
 
     -- Without a name the row says so in the game's red, like a broken set in its equipment
     -- manager: it is a preset that asks for something before it can be used.
-    row.name:SetText(ns.Data.HasName(preset) and preset.name
-        or RED_FONT_COLOR:WrapTextInColorCode(L["Unnamed"]))
+    -- (17/11) and what it is for after the name, in the secondary grey; a preset from before the kind says it needs one,
+    -- in the game's red, until the player picks it in the editor
+    local kindText = ns.Data.HasContent(preset)
+        and LIGHTGRAY_FONT_COLOR:WrapTextInColorCode("  ·  " .. ns.Data.ContentName(preset.content))
+        or RED_FONT_COLOR:WrapTextInColorCode("  ·  " .. L["choose the content"])
+    row.name:SetText((ns.Data.HasName(preset) and preset.name
+        or RED_FONT_COLOR:WrapTextInColorCode(L["Unnamed"])) .. kindText)
 
     local linhas = CardLines(preset)
     for i, fs in ipairs(row.lines) do
@@ -672,7 +681,7 @@ end
 --- entry by what the preset then does (21/10, Appearance).
 local function Group(parent, labelText, yTop, items, get, set, emptyText, clearText)
     emptyText = emptyText or L["(none)"]
-    clearText = clearText or L["(none)"]
+    if clearText == nil then clearText = L["(none)"] end     -- `false` = no clear entry (a required field)
     local group = CreateFrame("Frame", nil, parent)
     group:SetSize(FIELD_W + 16, 40)
     group:SetPoint("TOPLEFT", parent, "TOPLEFT", COL_X, yTop)
@@ -686,6 +695,7 @@ local function Group(parent, labelText, yTop, items, get, set, emptyText, clearT
     label:SetPoint("BOTTOMLEFT", dd, "TOPLEFT", 3, 3)
     label:SetJustifyH("LEFT")
     label:SetText(labelText)
+    group.label = label
 
     --- Rebuilds the menu from the current state.
     ---
@@ -698,8 +708,11 @@ local function Group(parent, labelText, yTop, items, get, set, emptyText, clearT
         -- The name typed goes to the preset BEFORE the choice: the box only saves when it loses
         -- the focus, and a click on a field does not take the focus from it.
         dd:SetupMenu(function(_, root)
-            root:CreateButton(clearText, function() UI.SaveName(); set(nil); UI.AfterEdit() end)
-            if #list > 0 then root:CreateDivider() end
+            -- a required field (the content, 17/11) has nothing to clear to: `clearText == false`
+            if clearText ~= false then
+                root:CreateButton(clearText, function() UI.SaveName(); set(nil); UI.AfterEdit() end)
+                if #list > 0 then root:CreateDivider() end
+            end
 
             for _, item in ipairs(list) do
                 local entry = root:CreateRadio(item.text,
@@ -836,6 +849,17 @@ local function BuildEditor()
     end
 
     local function Current() return UI.Selected() end
+
+    -- (17/11) WHAT THE PRESET IS FOR, required like the name: the game's own words (Data.ContentName)
+    editor.content = Group(frame, L["Content"], CONTENT_Y,
+        function()
+            local out = {}
+            for _, k in ipairs(ns.Data.CONTENTS) do out[#out + 1] = { value = k, text = ns.Data.ContentName(k) } end
+            return out
+        end,
+        function() local p = Current(); return p and p.content end,
+        function(v) local p = Current(); if p then p.content = v end end,
+        "", false)
 
     editor.spec = Group(frame, L["Specialization"], FIELDS_Y,
         function()
@@ -1659,6 +1683,16 @@ function UI.RefreshNameState()
         editor.nameTitle:SetText(L["Preset name"])
     end
     local reason = missing and L["Give the preset a name first."] or nil
+    editor.content.SetLocked(reason)
+    -- (17/11) the content comes second: without it the four fields stay off, as without the name
+    local preset = UI.Selected()
+    local noContent = preset ~= nil and not ns.Data.HasContent(preset)
+    if noContent then
+        editor.content.label:SetText(L["Content"] .. " " .. RED_FONT_COLOR:WrapTextInColorCode(L["(required)"]))
+    else
+        editor.content.label:SetText(L["Content"])
+    end
+    reason = reason or (noContent and L["Choose what the preset is for first."]) or nil
     for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
         group.SetLocked(reason)
     end
@@ -1690,7 +1724,7 @@ function UI.RefreshEditor()
     end
     if has then UI.RefreshNameState() end
 
-    for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
+    for _, group in ipairs({ editor.content, editor.spec, editor.talent, editor.gear, editor.transmog }) do
         -- `SetupMenu` only builds the menu with the frame visible: show BEFORE syncing.
         group:SetShown(has)
         if has then group.Sync() end
@@ -1741,7 +1775,7 @@ function UI.Refresh()
         editor.openTalents:Hide()
         editor.openGear:Hide()
         editor.divider:Hide()
-        for _, group in ipairs({ editor.spec, editor.talent, editor.gear, editor.transmog }) do
+        for _, group in ipairs({ editor.content, editor.spec, editor.talent, editor.gear, editor.transmog }) do
             group:Hide()
         end
         return

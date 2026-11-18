@@ -207,3 +207,14 @@ L["Matches the preset %s."] = "Совпадает с пресетом %s."
 
 -- (17/11) the window holds secure buttons: in combat it waits for the fight to end
 L["opens when the fight ends."] = "откроется, когда бой закончится."
+
+-- (17/11) what a preset is for (raid, Mythic+, PvP): the editor field and the warnings
+L["Content"] = "Контент"
+L["Choose what the preset is for first."] = "Сначала выберите, для чего этот набор."
+L["choose the content"] = "выберите контент"
+L["Your %s presets:"] = "Ваши наборы для «%s»:"
+L["Switch to a %s preset."] = "Переключитесь на набор для «%s»."
+-- the game's own words (GlobalStrings.ruRU: RAID, PLAYER_DIFFICULTY_MYTHIC_PLUS, LFG_TYPE_DUNGEON)
+L["Raid"] = "Рейд"
+L["Mythic+"] = "Эпохальный+"
+L["Dungeon"] = "Подземелье"

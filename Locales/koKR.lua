@@ -207,3 +207,14 @@ L["Matches the preset %s."] = "%s 프리셋과 일치합니다."
 
 -- (17/11) the window holds secure buttons: in combat it waits for the fight to end
 L["opens when the fight ends."] = "전투가 끝나면 열립니다."
+
+-- (17/11) what a preset is for (raid, Mythic+, PvP): the editor field and the warnings
+L["Content"] = "콘텐츠"
+L["Choose what the preset is for first."] = "먼저 이 세트의 용도를 고르세요."
+L["choose the content"] = "콘텐츠 선택"
+L["Your %s presets:"] = "%s 세트:"
+L["Switch to a %s preset."] = "%s 세트로 바꾸세요."
+-- the game's own words (GlobalStrings.koKR: RAID, PLAYER_DIFFICULTY_MYTHIC_PLUS, LFG_TYPE_DUNGEON)
+L["Raid"] = "공격대"
+L["Mythic+"] = "신화+"
+L["Dungeon"] = "던전"

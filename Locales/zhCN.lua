@@ -207,3 +207,14 @@ L["Matches the preset %s."] = "与预设%s一致。"
 
 -- (17/11) the window holds secure buttons: in combat it waits for the fight to end
 L["opens when the fight ends."] = "战斗结束后打开。"
+
+-- (17/11) what a preset is for (raid, Mythic+, PvP): the editor field and the warnings
+L["Content"] = "内容"
+L["Choose what the preset is for first."] = "请先选择此方案的用途。"
+L["choose the content"] = "选择内容"
+L["Your %s presets:"] = "你的%s方案："
+L["Switch to a %s preset."] = "请切换到%s方案。"
+-- the game's own words (GlobalStrings.zhCN: RAID, PLAYER_DIFFICULTY_MYTHIC_PLUS, LFG_TYPE_DUNGEON)
+L["Raid"] = "团队"
+L["Mythic+"] = "史诗钥石"
+L["Dungeon"] = "地下城"

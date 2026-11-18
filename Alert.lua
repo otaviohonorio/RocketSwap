@@ -92,6 +92,27 @@ function Alert.Context()
     return nil
 end
 
+--- (17/11) WHAT CONTENT IS THIS, in the preset's kinds (Data.CONTENTS): "raid", "mplus" (Forever: "dungeon"), "pvp", or
+--- nil. A retail dungeon counts as Mythic+ only at Mythic difficulty (23, where the group waits to start the key, and
+--- 8, the key itself): a normal, heroic, follower or Timewalking dungeon is not what an "M+ build" is for.
+local MYTHIC_DIFFICULTY = { [8] = true, [23] = true }
+function Alert.ContentKind()
+    local inInstance, instanceType = IsInInstance()
+    if inInstance then
+        if instanceType == "raid" then return "raid" end
+        if instanceType == "arena" or instanceType == "pvp" then return "pvp" end
+        if instanceType == "party" then
+            local second = ns.Data.CONTENTS[2]
+            if second ~= "mplus" then return second end
+            local difficulty = GetInstanceInfo and select(3, GetInstanceInfo())
+            return MYTHIC_DIFFICULTY[difficulty] and "mplus" or nil
+        end
+        return nil
+    end
+    if Alert.Context() == "pvp" then return "pvp" end      -- a PvP queue
+    return nil
+end
+
 --- Can it be fixed now?
 local function CanFix()
     if InCombatLockdown() then return false end
@@ -289,13 +310,23 @@ local function LooksPvP(preset)
     return (name:find("pvp") or name:find("arena") or name:find("bg") or name:find("campo")) ~= nil
 end
 
+--- Is it a PvP preset? Its kind says so (17/11); only a preset made before the kind existed falls back to its name.
+local function IsPvPPreset(preset)
+    if preset.content then return preset.content == "pvp" end
+    return LooksPvP(preset)
+end
+
 local function PresetFor(context)
+    -- the presets made for THIS content come first (17/11)
+    local kind = Alert.ContentKind()
+    if kind and WantsPvP(context) == (kind == "pvp") then
+        for _, preset in ipairs(ns.Data.PresetsFor(kind)) do
+            if preset.gear then return preset end
+        end
+    end
     for _, preset in ipairs(ns.db.presets or {}) do
-        if preset.gear then
-            local wrong, read = ns.Gear.Wrong(WantsPvP(context))
-            if WantsPvP(context) == LooksPvP(preset) then
-                return preset, wrong, read
-            end
+        if preset.gear and WantsPvP(context) == IsPvPPreset(preset) then
+            return preset
         end
     end
     return nil
@@ -366,6 +397,9 @@ function Alert.Check(reason)
     -- being able to fix is the BUTTON, and it already knows how to hide.
     if InCombatLockdown() then return end
 
+    -- (17/11) entering a content: the clear warning to switch to one of its presets (and the gear row says the rest)
+    if Alert.CheckContent() then return end
+
     local wrong, read = ns.Gear.Wrong(WantsPvP(context), ns.db.mutedSlots)
     if #wrong == 0 then
         Alert.Hide()
@@ -423,6 +457,35 @@ function Alert.Check(reason)
 
     ui:SetHeight(120 + math.min(#wrong, 7) * 14)
     ui:Show()
+end
+
+--- (17/11) ON ENTERING A CONTENT, A CLEAR WARNING TO SWITCH THE PRESET. The user: *"ao entrar em cada conteúdo pode ter
+--- o aviso bem claro que precisa trocar o preset"*. It is the summary card (what is on, the presets of this content with
+--- a button each), with the game's yellow line. Quiet when: no preset was made for this content, one of them is
+--- already on, a switch cannot be made now, it was already said in this instance, or the player muted it. PvP is left
+--- to the queue's card: inside the match the game locks the switch, so the queue's invite is the last window.
+local enteredKey
+function Alert.CheckContent()
+    local kind = Alert.ContentKind()
+    if not kind then enteredKey = nil return false end
+    if kind == "pvp" or not CanFix() then return false end
+    local mine = ns.Data.PresetsFor(kind)
+    if #mine == 0 then return false end
+    for _, p in ipairs(mine) do
+        if ns.Data.IsLoaded(p) then return false end
+    end
+    local instanceID = GetInstanceInfo and select(8, GetInstanceInfo())
+    local key = kind .. ":" .. tostring(instanceID)
+    if key == enteredKey then return false end
+    if ns.db.muted and ns.db.muted[kind .. ":content"] then return false end
+    if Alert.CardShown() then return false end
+    enteredKey = key
+    local name = ns.Data.ContentName(kind)
+    local title = format(L["Switch to a %s preset."], name)
+    if UIErrorsFrame and UIErrorsFrame.AddExternalWarningMessage then
+        pcall(UIErrorsFrame.AddExternalWarningMessage, UIErrorsFrame, title)
+    end
+    return Alert.ShowCard("enter", title, name)
 end
 
 --------------------------------------------------------------------------------
@@ -533,6 +596,8 @@ local CARD = { width = 360, side = 20, top = 16, bottom = 16, icon = 32, iconGap
                rowGap = 10, button = 22, fixWidth = 150, okWidth = 128, buttonGap = 10, fromScreenTop = 135 }
 CARD.text = CARD.width - 2 * CARD.side - CARD.icon - CARD.iconGap - CARD.mark - CARD.markGap
 Alert.CARD = CARD
+-- (17/11) how many presets of the content the card offers, one button each
+Alert.MAX_OPTIONS = 4
 
 -- The marks: the game's own (checked with tools/ver_atlas.py, 12.1.5): the check of the game's lists, the small
 -- warning sign of the Trading Post, the red X of the game's close buttons.
@@ -638,7 +703,7 @@ function Alert.ComparePreset(cur, kind)
             if sameSpec and preset.talent and preset.talent == cur.talent then score = score + 1 end
             if preset.gear and (preset.gear == cur.gearSet or preset.gear == cur.partialSet) then score = score + 1 end
             if kind == "queue" then
-                if LooksPvP(preset) then
+                if IsPvPPreset(preset) then
                     score = score + (sameSpec and 10 or 5)
                     if score > bestScore then best, bestScore = preset, score end
                 end
@@ -763,7 +828,21 @@ function Alert.CardModel(kind)
     end
     if fix and not CanFix() then fix = nil end
 
-    return { rows = rows, verdict = verdict, preset = preset, fix = fix, context = context }
+    -- (17/11) THE OTHER PRESETS OF THIS CONTENT, each with its own button: whoever has two Mythic+ builds picks one
+    -- right here (the user: *"caso tenha mais builds de mitica por exemplo, ai teria que mostrar as opções e o jogador
+    -- já poder trocar"*). Only when a switch can be made now, and never the one already on.
+    local contentKind = kind == "queue" and "pvp" or Alert.ContentKind()
+    local options = {}
+    if contentKind and CanFix() then
+        for _, p in ipairs(ns.Data.PresetsFor(contentKind)) do
+            if not ns.Data.IsLoaded(p) and #options < Alert.MAX_OPTIONS then options[#options + 1] = p end
+        end
+    end
+    -- the options already hold the presets of this content: a second button for one of them would be the same twice
+    if #options > 0 then fix = nil end
+
+    return { rows = rows, verdict = verdict, preset = preset, fix = fix, context = context,
+             options = options, contentKind = contentKind }
 end
 
 local function NewRow(f)
@@ -912,6 +991,46 @@ local function DrawCard(f, model, title, subtitle)
         f.verdict:Hide()
         y = y + 4
     end
+
+    -- (17/11) THE PRESETS OF THIS CONTENT, one button each, the whole width: the player switches right here
+    f.options = f.options or {}
+    local options = model.options or {}
+    if #options > 0 then
+        if not f.optionsTitle then
+            f.optionsTitle = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+            f.optionsTitle:SetJustifyH("LEFT")
+            f.optionsTitle:SetWidth(CARD.width - 2 * CARD.side)
+        end
+        f.optionsTitle:SetText(format(L["Your %s presets:"], ns.Data.ContentName(model.contentKind) or "?"))
+        f.optionsTitle:ClearAllPoints()
+        f.optionsTitle:SetPoint("TOPLEFT", x, -y)
+        f.optionsTitle:Show()
+        y = y + f.optionsTitle:GetStringHeight() + 6
+    elseif f.optionsTitle then
+        f.optionsTitle:Hide()
+    end
+    for i = 1, math.max(#options, #f.options) do
+        local preset = options[i]
+        local b = f.options[i]
+        if preset and not b then
+            b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+            b:SetSize(CARD.width - 2 * CARD.side, CARD.button)
+            f.options[i] = b
+        end
+        if preset then
+            b:SetText(format(L["Load %s"], preset.name or "?"))
+            b:SetScript("OnClick", function()
+                ns.Data.Apply(preset, function(text) ns.Print(text) end)
+            end)
+            b:ClearAllPoints()
+            b:SetPoint("TOPLEFT", x, -y)
+            b:Show()
+            y = y + CARD.button + 6
+        elseif b then
+            b:Hide()
+        end
+    end
+    if #options > 0 then y = y + 8 end
 
     f.ok:ClearAllPoints()
     if model.fix then

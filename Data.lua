@@ -1911,6 +1911,40 @@ function Data.HasName(preset)
     return type(name) == "string" and name:find("%S") ~= nil
 end
 
+-- (17/11/2026) WHAT THE PRESET IS FOR: raid, Mythic+ or PvP. A streamer's suggestion, taken by the user: right after the
+-- name, a required choice, so the addon knows which presets belong where -- the warning on entering each content and
+-- the ready check / PvP queue card offer the presets of THAT content. The words are the game's own (its globals, in the
+-- player's language). WoW Forever has no Mythic+ (skill wow-forever): there the second kind is the dungeon.
+-- A preset made before this has no kind: it still loads (blocking the macro on the action bar on update day would
+-- break a raid night), but the window marks it in red and keeps its fields off until the kind is chosen.
+Data.CONTENTS = FOREVER and { "raid", "dungeon", "pvp" } or { "raid", "mplus", "pvp" }
+-- The words come from the game through `FROM_GAME` (Locales/enUS.lua); a language file may say it as the players do
+-- (pt-BR: "Mítica+", the game's own majority form -- 24 of its strings against 4 with "Mítico+").
+local CONTENT_TEXT = { raid = L["Raid"], mplus = L["Mythic+"], dungeon = L["Dungeon"], pvp = L["PvP"] }
+
+---The game's word for a kind of content, in the player's language.
+function Data.ContentName(kind)
+    return kind and CONTENT_TEXT[kind] or nil
+end
+
+---Does the preset say what it is for (a kind this game has)?
+function Data.HasContent(preset)
+    local c = preset and preset.content
+    if not c then return false end
+    for _, k in ipairs(Data.CONTENTS) do if k == c then return true end end
+    return false
+end
+
+---The named presets made for `kind`, in the list's order.
+function Data.PresetsFor(kind)
+    local out = {}
+    if not kind then return out end
+    for _, p in ipairs(ns.db and ns.db.presets or {}) do
+        if p.content == kind and Data.HasName(p) then out[#out + 1] = p end
+    end
+    return out
+end
+
 local RESTRICAO_TEXTO = {
     PvPMatch = L["in a PvP match -- the countdown included -- the game blocks switches made by addons. Switch before accepting the queue."],
     Encounter = L["during a boss encounter the game blocks switches made by addons."],
