@@ -1,7 +1,6 @@
-# Rocket Swap 0.44.0
+# Rocket Swap 0.45.0
 
-- New: every preset says what it is for — Raid, Mythic+ or PvP (Raid, Dungeon or PvP in WoW Forever), in the game's own words. It is required, right under the name.
-- New: entering a raid or a Mythic dungeon without one of its presets on shows a clear warning with what you are using and that content's presets, one button each to switch.
-- New: the ready check and PvP queue summaries also list the presets of that content, each with its own button.
-- Presets made before this keep loading; they show "choose the content" in red until you pick one in the editor.
-- Fixed: opening the window during combat froze it half drawn and its X did not close it. In combat the window now opens by itself when the fight ends; if it is open when a fight starts, it closes and comes back afterwards.
+- New look: the window with a seal and the "Presets" band, preset cards with a gold ring, and the editor, warnings, summary and progress panel in the Rocket family's style.
+- When a swap finishes, the progress panel now says "Swap complete".
+- Questions (such as reporting a problem) now open in the family's own window instead of the game's old dialog.
+- Fixed: an open dropdown no longer lets the controls under it show through, and a button's or tab's text no longer disappears under the mouse.
