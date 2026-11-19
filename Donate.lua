@@ -13,8 +13,8 @@
 -- asks for donation requests to stay off the game; it is his call.
 --
 -- An addon cannot open a browser. So the link goes in a box, already selected: Ctrl+C copies it,
--- and the dialog closes by itself after the copy. The box is the game's own popup (`StaticPopup`
--- with an edit box, reached through `GetEditBox()` in 12.x).
+-- and the dialog closes by itself after the copy. The box is the addon's own (`Dialog.lua`, over the family's
+-- `Style.Ask` since 18/11/2026), never the game's `StaticPopup`.
 --
 -- Currency: BRL when the game is in Portuguese (Brazil), USD everywhere else (user's rule).
 local ADDON, ns = ...
