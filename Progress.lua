@@ -53,8 +53,8 @@ local HOLD = 3
 -- ONLY ON SUCCESS. If any step failed, the panel keeps showing the list and stays until the
 -- player closes it: celebrating over a step that failed would be the worst possible ending.
 --
--- It is not a translation key on purpose: it is a proper name, the same in every language.
-local SHOUT = "Leroy Jeeeeeennkiiinnss!"
+-- (18/11) It was a joke shout until the user asked for "algo mais formal": now the plain, translated "Swap complete".
+local function Shout() return L["Swap complete"] end
 
 -- The bar's colour at each moment. Gold is "moving" -- the progress colour of the whole game.
 -- Green only shows when **everything closed and it worked**, so it needs no legend: nobody
@@ -280,7 +280,7 @@ local function ShowShout(frame_, mostrar)
     local cor = mostrar and BAR_DONE or BAR_RUNNING
     frame_.trilho.fill:SetColorTexture(cor[1], cor[2], cor[3], cor[4])
     if mostrar then
-        frame_.shout:SetText(SHOUT)
+        frame_.shout:SetText(Shout())
         frame_.trilho.fill:SetWidth(frame_.trilho:GetWidth())
     end
 end
@@ -379,7 +379,7 @@ end
 --- The bar's art only shows in the game, but the ARITHMETIC is arithmetic and is checked on disk --
 --- and it is what carries the promise: the bar states how many steps closed, and nothing about time.
 function Progress.DebugShout()
-    return SHOUT
+    return Shout()
 end
 
 function Progress.DebugBarFill(passos)

@@ -129,3 +129,5 @@ L["Turn on the wrong gear warning first."] = "Turn on the wrong gear warning fir
 -- Colunas dos avisos por conteudo (0.35.0)
 L["PvE"] = "PvE"
 L["PvP"] = "PvP"
+-- the progress panel when every step closed (18/11, it replaced the joke shout: the user asked for something more formal)
+L["Swap complete"] = "Swap complete"

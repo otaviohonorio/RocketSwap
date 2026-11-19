@@ -218,3 +218,5 @@ L["Switch to a %s preset."] = "Passez à un ensemble %s."
 L["Raid"] = "Raid"
 L["Mythic+"] = "Mythique +"
 L["Dungeon"] = "Donjon"
+-- the progress panel when every step closed (18/11, it replaced the joke shout: the user asked for something more formal)
+L["Swap complete"] = "Changement terminé"

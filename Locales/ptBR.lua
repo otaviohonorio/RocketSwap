@@ -363,3 +363,5 @@ L["Mythic+"] = "Mítica+"
 -- the game's own words (GlobalStrings.ptBR: RAID, PLAYER_DIFFICULTY_MYTHIC_PLUS, LFG_TYPE_DUNGEON)
 L["Raid"] = "Raide"
 L["Dungeon"] = "Masmorra"
+-- the progress panel when every step closed (18/11, it replaced the joke shout: the user asked for something more formal)
+L["Swap complete"] = "Troca concluída"
