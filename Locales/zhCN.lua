@@ -220,3 +220,5 @@ L["Mythic+"] = "史诗钥石"
 L["Dungeon"] = "地下城"
 -- the progress panel when every step closed (18/11, it replaced the joke shout: the user asked for something more formal)
 L["Swap complete"] = "切换完成"
+-- (19/11) the question before deleting a preset (the user: pergunta se o jogador tem certeza)
+L["Delete the preset \"%s\"? This cannot be undone."] = "删除预设“%s”？此操作无法撤销。"

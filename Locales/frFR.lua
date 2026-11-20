@@ -220,3 +220,5 @@ L["Mythic+"] = "Mythique +"
 L["Dungeon"] = "Donjon"
 -- the progress panel when every step closed (18/11, it replaced the joke shout: the user asked for something more formal)
 L["Swap complete"] = "Changement terminé"
+-- (19/11) the question before deleting a preset (the user: pergunta se o jogador tem certeza)
+L["Delete the preset \"%s\"? This cannot be undone."] = "Supprimer le préréglage « %s » ? Cette action est irréversible."

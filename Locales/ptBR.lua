@@ -365,3 +365,5 @@ L["Raid"] = "Raide"
 L["Dungeon"] = "Masmorra"
 -- the progress panel when every step closed (18/11, it replaced the joke shout: the user asked for something more formal)
 L["Swap complete"] = "Troca concluída"
+-- (19/11) the question before deleting a preset (the user: pergunta se o jogador tem certeza)
+L["Delete the preset \"%s\"? This cannot be undone."] = "Apagar o conjunto \"%s\"? Isso não pode ser desfeito."

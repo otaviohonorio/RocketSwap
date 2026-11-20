@@ -1913,10 +1913,24 @@ function UI.SaveName()
     UI.AfterEdit()
 end
 
+---Deleting asks first (19/11, the user: "no botão de delete, pergunta se o jogador tem certeza que quer deletar"),
+---in the family's question box (Style.Ask, never the game's dialog); only "Delete" deletes. No box, no deleting.
 function UI.Delete()
     local preset = UI.Selected()
     if not preset then return end
+    ns.Style.Ask("delete", {
+        text = format(L['Delete the preset "%s"? This cannot be undone.'], preset.name or "?"),
+        data = preset,
+        buttons = {
+            { text = L["Delete"], onClick = function(p) UI.DeleteNow(p) end },
+            { text = CANCEL },
+        },
+    })
+end
 
+---Deletes the preset, with no question (the answer of UI.Delete's box).
+function UI.DeleteNow(preset)
+    if not preset then return end
     if ns.Macro then ns.Macro.Remove(preset) end
     local presets = Presets()
     for i = 1, #presets do

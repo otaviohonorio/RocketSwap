@@ -220,3 +220,5 @@ L["Mythic+"] = "신화+"
 L["Dungeon"] = "던전"
 -- the progress panel when every step closed (18/11, it replaced the joke shout: the user asked for something more formal)
 L["Swap complete"] = "전환 완료"
+-- (19/11) the question before deleting a preset (the user: pergunta se o jogador tem certeza)
+L["Delete the preset \"%s\"? This cannot be undone."] = "'%s' 프리셋을 삭제하시겠습니까? 되돌릴 수 없습니다."
