@@ -1,3 +1,3 @@
-# Rocket Swap 0.45.1
+# Rocket Swap 0.46.0
 
-- New icon: the rocket flying over the addon's own symbol, in the Rocket family's new colours. The minimap button and the seal of every window show the symbol alone.
+- Deleting a preset now asks first: a confirmation box shows the preset's name, with Delete and Cancel.
