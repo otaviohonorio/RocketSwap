@@ -222,3 +222,6 @@ L["Dungeon"] = "地城"
 L["Swap complete"] = "切換完成"
 -- (19/11) the question before deleting a preset (the user: pergunta se o jogador tem certeza)
 L["Delete the preset \"%s\"? This cannot be undone."] = "刪除預設「%s」？此操作無法復原。"
+
+-- (24/11/2026) full bags: the set is not started
+L["the inventory is full: free %d bag slot(s) for the items this set takes off."] = "物品欄已滿：請在背包中空出%d個欄位，存放此套裝卸下的物品。"

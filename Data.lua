@@ -596,6 +596,34 @@ function Data.GearSetProblem(setID)
     }
 end
 
+--- (24/11) BAG SPACE: how many free slots the set needs and how many the bags have.
+---
+--- Seen on a stream (the user, 24/11): the bags were full, the addon switched the spec and called it done,
+--- and the items never moved. Taking a piece off needs a place for it, and the game only uses the plain
+--- bags for that (`EquipmentManager_UpdateFreeBagSpace` takes `bagType == 0` only, the reagent bag out).
+--- What needs a place: a slot the set EMPTIES (`GetItemLocations` = 0, `EQUIPMENT_SET_EMPTY_SLOT`;
+--- warcraft.wiki.gg: "The slot should be emptied") while something is worn there -- the off hand when the
+--- set holds a two-hander is this case. A piece coming from the bags swaps places with the worn one and
+--- needs nothing. Asked BEFORE anything starts, so the spec is not switched alone.
+--- @return number|nil need, number|nil free (nil when the game did not answer)
+function Data.GearBagSpace(setID)
+    if setID == nil or not (C_EquipmentSet and C_EquipmentSet.GetItemLocations) then return nil end
+    if not (C_Container and C_Container.GetContainerNumFreeSlots and GetInventoryItemID) then return nil end
+    local ok, locais = pcall(C_EquipmentSet.GetItemLocations, setID)
+    if not ok or type(locais) ~= "table" then return nil end
+    local vazio = EQUIPMENT_SET_EMPTY_SLOT or 0
+    local need = 0
+    for slot, onde in pairs(locais) do
+        if onde == vazio and GetInventoryItemID("player", slot) then need = need + 1 end
+    end
+    local free = 0
+    for bag = BACKPACK_CONTAINER or 0, NUM_BAG_SLOTS or 4 do
+        local n, tipo = C_Container.GetContainerNumFreeSlots(bag)
+        if type(n) == "number" and (tipo == 0 or tipo == nil) then free = free + n end
+    end
+    return need, free
+end
+
 --- Writes what the player is wearing NOW over the set, fixing the piece that went missing.
 ---
 --- `SaveEquipmentSet` only changes an existing set and runs in an untainted context -- the same
@@ -2028,6 +2056,11 @@ function Data.Preflight(preset, byClick)
         elseif C_EquipmentSet and C_EquipmentSet.EquipmentSetContainsLockedItems then
             local ok, travado = pcall(C_EquipmentSet.EquipmentSetContainsLockedItems, preset.gear)
             if ok and travado then Nao("gear", L["some items of the set are locked (a trade, the bank, a repair)."]) end
+        end
+        -- (24/11) full bags: nothing starts (the spec would switch alone); freeing the space, the same button works
+        local need, free = Data.GearBagSpace(preset.gear)
+        if need and free and need > free then
+            Nao("gear", format(L["the inventory is full: free %d bag slot(s) for the items this set takes off."], need - free))
         end
     end
 

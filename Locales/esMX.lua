@@ -221,3 +221,6 @@ L["Dungeon"] = "Calabozo"
 L["Swap complete"] = "Cambio completado"
 -- (19/11) the question before deleting a preset (the user: pergunta se o jogador tem certeza)
 L["Delete the preset \"%s\"? This cannot be undone."] = "¿Eliminar el perfil «%s»? No se puede deshacer."
+
+-- (24/11/2026) full bags: the set is not started
+L["the inventory is full: free %d bag slot(s) for the items this set takes off."] = "el inventario está lleno: libera %d casilla(s) de las bolsas para los objetos que este conjunto se quita."

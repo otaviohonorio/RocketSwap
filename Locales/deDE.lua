@@ -222,3 +222,6 @@ L["Dungeon"] = "Dungeon"
 L["Swap complete"] = "Wechsel abgeschlossen"
 -- (19/11) the question before deleting a preset (the user: pergunta se o jogador tem certeza)
 L["Delete the preset \"%s\"? This cannot be undone."] = "Vorlage „%s“ löschen? Das kann nicht rückgängig gemacht werden."
+
+-- (24/11/2026) full bags: the set is not started
+L["the inventory is full: free %d bag slot(s) for the items this set takes off."] = "das Inventar ist voll: Mache %d Taschenplatz/-plätze frei für die Gegenstände, die dieses Set ablegt."
